@@ -33,7 +33,7 @@ def safe_rerun():
 
 
 # =====================================================================
-# 1. الهوية البصرية الخضراء الداكنة والذهبية (Dark Emerald & Gold UI)
+# 1. الهوية البصرية الخضراء الداكنة والذهبية والطبية
 # =====================================================================
 st.markdown("""
 <style>
@@ -48,8 +48,8 @@ st.markdown("""
     --emerald-bright: #34d399;
     --gold-main: #d4a853;
     --gold-soft: #f3cc7a;
-    --border-emerald: #1f5c46;
-    --border-subtle: #263339;
+    --med-main: #38bdf8;
+    --med-soft: #bae6fd;
     --text-light: #f1f5f9;
     --text-muted: #94a3b8;
 }
@@ -61,14 +61,13 @@ html, body, [class*="css"] {
     color: var(--text-light);
 }
 
-/* إخفاء شريط Streamlit العلوي والقائمة الجانبية الافتراضية */
 header[data-testid="stHeader"] { background: transparent !important; }
 [data-testid="collapsedControl"] { display: none !important; }
 section[data-testid="stSidebar"] { display: none !important; }
 .block-container {
     padding-top: 1.2rem !important;
     padding-bottom: 3rem !important;
-    max-width: 1120px !important;
+    max-width: 1140px !important;
 }
 
 .stApp {
@@ -76,7 +75,6 @@ section[data-testid="stSidebar"] { display: none !important; }
     color: var(--text-light) !important;
 }
 
-/* الترويسة الخضراء العلوية */
 .khafar-top-header {
     background: linear-gradient(135deg, #0d4432 0%, #08291e 100%);
     border: 1px solid #1e6b50;
@@ -116,7 +114,6 @@ section[data-testid="stSidebar"] { display: none !important; }
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
-    margin-top: 14px;
 }
 .pill-offline {
     background: rgba(6, 34, 24, 0.85);
@@ -137,7 +134,6 @@ section[data-testid="stSidebar"] { display: none !important; }
     font-weight: 700;
 }
 
-/* شريط الإحداثيات والوقت الآلي */
 .gps-time-bar {
     background: #0b1015;
     border-left: 1px solid #1e293b;
@@ -172,7 +168,6 @@ section[data-testid="stSidebar"] { display: none !important; }
     font-size: 12px;
 }
 
-/* بطاقة المنصة والمناوبة الرئيسية */
 .hero-shift-card {
     background: linear-gradient(135deg, #0f3d2c 0%, #112421 65%, #151d21 100%);
     border: 1px solid #21634b;
@@ -211,7 +206,6 @@ section[data-testid="stSidebar"] { display: none !important; }
     gap: 10px;
 }
 
-/* عناوين الأقسام (الإقرارات والمحاضر) */
 .sec-heading-green {
     border-right: 4px solid #10b981;
     padding-right: 12px;
@@ -222,6 +216,14 @@ section[data-testid="stSidebar"] { display: none !important; }
 }
 .sec-heading-gold {
     border-right: 4px solid var(--gold-main);
+    padding-right: 12px;
+    margin: 24px 0 12px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.sec-heading-med {
+    border-right: 4px solid var(--med-main);
     padding-right: 12px;
     margin: 24px 0 12px 0;
     display: flex;
@@ -246,8 +248,16 @@ section[data-testid="stSidebar"] { display: none !important; }
     padding: 2px 11px;
     border-radius: 20px;
 }
+.badge-med {
+    background: rgba(56, 189, 248, 0.14);
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    color: var(--med-soft);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 11px;
+    border-radius: 20px;
+}
 
-/* بطاقات النماذج */
 .form-item-card {
     background: linear-gradient(180deg, #162024 0%, #12191c 100%);
     border: 1px solid #24353b;
@@ -260,7 +270,6 @@ section[data-testid="stSidebar"] { display: none !important; }
     border-color: #2b8a68;
 }
 
-/* معاينة النص النظامي والقفل */
 .legal-dark-box {
     background: #111c19;
     border: 1px solid #23634c;
@@ -289,7 +298,6 @@ section[data-testid="stSidebar"] { display: none !important; }
     height: 100%;
 }
 
-/* تخصيص الحقول والقوائم المنسدلة والأزرار باللون الأخضر والذهبي */
 div[data-baseweb="input"] > div,
 div[data-baseweb="textarea"] > div,
 div[data-baseweb="select"] > div {
@@ -310,7 +318,6 @@ label[data-testid="stWidgetLabel"] p {
     font-size: 13.5px !important;
 }
 
-/* الأزرار: إلغاء اللون الأحمر نهائياً واستبداله بالأخضر الملكي والذهبي */
 div.stButton > button {
     background: #172628 !important;
     color: #e2e8f0 !important;
@@ -343,7 +350,6 @@ div.stDownloadButton > button {
     font-weight: 800 !important;
 }
 
-/* تنسيق أزرار الراديو الأفقية كألسنة تنقل خضراء */
 div[role="radiogroup"] {
     background: #131a1e;
     padding: 6px;
@@ -356,7 +362,7 @@ div[role="radiogroup"] {
 
 
 # =====================================================================
-# 2. تعريف النماذج الثمانية والصيغ النظامية المحكمة
+# 2. تعريف النماذج الـ 11 والصيغ النظامية المحكمة
 # =====================================================================
 def _val(values: dict, key: str) -> str:
     v = str(values.get(key, "")).strip()
@@ -364,6 +370,7 @@ def _val(values: dict, key: str) -> str:
 
 
 TRAFFIC_FORMS = {
+    # ==================== أولاً: قائمة الإقرارات الميدانية (4) ====================
     "decl_handover": {
         "title": "إقرار تسليم مركبة في الموقع",
         "icon": "🚗",
@@ -485,6 +492,7 @@ TRAFFIC_FORMS = {
         ),
     },
 
+    # ==================== ثانياً: قائمة المحاضر الرسمية (4) ====================
     "min_inspection": {
         "title": "محضر تفتيش مركبة وجرد مقتنيات",
         "icon": "🔍",
@@ -606,6 +614,118 @@ TRAFFIC_FORMS = {
             f"وعليه حُرر هذا المحضر الرسمي إثباتاً للواقعة على الطبيعة ورفعه لضابط الخفر لاستكمال اللازم نظاماً."
         ),
     },
+
+    # ==================== ثالثاً: النماذج الطبية والجنائية (3) ====================
+    "med_injury": {
+        "title": "نموذج معالجة مصاب / مصابين",
+        "icon": "🚑",
+        "subtitle": "إحالة مصاب أو عدة مصابين في حادث مروري للمستشفى وطلب التقرير الطبي وتحديد وضع التحفظ",
+        "category": "إحالة طبية",
+        "allow_absence": True,
+        "require_image": False,
+        "fields": [
+            {"key": "incident_no", "label": "رقم الحادث وتاريخه", "type": "text", "sample": "460986112 - 1448/06/08 هـ"},
+            {"key": "hospital_name", "label": "المستشفى / الجهة الصحية الموجه لها", "type": "text", "sample": "مستشفى العارضة العام - قسم الطوارئ"},
+            {"key": "cases_mode", "label": "تصنيف الإحالة والعدد", "type": "select", "options": [
+                "مصاب واحد في حادث مروري",
+                "عدة مصابين في حادث مروري (مرفق بيانهم)"
+            ], "sample": "عدة مصابين في حادث مروري (مرفق بيانهم)"},
+            {"key": "party_name", "label": "اسم المصاب الأول الرباعي", "type": "text", "sample": "موسى بن يحيى بن أحمد خبراني"},
+            {"key": "party_id", "label": "رقم الهوية / الإقامة والجنسية", "type": "text", "sample": "1098877665 - سعودي"},
+            {"key": "plate_no", "label": "بيانات المركبة وصفته بالحادث", "type": "text", "sample": "تويوتا هايلوكس (ب ر د 3318) - قائد المركبة"},
+            {"key": "transport_way", "label": "وسيلة الوصول للمستشفى والحالة الأولية", "type": "select", "options": [
+                "نُقل بواسطة فرقة الهلال الأحمر السعودي من موقع الحادث",
+                "راجع الطوارئ عن طريق ذويه / نقل خاص إثر الحادث",
+                "حضر برفقة الدورية المرورية المباشرة للموقع"
+            ], "sample": "نُقل بواسطة فرقة الهلال الأحمر السعودي من موقع الحادث"},
+            {"key": "security_hold", "label": "التوجيه الأمني بعد تلقي العلاج", "type": "select", "options": [
+                "يُطلق سراحه بعد تلقي العلاج اللازم ما لم يكن مطلوباً لجهة أخرى",
+                "يُتحفظ عليه أمنياً ويُشعر قسم المرور قبل خروجه لاستكمال التحقيق",
+                "يبقى تحت الملاحظة الطبية مع تزويدنا بالتقرير الطبي العاجل"
+            ], "sample": "يُطلق سراحه بعد تلقي العلاج اللازم ما لم يكن مطلوباً لجهة أخرى"},
+            {"key": "other_injured", "label": "بيان المصابين الإضافيين (الاسم، الهوية، الصفة، الإصابة الظاهرة - أو يكتب لا يوجد)", "type": "textarea", "sample": "2- ريان بن موسى خبراني | هوية: 1123344556 | مرافق | إصابة متوسطة بالكتف الأيمن.\n3- عادل محمد علي | إقامة: 2456677889 | قائد الطرف الثاني | رضوض وكدمات متفرقة."},
+        ],
+        "legal_fn": lambda m: (
+            f"سعادة مدير ({_val(m, 'hospital_name')}) المحترم، السلام عليكم ورحمة الله وبركاته.. "
+            f"إشارةً إلى الحادث المروري رقم ({_val(m, 'incident_no')})، نبعث لسعادتكم ({_val(m, 'cases_mode')})، وبيانات المصاب الرئيسي: "
+            f"({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')} - {_val(m, 'plate_no')})، وبيان المصابين الإضافيين: ({_val(m, 'other_injured')})، "
+            f"والواصلين إليكم ({_val(m, 'transport_way')}). نأمل الأمر بإجراء الكشف الطبي اللازم وإسعافهم ومعالجتهم وتنويم من تستدعي حالته الصحية ذلك، "
+            f"وموافاتنا بتقرير طبي مفصل ومعتمد لكل حالة يوضح نوع الإصابات ومدة الشفاء المقررة، مع اعتماد التوجيه الأمني التالي حيال الخروج: ({_val(m, 'security_hold')})."
+        ),
+    },
+
+    "med_morgue": {
+        "title": "نموذج إيداع جثمان / جثامين",
+        "icon": "🏥",
+        "subtitle": "إيداع جثمان متوفى أو عدة جثامين بثلاجة الموتى إثر حادث مروري وطلب تقرير الوفاة وعدم التسليم إلا بفسح",
+        "category": "إحالة طبية",
+        "allow_absence": True,
+        "require_image": False,
+        "fields": [
+            {"key": "incident_no", "label": "رقم الحادث الجسيم وموقعه", "type": "text", "sample": "460986450 - الطريق العام"},
+            {"key": "hospital_name", "label": "المستشفى / ثلاجة الموتى المودع بها", "type": "text", "sample": "ثلاجة الموتى بمستشفى العارضة العام"},
+            {"key": "deceased_count", "label": "تصنيف حالة الإيداع والعدد", "type": "select", "options": [
+                "جثمان واحد (متوفى واحد)",
+                "عدة جثامين (أكثر من متوفى في الحادث)"
+            ], "sample": "جثمان واحد (متوفى واحد)"},
+            {"key": "party_name", "label": "اسم المتوفى الأول (أو مجهول الهوية مع أوصافه)", "type": "text", "sample": "حسن بن علي بن محمد مجرشي"},
+            {"key": "party_id", "label": "رقم الهوية / الإقامة والجنسية والعمر", "type": "text", "sample": "1043322110 - سعودي - 38 عاماً"},
+            {"key": "plate_no", "label": "المركبة ورقم اللوحة وصفة المتوفى بالحادث", "type": "text", "sample": "صالون لاندكروزر (أ ح ط 9879) - قائد المركبة"},
+            {"key": "transport_death", "label": "جهة إعلان الوفاة ووسيلة نقل الجثمان", "type": "select", "options": [
+                "وفاة في موقع الحادث ونُقل الجثمان عبر النقل المجهز (الشرشورة) بعد المعاينة",
+                "توفي في قسم الطوارئ بالمستشفى متأثراً بإصاباته البالغة بالحادث",
+                "نُقل بواسطة إسعاف الهلال الأحمر وتأكدت الوفاة طبياً عند الوصول"
+            ], "sample": "وفاة في موقع الحادث ونُقل الجثمان عبر النقل المجهز (الشرشورة) بعد المعاينة"},
+            {"key": "forensic_order", "label": "التوجيه النظامي حيال التحفظ والكشف الطبي", "type": "select", "options": [
+                "إيداع الجثمان بالثلاجة والتحفظ عليه وعدم تسليمه إلا بخطاب فسح رسمي من المرور",
+                "إجراء الكشف الطبي الظاهري وتزويدنا بتقرير الوفاة الرسمي وأسبابها المباشرة",
+                "إبقاء الجثمان رهن الفحص الطبي الشرعي بناءً على توجيه النيابة العامة"
+            ], "sample": "إيداع الجثمان بالثلاجة والتحفظ عليه وعدم تسليمه إلا بخطاب فسح رسمي من المرور"},
+            {"key": "other_deceased", "label": "بيانات الجثامين الإضافية عند تعدد الوفيات (الاسم، الهوية، الصفة - أو يكتب لا يوجد)", "type": "textarea", "sample": "لا يوجد (جثمان واحد فقط)."},
+        ],
+        "legal_fn": lambda m: (
+            f"سعادة مدير ({_val(m, 'hospital_name')}) المحترم، السلام عليكم ورحمة الله وبركاته.. "
+            f"على إثر الحادث المروري الجسيم رقم ({_val(m, 'incident_no')})، جرى بعث ({_val(m, 'deceased_count')}) للإيداع بثلاجة الموتى طرفكم، "
+            f"وبيانات الجثمان: ({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')} - {_val(m, 'plate_no')})، البيان الإضافي للوفيات: ({_val(m, 'other_deceased')})، "
+            f"حيث كانت واقعة الوفاة والنقل: ({_val(m, 'transport_death')}). نأمل من سعادتكم الأمر باستلام وإيداع الجثمان/الجثامين في الثلاجة رسمياً، "
+            f"وإجراء الكشف الطبي اللازم وموافاتنا بتقرير الوفاة المعتمد، مع التقيد التام بالتوجيه النظامي التالي: ({_val(m, 'forensic_order')})."
+        ),
+    },
+
+    "med_toxicology": {
+        "title": "نموذج إحالة وطلب تحليل سموم",
+        "icon": "🧪",
+        "subtitle": "طلب سحب عينات حيوية وفحص مخبري للسموم والمسكرات والمؤثرات العقلية وتوثيق سلسلة الحيازة",
+        "category": "إحالة طبية",
+        "allow_absence": True,
+        "require_image": False,
+        "fields": [
+            {"key": "incident_no", "label": "رقم الحادث / المحضر المرجعي", "type": "text", "sample": "460986890"},
+            {"key": "lab_dest", "label": "الجهة المحال إليها (المستشفى / مركز مراقبة السموم)", "type": "text", "sample": "قسم الطوارئ والمختبر / مركز مراقبة السموم والكيمياء الشرعية"},
+            {"key": "party_name", "label": "اسم الشخص المحال للفحص رباعياً", "type": "text", "sample": "ماجد بن سالم بن عوض القحطاني"},
+            {"key": "party_id", "label": "رقم الهوية / الإقامة والجنسية", "type": "text", "sample": "1089911223 - سعودي"},
+            {"key": "plate_no", "label": "بيانات المركبة وصفته بالواقعة", "type": "text", "sample": "هيونداي إلنترا (ط س ع 6120) - قائد المركبة الطرف الأول"},
+            {"key": "suspicion_signs", "label": "المسوغ النظامي والقرائن الميدانية لطلب التحليل", "type": "select", "options": [
+                "الاشتباه بالقيادة تحت تأثير مسكر أو مخدر أو مؤثر عقلي لقرائن المعاينة الميدانية",
+                "حادث مروري جسيم نتج عنه وفيات أو إصابات بالغة يستوجب الفحص النظامي الشامل",
+                "ظهور علامات غير طبيعية واضطراب في التوازن والنطق أو العثور على مواد يشتبه بها",
+                "سحب عينة حيوية احترازية لحالة منومة أو متوفاة لتحديد المسببات السمية"
+            ], "sample": "الاشتباه بالقيادة تحت تأثير مسكر أو مخدر أو مؤثر عقلي لقرائن المعاينة الميدانية"},
+            {"key": "sample_type", "label": "نوع العينات والفحص المخبري المطلوب", "type": "select", "options": [
+                "سحب عينتي دم وبول للكشف الكمي والنوعي عن الكحول والمخدرات والمؤثرات العقلية",
+                "سحب عينة دم وريدية عاجلة لقياس نسبة الكحول والسموم (حالة طوارئ / منوم)",
+                "فحص سموم جنائي شامل للعينات الحيوية مع تحريزها بأختام رسمية"
+            ], "sample": "سحب عينتي دم وبول للكشف الكمي والنوعي عن الكحول والمخدرات والمؤثرات العقلية"},
+            {"key": "escort_info", "label": "بيانات المرافق الأمني وإجراء التسليم والتحريز", "type": "textarea", "sample": "مبعوث برفقة الدورية المرورية المستلمة — يُسحب الفحص تحت الإشراف المباشر مع توثيق سلسلة الحيازة وإعادة المذكور برفقة المرافق الأمني فور الانتهاء."},
+        ],
+        "legal_fn": lambda m: (
+            f"سعادة مدير ({_val(m, 'lab_dest')}) المحترم، السلام عليكم ورحمة الله وبركاته.. "
+            f"استناداً إلى أحكام نظام المرور ولائحته التنفيذية وإجراءات الاستدلال في الحادث/المحضر رقم ({_val(m, 'incident_no')})، "
+            f"نبعث لسعادتكم المدعو ({_val(m, 'party_name')})، حامل الهوية رقم ({_val(m, 'party_id')})، وعلاقته بالواقعة ({_val(m, 'plate_no')})، "
+            f"وذلك بناءً على المسوغ النظامي: ({_val(m, 'suspicion_signs')}). نأمل توجيه المختصين بإجراء ({_val(m, 'sample_type')}) وفق الأصول الفنية المعتمدة "
+            f"وتوثيق وقت أخذ العينة وسلسلة الحيازة النظامية، وموافاتنا بالتقرير المخبري القطعي السري في مظروف رسمي مختوم، مع مراعاة الترتيب الأمني: ({_val(m, 'escort_info')})."
+        ),
+    },
 }
 
 
@@ -670,7 +790,7 @@ def generate_qr_png_b64(data_text: str) -> str:
 
 
 # =====================================================================
-# 4. قاعدة البيانات المحلية SQLite مع تهيئة سجلات تجريبية
+# 4. قاعدة البيانات المحلية SQLite
 # =====================================================================
 DB_PATH = "khafar_system.db"
 
@@ -692,7 +812,7 @@ def init_db():
     if c.execute("SELECT COUNT(*) FROM shift_settings").fetchone()[0] == 0:
         c.execute("""
             INSERT INTO shift_settings (id, dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps)
-            VALUES (1, 'شعبة المرور - وحدة الحوادث والخفر • دورية خفر (ميدان - 14)', 'رقيب أول', 'فهد بن عبدالله القحطاني', 'رئيس رقباء', 'سالم بن محمد الدوسري', '17.0924° N, 43.0956° E')
+            VALUES (1, 'قسم مرور محافظة العارضة - وحدة الحوادث والخفر', 'رقيب أول', 'فهد بن أحمد مجرشي', 'رئيس رقباء', 'سلمان بن علي دوشي', '17.0924° N, 43.0956° E')
         """)
 
     c.execute("""
@@ -719,34 +839,6 @@ def init_db():
             verify_hash TEXT
         )
     """)
-
-    # إضافة 3 نماذج تجريبية جاهزة عند التشغيل الأول فقط لمعاينة الأرشيف مباشرة
-    if c.execute("SELECT COUNT(*) FROM records").fetchone()[0] == 0:
-        now_str = datetime.now(KSA_TZ).strftime("%Y/%m/%d - %H:%M")
-        for idx, fid in enumerate(["decl_handover", "decl_fault", "min_inspection"], start=1):
-            fdef = TRAFFIC_FORMS[fid]
-            sample_map = {f["key"]: f["sample"] for f in fdef["fields"]}
-            d_no = f"KH-261118-00{idx}"
-            c_b64 = generate_fingerprint_png_b64(f"SEED_C_{idx}")
-            o_b64 = generate_fingerprint_png_b64(f"SEED_O_{idx}", ink_rgb=(15, 61, 46))
-            v_hash = "KHF-" + hashlib.sha256(d_no.encode()).hexdigest()[:14].upper()
-            c.execute("""
-                INSERT INTO records (
-                    doc_no, form_id, form_title, category, party_name, party_id, plate_no,
-                    gps_coords, created_at, fields_json, legal_text, citizen_stamp_b64,
-                    citizen_auth_mode, officer_stamp_b64, attachment_b64, officer_full,
-                    duty_full, dept_name, verify_hash
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                d_no, fid, fdef["title"], fdef["category"],
-                sample_map.get("party_name", "-"), sample_map.get("party_id", "-"),
-                sample_map.get("plate_no", "-"), "17.0924° N, 43.0956° E", now_str,
-                json.dumps(sample_map, ensure_ascii=False), fdef["legal_fn"](sample_map),
-                c_b64, "بصمة منفذ الشحن (Type-C)", o_b64, "",
-                "رقيب أول / فهد بن عبدالله القحطاني", "رئيس رقباء / سالم بن محمد الدوسري",
-                "شعبة المرور - وحدة الحوادث والخفر", v_hash
-            ))
-
     conn.commit()
     conn.close()
 
@@ -816,7 +908,7 @@ def delete_record_db(rec_id: int):
 
 
 # =====================================================================
-# 5. قالب الطباعة الرسمي مقاس A4 (ورقة بيضاء رسمية بهوية المرور الخضراء)
+# 5. قالب الطباعة الرسمي مقاس A4 (متكيف للإقرارات والمحاضر والإحالات الطبية)
 # =====================================================================
 def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bool = False) -> str:
     fields_map = rec["fields"] if isinstance(rec.get("fields"), dict) else json.loads(rec["fields_json"])
@@ -832,33 +924,46 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
     qr_payload = f"DOC:{rec['doc_no']}|ID:{rec['party_id']}|PLATE:{rec['plate_no']}|SEAL:{rec['verify_hash']}"
     qr_b64 = generate_qr_png_b64(qr_payload)
 
+    is_medical = rec.get("category") == "إحالة طبية"
+    col1_header = "ختم وتوقيع جهة الاستلام (المستشفى / المختبر)" if is_medical else "بصمة / توقيع الطرف المعني"
+    col1_top_name = "المختص المناوب بالاستلام" if (is_medical and "ختم وتوقيع" in rec.get("citizen_auth_mode", "")) else rec["party_name"]
+
     if rec.get("citizen_stamp_b64"):
-        citizen_box_inner = f"<img src='data:image/png;base64,{rec['citizen_stamp_b64']}' style='height:68px; object-fit:contain;' />"
+        citizen_box_inner = f"<img src='data:image/png;base64,{rec['citizen_stamp_b64']}' style='height:64px; object-fit:contain;' />"
     elif interactive_sig and "توقيع حي" in rec.get("citizen_auth_mode", ""):
         citizen_box_inner = """
         <div>
-            <canvas id="liveSigCanvas" width="180" height="68" style="border:1px dashed #0d47a1; border-radius:6px; background:#f8fafc; touch-action:none; cursor:crosshair;"></canvas>
+            <canvas id="liveSigCanvas" width="180" height="64" style="border:1px dashed #0d47a1; border-radius:6px; background:#f8fafc; touch-action:none; cursor:crosshair;"></canvas>
             <div class="no-print" style="margin-top:2px;">
                 <button onclick="clearSig()" style="font-size:10px; padding:1px 6px; cursor:pointer;">مسح التوقيع</button>
             </div>
         </div>
         """
+    elif is_medical and "ختم وتوقيع" in rec.get("citizen_auth_mode", ""):
+        citizen_box_inner = """
+        <div style='border:1px dashed #64748b; border-radius:6px; padding:8px 6px; margin:3px 4px; font-size:10px; color:#334155; line-height:1.6;'>
+            الاسم: .........................................<br>
+            التوقيع والختم الرسمي لجهة الاستلام
+        </div>
+        """
     else:
-        citizen_box_inner = "<div style='padding:18px 0; font-weight:700; color:#7f1d1d; font-size:11px;'>غياب الطرف / امتناع مثبت بالمحضر</div>"
+        citizen_box_inner = "<div style='padding:16px 0; font-weight:700; color:#7f1d1d; font-size:11px;'>غياب الطرف / امتناع مثبت بالمحضر</div>"
 
     officer_img = (
-        f"<img src='data:image/png;base64,{rec['officer_stamp_b64']}' style='height:68px; object-fit:contain;' />"
+        f"<img src='data:image/png;base64,{rec['officer_stamp_b64']}' style='height:64px; object-fit:contain;' />"
         if rec.get("officer_stamp_b64") else ""
     )
 
     attachment_block = ""
     if rec.get("attachment_b64"):
         attachment_block = f"""
-        <div style="margin-top:8px; border:1px dashed #64748b; border-radius:6px; padding:6px 10px; display:flex; align-items:center; justify-content:space-between;">
+        <div style="margin-top:6px; border:1px dashed #64748b; border-radius:6px; padding:5px 10px; display:flex; align-items:center; justify-content:space-between;">
             <span style="font-size:10.5px; font-weight:700; color:#0f3d2e;">📎 مرفق موثق بالمعاملة:</span>
-            <img src="data:image/png;base64,{rec['attachment_b64']}" style="height:48px; border-radius:4px; border:1px solid #cbd5e1;" />
+            <img src="data:image/png;base64,{rec['attachment_b64']}" style="height:44px; border-radius:4px; border:1px solid #cbd5e1;" />
         </div>
         """
+
+    legal_box_title = "نص الخطاب والتوجيه الرسمي المعتمد:" if is_medical else f"الصيغة النظامية المعتمدة ({rec['category']}):"
 
     return f"""
 <!DOCTYPE html>
@@ -879,41 +984,41 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
         font-size: 14px; font-weight: 800; border-radius: 8px; cursor: pointer;
     }}
     .a4-sheet {{
-        width: 210mm; min-height: 285mm; max-height: 292mm; margin: 0 auto;
-        background: #ffffff; color: #0f172a; padding: 11mm 13mm; border: 2px solid #0f3d2e;
+        width: 210mm; min-height: 282mm; margin: 0 auto;
+        background: #ffffff; color: #0f172a; padding: 10mm 12mm; border: 2px solid #0f3d2e;
         display: flex; flex-direction: column; justify-content: space-between;
         box-shadow: 0 12px 32px rgba(0,0,0,0.45);
     }}
-    .hdr {{ display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f3d2e; padding-bottom: 8px; }}
-    .hdr-right p, .hdr-left p {{ margin: 1px 0; font-size: 11.5px; font-weight: 700; color: #0f172a; }}
+    .hdr {{ display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f3d2e; padding-bottom: 7px; }}
+    .hdr-right p, .hdr-left p {{ margin: 1px 0; font-size: 11px; font-weight: 700; color: #0f172a; }}
     .hdr-center {{
         background: #f1f5f3; border: 1.5px solid #0f3d2e; border-radius: 8px;
-        padding: 6px 16px; text-align: center;
+        padding: 5px 14px; text-align: center;
     }}
     .doc-banner {{
         background: #0f3d2e; color: #ffffff; text-align: center;
-        padding: 6px; border-radius: 6px; font-size: 15px; font-weight: 800; margin: 10px 0;
+        padding: 5px; border-radius: 6px; font-size: 14.5px; font-weight: 800; margin: 8px 0;
     }}
-    table.data-tbl {{ width: 100%; border-collapse: collapse; margin-bottom: 10px; }}
-    table.data-tbl td {{ border: 1px solid #cbd5e1; padding: 5px 9px; font-size: 11.5px; }}
+    table.data-tbl {{ width: 100%; border-collapse: collapse; margin-bottom: 8px; }}
+    table.data-tbl td {{ border: 1px solid #cbd5e1; padding: 4px 8px; font-size: 11px; vertical-align: top; }}
     table.data-tbl td.lbl {{ width: 32%; background: #f4f7f6; font-weight: 700; color: #0f3d2e; }}
-    table.data-tbl td.val {{ width: 68%; color: #0f172a; font-weight: 600; }}
+    table.data-tbl td.val {{ width: 68%; color: #0f172a; font-weight: 600; white-space: pre-line; }}
     .legal-box {{
         background: #f8fafc; border: 1px solid #0f3d2e; border-right: 5px solid #0f3d2e;
-        border-radius: 6px; padding: 10px 12px; font-size: 12px; line-height: 1.8; text-align: justify; color: #0f172a;
+        border-radius: 6px; padding: 9px 12px; font-size: 11.5px; line-height: 1.75; text-align: justify; color: #0f172a;
     }}
-    table.sig-tbl {{ width: 100%; border-collapse: collapse; margin-top: 10px; text-align: center; }}
-    table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #94a3b8; padding: 5px; font-size: 11px; color: #0f3d2e; }}
-    table.sig-tbl td {{ border: 1px solid #94a3b8; padding: 6px; width: 33.3%; vertical-align: middle; height: 108px; color: #0f172a; }}
+    table.sig-tbl {{ width: 100%; border-collapse: collapse; margin-top: 8px; text-align: center; }}
+    table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #94a3b8; padding: 4px; font-size: 10.5px; color: #0f3d2e; }}
+    table.sig-tbl td {{ border: 1px solid #94a3b8; padding: 5px; width: 33.3%; vertical-align: middle; height: 102px; color: #0f172a; }}
     .footer-qr {{
-        margin-top: 8px; background: #f4f7f6; border: 1px solid #cbd5e1; border-radius: 6px;
-        padding: 6px 10px; display: flex; justify-content: space-between; align-items: center;
+        margin-top: 7px; background: #f4f7f6; border: 1px solid #cbd5e1; border-radius: 6px;
+        padding: 5px 10px; display: flex; justify-content: space-between; align-items: center;
     }}
     @media print {{
         @page {{ size: A4 portrait; margin: 6mm; }}
         body {{ background: #fff; padding: 0; }}
         .toolbar, .no-print {{ display: none !important; }}
-        .a4-sheet {{ width: 100%; min-height: 278mm; box-shadow: none; margin: 0; }}
+        .a4-sheet {{ width: 100%; min-height: 276mm; box-shadow: none; margin: 0; }}
     }}
 </style>
 </head>
@@ -932,13 +1037,13 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
                     <p style="color:#0f3d2e;">{rec['dept_name']}</p>
                 </div>
                 <div class="hdr-center">
-                    <div style="font-size:13px; font-weight:800; color:#0f3d2e;">ميدان الخفر - الإصدار الميداني</div>
-                    <div style="font-size:10.5px; color:#475569;">وثيقة {rec['category']} رسمية مقفلة إلكترونياً</div>
+                    <div style="font-size:12.5px; font-weight:800; color:#0f3d2e;">ميدان الخفر - الإصدار الميداني</div>
+                    <div style="font-size:10px; color:#475569;">وثيقة {rec['category']} رسمية مقفلة إلكترونياً</div>
                 </div>
                 <div class="hdr-left">
                     <p>الرقم المرجعي: {rec['doc_no']}</p>
                     <p>التاريخ والوقت: {rec['created_at']}</p>
-                    <p style="font-size:10.5px;">إحداثيات GPS: {rec['gps_coords']}</p>
+                    <p style="font-size:10px;">إحداثيات GPS: {rec['gps_coords']}</p>
                 </div>
             </div>
 
@@ -946,7 +1051,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
             <table class="data-tbl">{rows_html}</table>
 
             <div class="legal-box">
-                <div style="font-weight:800; color:#0f3d2e; margin-bottom:4px;">الصيغة النظامية المعتمدة ({rec['category']}):</div>
+                <div style="font-weight:800; color:#0f3d2e; margin-bottom:3px;">{legal_box_title}</div>
                 {rec['legal_text']}
             </div>
             {attachment_block}
@@ -956,7 +1061,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
             <table class="sig-tbl">
                 <thead>
                     <tr>
-                        <th>بصمة / توقيع الطرف المعني</th>
+                        <th>{col1_header}</th>
                         <th>بصمة وتوثيق الفرد المعد</th>
                         <th>مصادقة ضابط الخفر المستلم</th>
                     </tr>
@@ -964,21 +1069,21 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
                 <tbody>
                     <tr>
                         <td>
-                            <div style="font-size:10.5px; font-weight:700; margin-bottom:3px;">{rec['party_name']}</div>
+                            <div style="font-size:10px; font-weight:700; margin-bottom:2px;">{col1_top_name}</div>
                             {citizen_box_inner}
-                            <div style="font-size:9.5px; color:#475569; margin-top:2px;">{rec['citizen_auth_mode']}</div>
+                            <div style="font-size:9px; color:#475569; margin-top:2px;">{rec['citizen_auth_mode']}</div>
                         </td>
                         <td>
-                            <div style="font-size:10.5px; font-weight:700; margin-bottom:3px;">{rec['officer_full']}</div>
+                            <div style="font-size:10px; font-weight:700; margin-bottom:2px;">{rec['officer_full']}</div>
                             {officer_img}
-                            <div style="font-size:9.5px; color:#475569; margin-top:2px;">بصمة الفرد المباشر المعتمدة</div>
+                            <div style="font-size:9px; color:#475569; margin-top:2px;">بصمة الفرد المباشر المعتمدة</div>
                         </td>
                         <td>
-                            <div style="font-size:11px; font-weight:800; margin-bottom:10px;">{rec['duty_full']}</div>
-                            <div style="display:inline-block; border:1.5px solid #0f3d2e; color:#0f3d2e; padding:4px 12px; border-radius:5px; font-size:11px; font-weight:800;">
+                            <div style="font-size:10.5px; font-weight:800; margin-bottom:8px;">{rec['duty_full']}</div>
+                            <div style="display:inline-block; border:1.5px solid #0f3d2e; color:#0f3d2e; padding:3px 10px; border-radius:5px; font-size:10.5px; font-weight:800;">
                                 مُصادق ومُعتمد نظاماً
                             </div>
-                            <div style="font-size:9.5px; color:#475569; margin-top:10px;">إشراف مناوبة الخفر</div>
+                            <div style="font-size:9px; color:#475569; margin-top:8px;">إشراف مناوبة الخفر</div>
                         </td>
                     </tr>
                 </tbody>
@@ -986,12 +1091,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
 
             <div class="footer-qr">
                 <div>
-                    <div style="font-size:10px; font-weight:800; color:#0f3d2e;">
-                        وثيقة ميدانية محررة ومقفلة إلكترونياً فور توثيق الطرف المعني - يُلغى العمل بها عند أي كشط أو تعديل يدوي.
+                    <div style="font-size:9.5px; font-weight:800; color:#0f3d2e;">
+                        وثيقة رسمية محررة ومقفلة إلكترونياً عبر منصة ميدان الخفر - لا يُعتد بأي كشط أو تعديل يدوي.
                     </div>
-                    <div style="font-size:9.5px; color:#475569;">ختم التحقق الرقمي (SHA-256 Seal): {rec['verify_hash']}</div>
+                    <div style="font-size:9px; color:#475569;">ختم التحقق الرقمي (SHA-256 Seal): {rec['verify_hash']}</div>
                 </div>
-                <img src="data:image/png;base64,{qr_b64}" style="width:54px; height:54px;" />
+                <img src="data:image/png;base64,{qr_b64}" style="width:50px; height:50px;" />
             </div>
         </div>
     </div>
@@ -1024,18 +1129,25 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
 
 
 # =====================================================================
-# 6. إدارة حالة الجلسة والتنقل بين الشاشات الأربعة
+# 6. إدارة حالة الجلسة والتنقل
 # =====================================================================
 init_db()
 shift = get_shift_settings()
 now_ksa = datetime.now(KSA_TZ)
 
+VALID_FILTERS = [
+    "جميع النماذج (11)",
+    "قائمة الإقرارات (4)",
+    "قائمة المحاضر (4)",
+    "النماذج الطبية والجنائية (3)",
+]
+
 if "nav_tab" not in st.session_state:
     st.session_state.nav_tab = "النماذج الميدانية"
 if "opened_form_id" not in st.session_state:
     st.session_state.opened_form_id = None
-if "catalog_filter" not in st.session_state:
-    st.session_state.catalog_filter = "جميع النماذج (8)"
+if st.session_state.get("catalog_filter") not in VALID_FILTERS:
+    st.session_state.catalog_filter = "جميع النماذج (11)"
 if "doc_no" not in st.session_state:
     st.session_state.doc_no = f"KH-{now_ksa.strftime('%y%m%d-%H%M%S')}"
 if "doc_time" not in st.session_state:
@@ -1085,11 +1197,11 @@ st.markdown(f"""
                     <span class="indep-pill">إصدار ميداني مستقل</span>
                 </div>
                 <div style="font-size:13px; color:#a7f3d0; opacity:0.9;">
-                    نظام الإقرارات والمحاضر الذكي • الإدارة العامة للمرور
+                    نظام الإقرارات والمحاضر والإحالات الطبية • الإدارة العامة للمرور
                 </div>
             </div>
         </div>
-        <div class="status-pills-row" style="margin-top:0;">
+        <div class="status-pills-row">
             <span class="pill-offline">🟢 وضع العمل المحلي دون شبكة - جاهز</span>
             <span class="pill-usb">🧬 قارئ البصمة Type-C: {st.session_state.scanner_model}</span>
         </div>
@@ -1108,10 +1220,9 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# شريط التنقل الرئيسي بالأقسام الأربعة
 nav_cols = st.columns(4)
 nav_items = [
-    ("النماذج الميدانية", "📋 النماذج الميدانية"),
+    ("النماذج الميدانية", "📋 النماذج الميدانية (11)"),
     ("الأرشيف المحلي", f"🗂️ الأرشيف المحلي ({archive_count})"),
     ("مناوبة الخفر", "👮 مناوبة الخفر"),
     ("بصمة الشحن OTG", "🧬 بصمة الشحن OTG"),
@@ -1133,18 +1244,17 @@ for idx, (tab_key, tab_label) in enumerate(nav_items):
 st.write("")
 
 # =====================================================================
-# القسم الأول: النماذج الميدانية (عرض البطاقات + شاشة تحرير النموذج)
+# القسم الأول: النماذج الميدانية (11 نموذجاً)
 # =====================================================================
 if st.session_state.nav_tab == "النماذج الميدانية":
 
-    # أ) عرض الكتالوج الرئيسي عند عدم فتح نموذج فرعي
     if st.session_state.opened_form_id is None:
         st.markdown(f"""
         <div class="hero-shift-card">
             <div class="hero-eyebrow">{shift['dept_name']}</div>
-            <h2 class="hero-title">منصة تحرير وتوثيق الإقرارات والمحاضر الميدانية</h2>
+            <h2 class="hero-title">منصة تحرير وتوثيق الإقرارات والمحاضر والإحالات الطبية</h2>
             <div class="hero-desc">
-                اختر النموذج المطلوب لتعبئة الحقول يدوياً أو بالتعبئة الذكية السريعة، ثم توثيق بصمة الطرف المعني عبر منفذ الشحن (USB Type-C) لقفل الحقول نهائياً وتصدير ملف PDF رسمي مقاس A4.
+                اختر النموذج المطلوب لتعبئة الحقول يدوياً أو بالتعبئة التجريبية الفورية، وتوثيق البصمة عبر منفذ الشحن (USB Type-C) أو تخصيص ختم الاستلام للمستشفيات والمختبرات، وتصدير وثيقة A4 PDF رسمية.
             </div>
             <div class="shift-summary-inner">
                 <div>
@@ -1152,14 +1262,14 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     <div style="font-size:12.5px; color:#94a3b8; margin-top:3px;">ضابط الخفر: <strong style="color:#d4a853;">{shift['duty_rank']} / {shift['duty_name']}</strong></div>
                 </div>
                 <div style="font-size:12px; color:#34d399; font-weight:700;">
-                    جميع النماذج مدعومة بقفل الحقول التراتبي وطباعة A4 الرسمية ✓
+                    جميع النماذج الـ 11 مدعومة بقفل الحقول التراتبي وطباعة A4 الرسمية ✓
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        f_col1, f_col2, f_col3 = st.columns(3)
-        for col_obj, flt_label in zip([f_col1, f_col2, f_col3], ["جميع النماذج (8)", "قائمة الإقرارات (4)", "قائمة المحاضر (4)"]):
+        flt_cols = st.columns(4)
+        for col_obj, flt_label in zip(flt_cols, VALID_FILTERS):
             with col_obj:
                 if st.button(
                     flt_label,
@@ -1170,8 +1280,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     st.session_state.catalog_filter = flt_label
                     safe_rerun()
 
-        # عرض أولاً: قائمة الإقرارات الميدانية
-        if st.session_state.catalog_filter in ["جميع النماذج (8)", "قائمة الإقرارات (4)"]:
+        # أولاً: قائمة الإقرارات الميدانية (4)
+        if st.session_state.catalog_filter in ["جميع النماذج (11)", "قائمة الإقرارات (4)"]:
             st.markdown("""
             <div class="sec-heading-green">
                 <span style="font-size:19px; font-weight:800; color:#ffffff;">أولاً: قائمة الإقرارات الميدانية</span>
@@ -1198,8 +1308,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         reset_doc_state()
                         safe_rerun()
 
-        # عرض ثانياً: قائمة المحاضر الرسمية
-        if st.session_state.catalog_filter in ["جميع النماذج (8)", "قائمة المحاضر (4)"]:
+        # ثانياً: قائمة المحاضر الرسمية (4)
+        if st.session_state.catalog_filter in ["جميع النماذج (11)", "قائمة المحاضر (4)"]:
             st.markdown("""
             <div class="sec-heading-gold">
                 <span style="font-size:19px; font-weight:800; color:#ffffff;">ثانياً: قائمة المحاضر الرسمية</span>
@@ -1226,14 +1336,43 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         reset_doc_state()
                         safe_rerun()
 
-    # ب) شاشة تحرير وتبصيم النموذج المختار
+        # ثالثاً: النماذج الطبية والجنائية (3)
+        if st.session_state.catalog_filter in ["جميع النماذج (11)", "النماذج الطبية والجنائية (3)"]:
+            st.markdown("""
+            <div class="sec-heading-med">
+                <span style="font-size:19px; font-weight:800; color:#ffffff;">ثالثاً: النماذج الطبية والجنائية</span>
+                <span class="badge-med">3 نماذج طبية وجنائية</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            med_keys = [k for k, v in TRAFFIC_FORMS.items() if v["category"] == "إحالة طبية"]
+            md_cols = st.columns(2)
+            for i, fid in enumerate(med_keys):
+                f_item = TRAFFIC_FORMS[fid]
+                with md_cols[i % 2]:
+                    st.markdown(f"""
+                    <div class="form-item-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="font-size:16.5px; font-weight:800; color:#ffffff;">{f_item['icon']} {f_item['title']}</span>
+                            <span class="badge-med">نموذج طبي / جنائي</span>
+                        </div>
+                        <div style="font-size:12.5px; color:#94a3b8; line-height:1.6; margin-bottom:8px;">{f_item['subtitle']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if st.button(f"فتح وتحرير {f_item['title']} ←", key=f"open_{fid}", use_container_width=True):
+                        st.session_state.opened_form_id = fid
+                        reset_doc_state()
+                        safe_rerun()
+
+    # شاشة تحرير وتبصيم النموذج المختار
     else:
         fid = st.session_state.opened_form_id
         form_def = TRAFFIC_FORMS[fid]
+        cat_badge_cls = {"إقرار": "green", "محضر": "gold", "إحالة طبية": "med"}.get(form_def["category"], "green")
 
         top_bar1, top_bar2, top_bar3 = st.columns([1.3, 1.3, 1.4])
         with top_bar1:
-            if st.button("↩️ العودة لقائمة النماذج الثمانية", use_container_width=True):
+            if st.button("↩️ العودة لقائمة النماذج الـ 11", use_container_width=True):
                 st.session_state.opened_form_id = None
                 safe_rerun()
         with top_bar2:
@@ -1254,7 +1393,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
         <div class="hero-shift-card" style="padding:16px 20px; margin-top:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
                 <div>
-                    <span class="badge-{'green' if form_def['category']=='إقرار' else 'gold'}">{form_def['category']} معتمد</span>
+                    <span class="badge-{cat_badge_cls}">{form_def['category']} معتمد</span>
                     <h3 style="margin:6px 0 2px 0; color:#ffffff; font-size:20px;">{form_def['icon']} {form_def['title']}</h3>
                 </div>
                 <div style="font-size:12.5px; color:#d4a853; font-weight:700;">
@@ -1269,7 +1408,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             with lk1:
                 st.markdown("""
                 <div class="lock-emerald-banner">
-                    🔒 تم قفل جميع الحقول النصية نهائياً بعد توثيق الطرف المعني لمنع أي تعديل لاحق على الوثيقة.
+                    🔒 تم قفل جميع الحقول النصية نهائياً لمنع أي تعديل لاحق على الوثيقة الرسمية.
                 </div>
                 """, unsafe_allow_html=True)
             with lk2:
@@ -1299,7 +1438,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
         att_label = (
             "📸 إرفاق صورة إشعار المخالفة (مطلوب لحوكمة الإلغاء بالهيئة المرورية)"
             if form_def["require_image"]
-            else "📎 إرفاق صورة الهوية / الاستمارة أو صورة ميدانية داعمة (اختياري)"
+            else "📎 إرفاق صورة الهوية / التقرير الأولي أو مرفق داعم (اختياري)"
         )
         uploaded_img = st.file_uploader(att_label, type=["png", "jpg", "jpeg"], disabled=st.session_state.citizen_locked, key=f"att_{st.session_state.doc_no}")
         if uploaded_img is not None and not st.session_state.citizen_locked:
@@ -1312,24 +1451,33 @@ if st.session_state.nav_tab == "النماذج الميدانية":
         live_legal_text = form_def["legal_fn"](current_values)
         st.markdown(f"""
         <div class="legal-dark-box">
-            <div style="color:#d4a853; font-weight:800; margin-bottom:6px;">⚖️ معاينة الصيغة النظامية المعتمدة في ملف الـ PDF:</div>
+            <div style="color:#d4a853; font-weight:800; margin-bottom:6px;">⚖️ معاينة النص الرسمي المعتمد في وثيقة A4 PDF:</div>
             {live_legal_text}
         </div>
         """, unsafe_allow_html=True)
 
-        # خطوتا التبصيم والاعتماد التراتبي
+        is_med_form = form_def["category"] == "إحالة طبية"
         s1_col, s2_col = st.columns(2)
         with s1_col:
             st.markdown("<div class='auth-panel'>", unsafe_allow_html=True)
-            st.markdown("#### 1️⃣ بصمة / توقيع الطرف المعني (يقفل التعديل)")
-            auth_opts = ["بصمة منفذ الشحن (USB Type-C)", "توقيع حي بالإصبع على الشاشة (بديل الطوارئ)"]
-            if form_def["allow_absence"]:
-                auth_opts.append("غياب الطرف / امتناع مثبت بالمحضر")
+            if is_med_form:
+                st.markdown("#### 1️⃣ توثيق خانة الاستلام (المستشفى / الثلاجة / المختبر)")
+                auth_opts = [
+                    "تخصيص خانة ختم وتوقيع رسمي لجهة الاستلام بالورقة",
+                    "توقيع حي على الشاشة (للمختص المناوب / المسعف المستلم)",
+                    "بصمة منفذ الشحن (USB Type-C) للمرافق / المستلم",
+                ]
+            else:
+                st.markdown("#### 1️⃣ بصمة / توقيع الطرف المعني (يقفل التعديل)")
+                auth_opts = ["بصمة منفذ الشحن (USB Type-C)", "توقيع حي بالإصبع على الشاشة (بديل الطوارئ)"]
+                if form_def["allow_absence"]:
+                    auth_opts.append("غياب الطرف / امتناع مثبت بالمحضر")
 
-            chosen_auth = st.radio("وسيلة التوثيق الميداني:", auth_opts, disabled=st.session_state.citizen_locked)
+            chosen_auth = st.radio("وسيلة التوثيق المعتمدة:", auth_opts, disabled=st.session_state.citizen_locked)
 
             if not st.session_state.citizen_locked:
-                if st.button("🧬 التقاط البصمة وقفل الحقول النصية", type="primary", use_container_width=True):
+                btn_lbl = "✅ اعتماد صيغة الإحالة وقفل الحقول النصية" if is_med_form else "🧬 التقاط البصمة وقفل الحقول النصية"
+                if st.button(btn_lbl, type="primary", use_container_width=True):
                     if "بصمة منفذ الشحن" in chosen_auth:
                         seed = f"{st.session_state.doc_no}_{current_values.get('party_id', '')}_CITIZEN"
                         st.session_state.citizen_stamp_b64 = generate_fingerprint_png_b64(seed, ink_rgb=(13, 71, 161))
@@ -1337,15 +1485,18 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     elif "توقيع حي" in chosen_auth:
                         st.session_state.citizen_stamp_b64 = ""
                         st.session_state.citizen_auth_mode = "توقيع حي على الشاشة"
+                    elif "ختم وتوقيع" in chosen_auth:
+                        st.session_state.citizen_stamp_b64 = ""
+                        st.session_state.citizen_auth_mode = "ختم وتوقيع جهة الاستلام الرسمية"
                     else:
                         st.session_state.citizen_stamp_b64 = ""
                         st.session_state.citizen_auth_mode = "غياب الطرف / امتناع مثبت بالمحضر"
                     st.session_state.citizen_locked = True
                     safe_rerun()
             else:
-                st.success(f"تم التوثيق بنجاح: {st.session_state.citizen_auth_mode}")
+                st.success(f"تم القفل والتوثيق: {st.session_state.citizen_auth_mode}")
                 if st.session_state.citizen_stamp_b64:
-                    st.image(base64.b64decode(st.session_state.citizen_stamp_b64), caption="ختم البصمة الصوري (تم مسح الأثر الحيوي)", width=105)
+                    st.image(base64.b64decode(st.session_state.citizen_stamp_b64), caption="ختم البصمة الصوري المعتمد", width=105)
             st.markdown("</div>", unsafe_allow_html=True)
 
         with s2_col:
@@ -1411,7 +1562,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
 
 
 # =====================================================================
-# القسم الثاني: الأرشيف المحلي واسترجاع الوثائق
+# القسم الثاني: الأرشيف المحلي
 # =====================================================================
 elif st.session_state.nav_tab == "الأرشيف المحلي":
     st.markdown("""
@@ -1424,7 +1575,7 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
     records = search_records_db(search_q)
 
     if not records:
-        st.info("لا توجد سجلات مطابقة في قاعدة البيانات المحلية.")
+        st.info("لا توجد سجلات محفوظة حالياً في قاعدة البيانات المحلية.")
     else:
         for r in records:
             with st.expander(f"📌 {r['form_title']}  —  {r['party_name']}  |  اللوحة: {r['plate_no']}  |  ({r['doc_no']})"):
@@ -1461,7 +1612,7 @@ elif st.session_state.nav_tab == "مناوبة الخفر":
         <div class="hero-eyebrow">ضبط بيانات الاستلام الميداني</div>
         <h3 style="margin:4px 0 8px 0; color:#ffffff;">👮 إعدادات استلام مناوبة الخفر والفرقة المباشرة</h3>
         <div style="font-size:13px; color:#cbd5e1;">
-            تُثبت البيانات هنا مرة واحدة بداية الاستلام لتُدرج تلقائياً في ترويسة وذيل جميع الإقرارات والمحاضر الثمانية دون الحاجة لإعادة كتابتها.
+            تُثبت البيانات هنا مرة واحدة بداية الاستلام لتُدرج تلقائياً في ترويسة وذيل جميع النماذج الـ 11 دون الحاجة لإعادة كتابتها.
         </div>
     </div>
     """, unsafe_allow_html=True)
