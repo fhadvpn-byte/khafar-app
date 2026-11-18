@@ -970,7 +970,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     elif interactive_sig and "توقيع حي" in rec.get("citizen_auth_mode", ""):
         citizen_box_inner = """
         <div>
-            <canvas id="liveSigCanvas" width="180" height="62" style="border:1px dashed #0d47a1; border-radius:6px; background:#f8fafc; touch-action:none; cursor:crosshair;"></canvas>
+            <canvas id="liveSigCanvas" width="210" height="74" style="border:1px dashed #0d47a1; border-radius:6px; background:#f8fafc; touch-action:none; cursor:crosshair;"></canvas>
             <div class="no-print" style="margin-top:2px;">
                 <button onclick="clearSig()" style="font-size:10px; padding:1px 6px; cursor:pointer;">مسح التوقيع</button>
             </div>
@@ -1159,18 +1159,44 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     if (canvas) {{
         const ctx = canvas.getContext('2d');
         ctx.strokeStyle = '#0d47a1';
-        ctx.lineWidth = 2.2;
+        ctx.lineWidth = 2.6;
         ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         let drawing = false;
-        const pos = (e) => {{
+        const getPt = (e) => {{
             const r = canvas.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            return {{ x: (clientX - r.left) * (canvas.width / (r.width || 1)), y: (clientY - r.top) * (canvas.height / (r.height || 1)) }};
+            const t = (e.touches && e.touches.length) ? e.touches[0] : ((e.changedTouches && e.changedTouches.length) ? e.changedTouches[0] : e);
+            return {{
+                x: (t.clientX - r.left) * (canvas.width / (r.width || 1)),
+                y: (t.clientY - r.top) * (canvas.height / (r.height || 1))
+            }};
         }};
-        canvas.addEventListener('pointerdown', (e) => {{ drawing = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }});
-        canvas.addEventListener('pointermove', (e) => {{ if (!drawing) return; const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); }});
-        window.addEventListener('pointerup', () => {{ drawing = false; }});
+        const startDraw = (e) => {{
+            if (e.cancelable) e.preventDefault();
+            e.stopPropagation();
+            drawing = true;
+            const p = getPt(e);
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p.x + 0.1, p.y + 0.1);
+            ctx.stroke();
+        }};
+        const moveDraw = (e) => {{
+            if (!drawing) return;
+            if (e.cancelable) e.preventDefault();
+            e.stopPropagation();
+            const p = getPt(e);
+            ctx.lineTo(p.x, p.y);
+            ctx.stroke();
+        }};
+        const endDraw = (e) => {{ drawing = false; }};
+        canvas.addEventListener('mousedown', startDraw);
+        canvas.addEventListener('mousemove', moveDraw);
+        window.addEventListener('mouseup', endDraw);
+        canvas.addEventListener('touchstart', startDraw, {{ passive: false }});
+        canvas.addEventListener('touchmove', moveDraw, {{ passive: false }});
+        window.addEventListener('touchend', endDraw, {{ passive: false }});
+        window.addEventListener('touchcancel', endDraw, {{ passive: false }});
     }}
     function clearSig() {{
         if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
