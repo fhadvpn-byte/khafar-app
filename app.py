@@ -18,7 +18,7 @@ except ImportError:
 KSA_TZ = timezone(timedelta(hours=3))
 
 st.set_page_config(
-    page_title="ميدان الخفر | الإقرارات والمحاضر",
+    page_title="ميدان الخفر | قسم مرور العارضة",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -32,8 +32,14 @@ def safe_rerun():
         st.experimental_rerun()
 
 
+def format_entity(role_label: str, optional_name: str) -> str:
+    r = (role_label or "").strip()
+    n = (optional_name or "").strip()
+    return f"{r} / {n}" if (r and n) else (r or n)
+
+
 # =====================================================================
-# 1. الهوية البصرية الخضراء الداكنة والذهبية والطبية
+# 1. الهوية البصرية الخضراء الداكنة والذهبية
 # =====================================================================
 st.markdown("""
 <style>
@@ -178,8 +184,8 @@ section[data-testid="stSidebar"] { display: none !important; }
 }
 .hero-eyebrow {
     color: var(--gold-main);
-    font-size: 13px;
-    font-weight: 700;
+    font-size: 13.5px;
+    font-weight: 800;
     margin-bottom: 4px;
 }
 .hero-title {
@@ -400,7 +406,7 @@ TRAFFIC_FORMS = {
             f"أقر أنا الموقع والمبصم أدناه ({_val(m, 'party_name')})، حامل الهوية رقم ({_val(m, 'party_id')})، "
             f"بصفتي ({_val(m, 'receiver_role')})، بأنني استلمت المركبة ({_val(m, 'vehicle_desc')}) التي تحمل اللوحة رقم ({_val(m, 'plate_no')}) "
             f"في موقع الحادث رقم ({_val(m, 'incident_no')}) مباشرةً بحالتها الراهنة ({_val(m, 'vehicle_state')}) وبكامل مقتنياتها الشخصية دون نقص، "
-            f"وبموجبه أخلي مسؤولية الفرقة الميدانية المباشرة وقسم المرور من سحب المركبة أو حجزها، وأتعهد بعدم قيادتها في حال وجود أي خلل يؤثر على السلامة العامة."
+            f"وبموجبه أخلي مسؤولية قسم مرور العارضة والفرقة المباشرة من سحب المركبة أو حجزها، وأتعهد بعدم قيادتها في حال وجود أي خلل يؤثر على السلامة العامة."
         ),
     },
 
@@ -547,7 +553,7 @@ TRAFFIC_FORMS = {
             {"key": "party_name", "label": "اسم قائد المركبة عند الضبط", "type": "text", "sample": "تركي بن منصور الدوسري"},
             {"key": "party_id", "label": "رقم الهوية / الإقامة", "type": "text", "sample": "1109876543"},
             {"key": "tow_truck", "label": "بيانات سطحة السحب واسم السائق", "type": "text", "sample": "سطحة الحجز المعتمدة رقم (14) - السائق: رفيق أحمد"},
-            {"key": "impound_loc", "label": "ساحة الحجز المودعة بها المركبة", "type": "text", "sample": "ساحة حجز المرور الرئيسية بالمحافظة"},
+            {"key": "impound_loc", "label": "ساحة الحجز المودعة بها المركبة", "type": "text", "sample": "ساحة حجز المرور بالعارضة"},
             {"key": "pre_tow_state", "label": "حالة الهيكل الخارجي قبل الرفع على السطحة", "type": "text", "sample": "خدوش سابقة بالصدام الخلفي والزجاج سليم والأبواب مقفلة"},
         ],
         "legal_fn": lambda m: (
@@ -576,12 +582,12 @@ TRAFFIC_FORMS = {
                 "اختيار بند أو وصف مخالفة غير مطابق للواقعة بالخطأ",
                 "تكرار تقني مزدوج لذات المخالفة في وقت واحد بجهاز الرصد"
             ], "sample": "خطأ مطبعي غير مقصود في أحرف أو أرقام اللوحة أثناء الرصد الميداني"},
-            {"key": "officer_note", "label": "إفادة رجل المرور راصد المخالفة التفصيلية", "type": "textarea", "sample": "أثناء مباشرة تنظيم الحركة المرورية جرى إدخال حرف (ج) بدلاً من (ح) بالخطأ للوحة المركبة المخالفة الفعلية، والمركبة المسجل عليها الإشعار لم تكن بالموقع."},
+            {"key": "officer_note", "label": "إفادة راصد المخالفة التفصيلية", "type": "textarea", "sample": "أثناء مباشرة تنظيم الحركة المرورية جرى إدخال حرف (ج) بدلاً من (ح) بالخطأ للوحة المركبة المخالفة الفعلية، والمركبة المسجل عليها الإشعار لم تكن بالموقع."},
         ],
         "legal_fn": lambda m: (
             f"نرفع هذا المحضر الرسمي بشأن المخالفة المرورية رقم ({_val(m, 'incident_no')}) المقيدة بتاريخ ({_val(m, 'viol_datetime')}) على اللوحة ({_val(m, 'plate_no')})، "
             f"حيث تبين بعد المراجعة والتدقيق وقوع خطأ في الرصد ناتج عن ({_val(m, 'error_reason')})، والبيانات المرجعية هي ({_val(m, 'party_name')} - {_val(m, 'party_id')}). "
-            f"وإيضاح الراصد الميداني كالآتي: ({_val(m, 'officer_note')}). وعليه حُرر هذا المحضر مرفقاً به صورة المخالفة ومعتمداً ببصمة الفرد المعد ومصادقة ضابط الخفر للعرض على الهيئة المرورية لإلغاء المخالفة نظاماً."
+            f"وإيضاح الراصد الميداني كالآتي: ({_val(m, 'officer_note')}). وعليه حُرر هذا المحضر مرفقاً به صورة المخالفة ومعتمداً للعرض على الهيئة المرورية لإلغاء المخالفة نظاماً."
         ),
     },
 
@@ -640,7 +646,7 @@ TRAFFIC_FORMS = {
             ], "sample": "نُقل بواسطة فرقة الهلال الأحمر السعودي من موقع الحادث"},
             {"key": "security_hold", "label": "التوجيه الأمني بعد تلقي العلاج", "type": "select", "options": [
                 "يُطلق سراحه بعد تلقي العلاج اللازم ما لم يكن مطلوباً لجهة أخرى",
-                "يُتحفظ عليه أمنياً ويُشعر قسم المرور قبل خروجه لاستكمال التحقيق",
+                "يُتحفظ عليه أمنياً ويُشعر قسم مرور العارضة قبل خروجه لاستكمال التحقيق",
                 "يبقى تحت الملاحظة الطبية مع تزويدنا بالتقرير الطبي العاجل"
             ], "sample": "يُطلق سراحه بعد تلقي العلاج اللازم ما لم يكن مطلوباً لجهة أخرى"},
             {"key": "other_injured", "label": "بيان المصابين الإضافيين (الاسم، الهوية، الصفة، الإصابة الظاهرة - أو يكتب لا يوجد)", "type": "textarea", "sample": "2- ريان بن موسى خبراني | هوية: 1123344556 | مرافق | إصابة متوسطة بالكتف الأيمن.\n3- عادل محمد علي | إقامة: 2456677889 | قائد الطرف الثاني | رضوض وكدمات متفرقة."},
@@ -668,19 +674,19 @@ TRAFFIC_FORMS = {
                 "جثمان واحد (متوفى واحد)",
                 "عدة جثامين (أكثر من متوفى في الحادث)"
             ], "sample": "جثمان واحد (متوفى واحد)"},
-            {"key": "party_name", "label": "اسم المتوفى الأول (أو مجهول الهوية مع أوصافه)", "type": "text", "sample": "حسن بن علي بن محمد مجرشي"},
+            {"key": "party_name", "label": "اسم المتوفى الأول (أو مجهول الهوية مع أوصافه)", "type": "text", "sample": "عبدالله بن حسن بن علي"},
             {"key": "party_id", "label": "رقم الهوية / الإقامة والجنسية والعمر", "type": "text", "sample": "1043322110 - سعودي - 38 عاماً"},
-            {"key": "plate_no", "label": "المركبة ورقم اللوحة وصفة المتوفى بالحادث", "type": "text", "sample": "صالون لاندكروزر (أ ح ط 9879) - قائد المركبة"},
+            {"key": "plate_no", "label": "المركبة ورقم اللوحة وصفة المتوفى بالحادث", "type": "text", "sample": "صالون لاندكروزر (ب ح ط 9879) - قائد المركبة"},
             {"key": "transport_death", "label": "جهة إعلان الوفاة ووسيلة نقل الجثمان", "type": "select", "options": [
                 "وفاة في موقع الحادث ونُقل الجثمان عبر النقل المجهز (الشرشورة) بعد المعاينة",
                 "توفي في قسم الطوارئ بالمستشفى متأثراً بإصاباته البالغة بالحادث",
                 "نُقل بواسطة إسعاف الهلال الأحمر وتأكدت الوفاة طبياً عند الوصول"
             ], "sample": "وفاة في موقع الحادث ونُقل الجثمان عبر النقل المجهز (الشرشورة) بعد المعاينة"},
             {"key": "forensic_order", "label": "التوجيه النظامي حيال التحفظ والكشف الطبي", "type": "select", "options": [
-                "إيداع الجثمان بالثلاجة والتحفظ عليه وعدم تسليمه إلا بخطاب فسح رسمي من المرور",
+                "إيداع الجثمان بالثلاجة والتحفظ عليه وعدم تسليمه إلا بخطاب فسح رسمي من قسم مرور العارضة",
                 "إجراء الكشف الطبي الظاهري وتزويدنا بتقرير الوفاة الرسمي وأسبابها المباشرة",
                 "إبقاء الجثمان رهن الفحص الطبي الشرعي بناءً على توجيه النيابة العامة"
-            ], "sample": "إيداع الجثمان بالثلاجة والتحفظ عليه وعدم تسليمه إلا بخطاب فسح رسمي من المرور"},
+            ], "sample": "إيداع الجثمان بالثلاجة والتحفظ عليه وعدم تسليمه إلا بخطاب فسح رسمي من قسم مرور العارضة"},
             {"key": "other_deceased", "label": "بيانات الجثامين الإضافية عند تعدد الوفيات (الاسم، الهوية، الصفة - أو يكتب لا يوجد)", "type": "textarea", "sample": "لا يوجد (جثمان واحد فقط)."},
         ],
         "legal_fn": lambda m: (
@@ -790,7 +796,7 @@ def generate_qr_png_b64(data_text: str) -> str:
 
 
 # =====================================================================
-# 4. قاعدة البيانات المحلية SQLite
+# 4. قاعدة البيانات المحلية SQLite (تثبيت المسميات الثلاثة وتنظيف التجريبي)
 # =====================================================================
 DB_PATH = "khafar_system.db"
 
@@ -812,8 +818,23 @@ def init_db():
     if c.execute("SELECT COUNT(*) FROM shift_settings").fetchone()[0] == 0:
         c.execute("""
             INSERT INTO shift_settings (id, dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps)
-            VALUES (1, 'قسم مرور محافظة العارضة - وحدة الحوادث والخفر', 'رقيب أول', 'فهد بن أحمد مجرشي', 'رئيس رقباء', 'سلمان بن علي دوشي', '17.0924° N, 43.0956° E')
+            VALUES (1, 'قسم مرور العارضة', 'وحدة الحوادث', '', 'ضابط الخفر', '', '17.0924° N, 43.0956° E')
         """)
+    else:
+        # تحديث أي بيانات افتراضية سابقة لتقتصر على المسميات الثلاثة فقط دون أسماء شخصية
+        row = c.execute("SELECT dept_name, officer_name, duty_name FROM shift_settings WHERE id = 1").fetchone()
+        if row and (
+            "شعبة المرور" in (row[0] or "")
+            or "محافظة" in (row[0] or "")
+            or "وحدة الحوادث والخفر" in (row[0] or "")
+            or row[1] in ("فهد بن عبدالله القحطاني", "فهد بن أحمد مجرشي", "الفرد المباشر المناوب")
+            or row[2] in ("سالم بن محمد الدوسري", "سلمان بن علي دوشي", "ضابط الخفر المستلم")
+        ):
+            c.execute("""
+                UPDATE shift_settings
+                SET dept_name='قسم مرور العارضة', officer_rank='وحدة الحوادث', officer_name='', duty_rank='ضابط الخفر', duty_name=''
+                WHERE id = 1
+            """)
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS records (
@@ -839,6 +860,9 @@ def init_db():
             verify_hash TEXT
         )
     """)
+
+    # إزالة السجلات التجريبية القديمة تلقائياً إن وجدت
+    c.execute("DELETE FROM records WHERE doc_no IN ('KH-261118-001', 'KH-261118-002', 'KH-261118-003')")
     conn.commit()
     conn.close()
 
@@ -908,7 +932,7 @@ def delete_record_db(rec_id: int):
 
 
 # =====================================================================
-# 5. قالب الطباعة الرسمي مقاس A4 (متكيف للإقرارات والمحاضر والإحالات الطبية)
+# 5. قالب الطباعة الرسمي مقاس A4
 # =====================================================================
 def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bool = False) -> str:
     fields_map = rec["fields"] if isinstance(rec.get("fields"), dict) else json.loads(rec["fields_json"])
@@ -990,10 +1014,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
         box-shadow: 0 12px 32px rgba(0,0,0,0.45);
     }}
     .hdr {{ display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f3d2e; padding-bottom: 7px; }}
-    .hdr-right p, .hdr-left p {{ margin: 1px 0; font-size: 11px; font-weight: 700; color: #0f172a; }}
+    .hdr-right p, .hdr-left p {{ margin: 1.5px 0; font-size: 11.5px; font-weight: 800; color: #0f172a; }}
     .hdr-center {{
         background: #f1f5f3; border: 1.5px solid #0f3d2e; border-radius: 8px;
-        padding: 5px 14px; text-align: center;
+        padding: 6px 16px; text-align: center;
     }}
     .doc-banner {{
         background: #0f3d2e; color: #ffffff; text-align: center;
@@ -1031,14 +1055,13 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
         <div>
             <div class="hdr">
                 <div class="hdr-right">
-                    <p>المملكة العربية السعودية</p>
-                    <p>وزارة الداخلية - الأمن العام</p>
-                    <p>الإدارة العامة للمرور</p>
-                    <p style="color:#0f3d2e;">{rec['dept_name']}</p>
+                    <p style="color:#0f3d2e; font-size:13px;">{rec['dept_name']}</p>
+                    <p>وحدة الحوادث</p>
+                    <p>ضابط الخفر</p>
                 </div>
                 <div class="hdr-center">
-                    <div style="font-size:12.5px; font-weight:800; color:#0f3d2e;">ميدان الخفر - الإصدار الميداني</div>
-                    <div style="font-size:10px; color:#475569;">وثيقة {rec['category']} رسمية مقفلة إلكترونياً</div>
+                    <div style="font-size:12.5px; font-weight:800; color:#0f3d2e;">{rec['dept_name']}</div>
+                    <div style="font-size:10.5px; color:#475569;">وحدة الحوادث • ضابط الخفر</div>
                 </div>
                 <div class="hdr-left">
                     <p>الرقم المرجعي: {rec['doc_no']}</p>
@@ -1062,8 +1085,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
                 <thead>
                     <tr>
                         <th>{col1_header}</th>
-                        <th>بصمة وتوثيق الفرد المعد</th>
-                        <th>مصادقة ضابط الخفر المستلم</th>
+                        <th>وحدة الحوادث</th>
+                        <th>ضابط الخفر</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1074,16 +1097,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
                             <div style="font-size:9px; color:#475569; margin-top:2px;">{rec['citizen_auth_mode']}</div>
                         </td>
                         <td>
-                            <div style="font-size:10px; font-weight:700; margin-bottom:2px;">{rec['officer_full']}</div>
+                            <div style="font-size:10.5px; font-weight:800; margin-bottom:2px;">{rec['officer_full']}</div>
                             {officer_img}
-                            <div style="font-size:9px; color:#475569; margin-top:2px;">بصمة الفرد المباشر المعتمدة</div>
+                            <div style="font-size:9px; color:#475569; margin-top:2px;">توثيق الإعداد الميداني</div>
                         </td>
                         <td>
-                            <div style="font-size:10.5px; font-weight:800; margin-bottom:8px;">{rec['duty_full']}</div>
+                            <div style="font-size:11px; font-weight:800; margin-bottom:8px;">{rec['duty_full']}</div>
                             <div style="display:inline-block; border:1.5px solid #0f3d2e; color:#0f3d2e; padding:3px 10px; border-radius:5px; font-size:10.5px; font-weight:800;">
                                 مُصادق ومُعتمد نظاماً
                             </div>
-                            <div style="font-size:9px; color:#475569; margin-top:8px;">إشراف مناوبة الخفر</div>
+                            <div style="font-size:9px; color:#475569; margin-top:8px;">{rec['dept_name']}</div>
                         </td>
                     </tr>
                 </tbody>
@@ -1092,7 +1115,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
             <div class="footer-qr">
                 <div>
                     <div style="font-size:9.5px; font-weight:800; color:#0f3d2e;">
-                        وثيقة رسمية محررة ومقفلة إلكترونياً عبر منصة ميدان الخفر - لا يُعتد بأي كشط أو تعديل يدوي.
+                        {rec['dept_name']} — وحدة الحوادث — ضابط الخفر (وثيقة مقفلة إلكترونياً ضد الكشط أو التعديل).
                     </div>
                     <div style="font-size:9px; color:#475569;">ختم التحقق الرقمي (SHA-256 Seal): {rec['verify_hash']}</div>
                 </div>
@@ -1134,6 +1157,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
 init_db()
 shift = get_shift_settings()
 now_ksa = datetime.now(KSA_TZ)
+
+unit_display = format_entity(shift["officer_rank"], shift["officer_name"])
+duty_display = format_entity(shift["duty_rank"], shift["duty_name"])
 
 VALID_FILTERS = [
     "جميع النماذج (11)",
@@ -1184,7 +1210,7 @@ all_archived = search_records_db("")
 archive_count = len(all_archived)
 
 # =====================================================================
-# 7. الترويسة الخضراء الملكية وشريط الإحداثيات المثبت
+# 7. الترويسة العلوية المثبتة
 # =====================================================================
 st.markdown(f"""
 <div class="khafar-top-header">
@@ -1193,16 +1219,16 @@ st.markdown(f"""
             <div class="shield-badge">🛡️</div>
             <div>
                 <div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
-                    <span style="font-size:22px; font-weight:900; color:#ffffff;">ميدان الخفر</span>
-                    <span class="indep-pill">إصدار ميداني مستقل</span>
+                    <span style="font-size:22px; font-weight:900; color:#ffffff;">{shift['dept_name']}</span>
+                    <span class="indep-pill">ضابط الخفر</span>
                 </div>
-                <div style="font-size:13px; color:#a7f3d0; opacity:0.9;">
-                    نظام الإقرارات والمحاضر والإحالات الطبية • الإدارة العامة للمرور
+                <div style="font-size:13.5px; color:#a7f3d0; font-weight:700;">
+                    وحدة الحوادث • ضابط الخفر
                 </div>
             </div>
         </div>
         <div class="status-pills-row">
-            <span class="pill-offline">🟢 وضع العمل المحلي دون شبكة - جاهز</span>
+            <span class="pill-offline">🟢 وضع العمل المحلي - جاهز</span>
             <span class="pill-usb">🧬 قارئ البصمة Type-C: {st.session_state.scanner_model}</span>
         </div>
     </div>
@@ -1224,7 +1250,7 @@ nav_cols = st.columns(4)
 nav_items = [
     ("النماذج الميدانية", "📋 النماذج الميدانية (11)"),
     ("الأرشيف المحلي", f"🗂️ الأرشيف المحلي ({archive_count})"),
-    ("مناوبة الخفر", "👮 مناوبة الخفر"),
+    ("مناوبة الخفر", "👮 البيانات الثابتة"),
     ("بصمة الشحن OTG", "🧬 بصمة الشحن OTG"),
 ]
 for idx, (tab_key, tab_label) in enumerate(nav_items):
@@ -1251,18 +1277,19 @@ if st.session_state.nav_tab == "النماذج الميدانية":
     if st.session_state.opened_form_id is None:
         st.markdown(f"""
         <div class="hero-shift-card">
-            <div class="hero-eyebrow">{shift['dept_name']}</div>
-            <h2 class="hero-title">منصة تحرير وتوثيق الإقرارات والمحاضر والإحالات الطبية</h2>
+            <div class="hero-eyebrow">{shift['dept_name']} • وحدة الحوادث • ضابط الخفر</div>
+            <h2 class="hero-title">منصة الإقرارات والمحاضر والإحالات الطبية</h2>
             <div class="hero-desc">
-                اختر النموذج المطلوب لتعبئة الحقول يدوياً أو بالتعبئة التجريبية الفورية، وتوثيق البصمة عبر منفذ الشحن (USB Type-C) أو تخصيص ختم الاستلام للمستشفيات والمختبرات، وتصدير وثيقة A4 PDF رسمية.
+                اختر النموذج المطلوب لتعبئة الحقول وتوثيق البصمة عبر منفذ الشحن (USB Type-C) لقفل الحقول نهائياً وتصدير وثيقة A4 PDF رسمية.
             </div>
             <div class="shift-summary-inner">
-                <div>
-                    <div style="font-size:12.5px; color:#94a3b8;">الفرد المُعد: <strong style="color:#ffffff;">{shift['officer_rank']} / {shift['officer_name']}</strong></div>
-                    <div style="font-size:12.5px; color:#94a3b8; margin-top:3px;">ضابط الخفر: <strong style="color:#d4a853;">{shift['duty_rank']} / {shift['duty_name']}</strong></div>
+                <div style="display:flex; gap:24px; flex-wrap:wrap;">
+                    <div style="font-size:13px; color:#cbd5e1;">القسم: <strong style="color:#ffffff;">{shift['dept_name']}</strong></div>
+                    <div style="font-size:13px; color:#cbd5e1;">الوحدة: <strong style="color:#34d399;">{unit_display}</strong></div>
+                    <div style="font-size:13px; color:#cbd5e1;">الإشراف: <strong style="color:#d4a853;">{duty_display}</strong></div>
                 </div>
                 <div style="font-size:12px; color:#34d399; font-weight:700;">
-                    جميع النماذج الـ 11 مدعومة بقفل الحقول التراتبي وطباعة A4 الرسمية ✓
+                    طباعة A4 رسمية مقفلة ✓
                 </div>
             </div>
         </div>
@@ -1280,7 +1307,6 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     st.session_state.catalog_filter = flt_label
                     safe_rerun()
 
-        # أولاً: قائمة الإقرارات الميدانية (4)
         if st.session_state.catalog_filter in ["جميع النماذج (11)", "قائمة الإقرارات (4)"]:
             st.markdown("""
             <div class="sec-heading-green">
@@ -1308,7 +1334,6 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         reset_doc_state()
                         safe_rerun()
 
-        # ثانياً: قائمة المحاضر الرسمية (4)
         if st.session_state.catalog_filter in ["جميع النماذج (11)", "قائمة المحاضر (4)"]:
             st.markdown("""
             <div class="sec-heading-gold">
@@ -1336,7 +1361,6 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         reset_doc_state()
                         safe_rerun()
 
-        # ثالثاً: النماذج الطبية والجنائية (3)
         if st.session_state.catalog_filter in ["جميع النماذج (11)", "النماذج الطبية والجنائية (3)"]:
             st.markdown("""
             <div class="sec-heading-med">
@@ -1364,7 +1388,6 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         reset_doc_state()
                         safe_rerun()
 
-    # شاشة تحرير وتبصيم النموذج المختار
     else:
         fid = st.session_state.opened_form_id
         form_def = TRAFFIC_FORMS[fid]
@@ -1393,7 +1416,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
         <div class="hero-shift-card" style="padding:16px 20px; margin-top:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
                 <div>
-                    <span class="badge-{cat_badge_cls}">{form_def['category']} معتمد</span>
+                    <span class="badge-{cat_badge_cls}">{shift['dept_name']} • {unit_display} • {duty_display}</span>
                     <h3 style="margin:6px 0 2px 0; color:#ffffff; font-size:20px;">{form_def['icon']} {form_def['title']}</h3>
                 </div>
                 <div style="font-size:12.5px; color:#d4a853; font-weight:700;">
@@ -1501,18 +1524,18 @@ if st.session_state.nav_tab == "النماذج الميدانية":
 
         with s2_col:
             st.markdown("<div class='auth-panel'>", unsafe_allow_html=True)
-            st.markdown("#### 2️⃣ بصمة الفرد المعد ومصادقة ضابط الخفر")
-            st.caption(f"الفرد المعد: {shift['officer_rank']} / {shift['officer_name']}  •  ضابط الخفر: {shift['duty_rank']} / {shift['duty_name']}")
+            st.markdown("#### 2️⃣ توثيق وحدة الحوادث ومصادقة ضابط الخفر")
+            st.caption(f"{shift['dept_name']}  •  {unit_display}  •  {duty_display}")
 
             if not st.session_state.officer_approved:
-                if st.button("🛡️ تبصيم الفرد المعد وإصدار رمز التحقق QR", type="primary", use_container_width=True, disabled=not st.session_state.citizen_locked):
-                    seed_off = f"{st.session_state.doc_no}_{shift['officer_name']}_OFFICER"
+                if st.button("🛡️ اعتماد الوثيقة وإصدار رمز التحقق QR", type="primary", use_container_width=True, disabled=not st.session_state.citizen_locked):
+                    seed_off = f"{st.session_state.doc_no}_{unit_display}_OFFICER"
                     st.session_state.officer_stamp_b64 = generate_fingerprint_png_b64(seed_off, ink_rgb=(15, 61, 46))
                     st.session_state.officer_approved = True
                     safe_rerun()
             else:
-                st.success("تم اعتماد بصمة الفرد المعد ومصادقة ضابط الخفر.")
-                st.image(base64.b64decode(st.session_state.officer_stamp_b64), caption="بصمة الفرد المعد المعتمدة", width=105)
+                st.success("تم التوثيق ومصادقة ضابط الخفر.")
+                st.image(base64.b64decode(st.session_state.officer_stamp_b64), caption="ختم التوثيق المعتمد", width=105)
             st.markdown("</div>", unsafe_allow_html=True)
 
         if st.session_state.officer_approved:
@@ -1535,8 +1558,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 "citizen_auth_mode": st.session_state.citizen_auth_mode,
                 "officer_stamp_b64": st.session_state.officer_stamp_b64,
                 "attachment_b64": st.session_state.attachment_b64,
-                "officer_full": f"{shift['officer_rank']} / {shift['officer_name']}",
-                "duty_full": f"{shift['duty_rank']} / {shift['duty_name']}",
+                "officer_full": unit_display,
+                "duty_full": duty_display,
                 "dept_name": shift["dept_name"],
                 "verify_hash": verify_hash,
             }
@@ -1604,38 +1627,38 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
 
 
 # =====================================================================
-# القسم الثالث: إعدادات مناوبة الخفر
+# القسم الثالث: البيانات الثابتة (اختياري للمناوبة)
 # =====================================================================
 elif st.session_state.nav_tab == "مناوبة الخفر":
     st.markdown("""
     <div class="hero-shift-card">
-        <div class="hero-eyebrow">ضبط بيانات الاستلام الميداني</div>
-        <h3 style="margin:4px 0 8px 0; color:#ffffff;">👮 إعدادات استلام مناوبة الخفر والفرقة المباشرة</h3>
+        <div class="hero-eyebrow">قسم مرور العارضة • وحدة الحوادث • ضابط الخفر</div>
+        <h3 style="margin:4px 0 8px 0; color:#ffffff;">👮 إعدادات الترويسة المثبتة</h3>
         <div style="font-size:13px; color:#cbd5e1;">
-            تُثبت البيانات هنا مرة واحدة بداية الاستلام لتُدرج تلقائياً في ترويسة وذيل جميع النماذج الـ 11 دون الحاجة لإعادة كتابتها.
+            المسميات مثبتة افتراضياً على (قسم مرور العارضة / وحدة الحوادث / ضابط الخفر) دون أسماء شخصية، مع إمكانية إضافة اسم المناوب اختيارياً عند الحاجة.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     with st.form("shift_update_form"):
-        s_dept = st.text_input("اسم الشعبة / القسم والدورية الميدانية", value=shift["dept_name"])
+        s_dept = st.text_input("القسم الثابت", value=shift["dept_name"])
         r1, r2 = st.columns([1, 2])
         with r1:
-            s_orank = st.text_input("رتبة الفرد المعد", value=shift["officer_rank"])
+            s_orank = st.text_input("الوحدة الثابتة", value=shift["officer_rank"])
         with r2:
-            s_oname = st.text_input("اسم الفرد المعد الثلاثي", value=shift["officer_name"])
+            s_oname = st.text_input("اسم المعد (اختياري - يترك فارغاً للاكتفاء بالمسمى)", value=shift["officer_name"])
 
         r3, r4 = st.columns([1, 2])
         with r3:
-            s_drank = st.text_input("رتبة ضابط الخفر", value=shift["duty_rank"])
+            s_drank = st.text_input("جهة الاعتماد الثابتة", value=shift["duty_rank"])
         with r4:
-            s_dname = st.text_input("اسم ضابط الخفر المستلم", value=shift["duty_name"])
+            s_dname = st.text_input("اسم المناوب (اختياري - يترك فارغاً للاكتفاء بالمسمى)", value=shift["duty_name"])
 
-        s_gps = st.text_input("إحداثيات الموقع الميداني (GPS)", value=shift["default_gps"])
+        s_gps = st.text_input("إحداثيات الموقع (GPS)", value=shift["default_gps"])
 
-        if st.form_submit_button("💾 حفظ واعتماد بيانات المناوبة", type="primary", use_container_width=True):
+        if st.form_submit_button("💾 حفظ واعتماد الإعدادات", type="primary", use_container_width=True):
             update_shift_settings(s_dept, s_orank, s_oname, s_drank, s_dname, s_gps)
-            st.success("تم تحديث بيانات المناوبة وتعميمها على كافة النماذج بنجاح.")
+            st.success("تم حفظ الإعدادات وتعميمها على جميع النماذج.")
             safe_rerun()
 
 
