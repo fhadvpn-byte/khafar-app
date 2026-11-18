@@ -378,6 +378,14 @@ div[role="radiogroup"] {
     border: 1px solid #25353b;
     gap: 8px;
 }
+
+/* RTL_JUSTIFY_FIX */
+[data-testid="stAppViewContainer"], [data-testid="stMarkdownContainer"], .stMarkdown { direction: rtl !important; text-align: right !important; }
+.official-5lines, .official-5lines div { text-align: center !important; }
+.auth-panel:empty { display: none !important; }
+.legal-dark-box { direction: rtl !important; text-align: justify !important; text-align-last: right !important; unicode-bidi: embed !important; }
+.legal-dark-box .legal-title { direction: rtl !important; text-align: right !important; color: #d4a853 !important; font-weight: 800 !important; margin-bottom: 8px !important; }
+.legal-dark-box .legal-body { direction: rtl !important; unicode-bidi: embed !important; text-align: justify !important; text-align-last: right !important; text-justify: inter-word !important; line-height: 2.0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -387,7 +395,7 @@ div[role="radiogroup"] {
 # =====================================================================
 def _val(values: dict, key: str) -> str:
     v = str(values.get(key, "")).strip()
-    return v if v else "...................."
+    return ("\u200f" + v + "\u200f") if v else "...................."
 
 
 TRAFFIC_FORMS = {
@@ -1039,7 +1047,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         padding: 5px; border-radius: 6px; font-size: 14.5px; font-weight: 800; margin: 8px 0;
     }}
     table.data-tbl {{ width: 100%; border-collapse: collapse; margin-bottom: 8px; }}
-    table.data-tbl td {{ border: 1px solid #cbd5e1; padding: 4px 8px; font-size: 11px; vertical-align: top; }}
+    table.data-tbl td {{ border: 1px solid #cbd5e1; padding: 4px 8px; font-size: 11px; vertical-align: top; direction: rtl; text-align: right; }}
     table.data-tbl td.lbl {{ width: 32%; background: #f4f7f6; font-weight: 700; color: #0f3d2e; }}
     table.data-tbl td.val {{ width: 68%; color: #0f172a; font-weight: 600; white-space: pre-line; }}
     .legal-box {{
@@ -1095,9 +1103,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             <div class="doc-banner">{rec['form_title']}</div>
             <table class="data-tbl">{rows_html}</table>
 
-            <div class="legal-box">
-                <div style="font-weight:800; color:#0f3d2e; margin-bottom:3px;">{legal_box_title}</div>
-                {rec['legal_text']}
+            <div class="legal-box" dir="rtl" style="direction:rtl; text-align:justify; text-align-last:right;">
+                <div dir="rtl" style="font-weight:800; color:#0f3d2e; margin-bottom:4px; direction:rtl; text-align:right;">{legal_box_title}</div>
+                <div dir="rtl" style="direction:rtl; unicode-bidi:embed; text-align:justify; text-align-last:right; text-justify:inter-word; line-height:1.8;">&#8207;{rec['legal_text']}</div>
             </div>
             {attachment_block}
         </div>
@@ -1520,13 +1528,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             img_pil.save(b_io, format="PNG")
             st.session_state.attachment_b64 = base64.b64encode(b_io.getvalue()).decode("utf-8")
 
-        live_legal_text = form_def["legal_fn"](current_values)
-        st.markdown(f"""
-        <div class="legal-dark-box">
-            <div style="color:#d4a853; font-weight:800; margin-bottom:6px;">⚖️ معاينة النص الرسمي المعتمد في وثيقة A4 PDF:</div>
-            {live_legal_text}
-        </div>
-        """, unsafe_allow_html=True)
+        live_legal_text = " ".join(form_def["legal_fn"](current_values).splitlines())
+        st.markdown(
+            f'<div class="legal-dark-box" dir="rtl" style="direction:rtl !important;text-align:justify !important;text-align-last:right !important;"><div class="legal-title" dir="rtl" style="direction:rtl !important;text-align:right !important;color:#d4a853;font-weight:800;margin-bottom:8px;">⚖️ معاينة النص الرسمي المعتمد في الوثيقة:</div><div class="legal-body" dir="rtl" style="direction:rtl !important;unicode-bidi:embed !important;text-align:justify !important;text-align-last:right !important;line-height:2.0;">\u200f{live_legal_text}</div></div>',
+            unsafe_allow_html=True,
+        )
 
         is_med_form = form_def["category"] == "إحالة طبية"
         s1_col, s2_col = st.columns(2)
