@@ -1012,12 +1012,18 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         background: linear-gradient(135deg, #d4a853 0%, #a37a2c 100%); color: #fff; border: none; padding: 8px 24px;
         font-size: 14px; font-weight: 800; border-radius: 8px; cursor: pointer;
     }}
-    .a4-sheet {{
-        width: 210mm; min-height: 280mm; margin: 0 auto;
-        background: #ffffff; color: #0f172a; padding: 9mm 12mm; border: 2px solid #0f3d2e;
-        display: flex; flex-direction: column; justify-content: space-between;
-        box-shadow: 0 12px 32px rgba(0,0,0,0.45);
-        page-break-inside: avoid;
+    @media screen {{
+        body {{ padding: 8px !important; overflow-x: hidden; }}
+        .toolbar {{ width: 100%; max-width: 794px; padding: 8px; }}
+        .print-btn {{ width: 100%; max-width: 360px; font-size: 13px; padding: 8px 14px; }}
+        .sheet-stage {{ width: 100%; max-width: 794px; margin: 0 auto; height: var(--stage-h, auto); overflow: hidden; position: relative; }}
+        .a4-sheet {{
+            width: 794px !important; min-height: 1100px; margin: 0;
+            background: #ffffff; color: #0f172a; padding: 9mm 12mm; border: 2px solid #0f3d2e;
+            display: flex; flex-direction: column; justify-content: space-between;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+            transform-origin: top right; transform: scale(var(--a4-scale, 1));
+        }}
     }}
     .hdr {{
         display: grid; grid-template-columns: 1.35fr 0.9fr 1.15fr;
@@ -1049,9 +1055,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     @media print {{
         @page {{ size: A4 portrait; margin: 6mm; }}
-        body {{ background: #fff; padding: 0; }}
+        html, body {{ background: #fff !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }}
         .toolbar, .no-print {{ display: none !important; }}
-        .a4-sheet {{ width: 100%; min-height: 274mm; box-shadow: none; margin: 0; }}
+        .sheet-stage {{ width: 100% !important; max-width: none !important; height: auto !important; overflow: visible !important; margin: 0 !important; }}
+        .a4-sheet {{
+            width: 100% !important; min-height: 274mm !important; margin: 0 !important;
+            background: #ffffff; color: #0f172a; padding: 9mm 12mm; border: 2px solid #0f3d2e;
+            display: flex; flex-direction: column; justify-content: space-between;
+            box-shadow: none !important; transform: none !important; page-break-inside: avoid;
+        }}
     }}
 </style>
 </head>
@@ -1060,7 +1072,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         <button class="print-btn" onclick="window.print()">🖨️ طباعة الوثيقة الرسمية / حفظ كملف A4 PDF</button>
     </div>
 
-    <div class="a4-sheet">
+    <div class="sheet-stage" id="sheetStage"><div class="a4-sheet" id="a4Sheet">
         <div>
             <div class="hdr">
                 <div class="hdr-right">
@@ -1133,7 +1145,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             </div>
         </div>
     </div>
-
+</div>
 <script>
     const canvas = document.getElementById('liveSigCanvas');
     if (canvas) {{
@@ -1146,7 +1158,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             const r = canvas.getBoundingClientRect();
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            return {{ x: clientX - r.left, y: clientY - r.top }};
+            return {{ x: (clientX - r.left) * (canvas.width / (r.width || 1)), y: (clientY - r.top) * (canvas.height / (r.height || 1)) }};
         }};
         canvas.addEventListener('pointerdown', (e) => {{ drawing = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }});
         canvas.addEventListener('pointermove', (e) => {{ if (!drawing) return; const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); }});
@@ -1155,6 +1167,28 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     function clearSig() {{
         if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
     }}
+    function fitA4Sheet() {{
+        const stage = document.getElementById("sheetStage");
+        const sheet = document.getElementById("a4Sheet");
+        if (!stage || !sheet) return;
+        const baseW = 794;
+        const availW = stage.clientWidth || baseW;
+        const scale = availW < baseW ? (availW / baseW) : 1;
+        stage.style.setProperty("--a4-scale", scale.toFixed(4));
+        const scaledH = Math.ceil(sheet.offsetHeight * scale);
+        stage.style.setProperty("--stage-h", scale < 1 ? (scaledH + 6) + "px" : "auto");
+        try {{
+            if (window.frameElement) {{
+                const totalH = (scale < 1 ? scaledH : sheet.offsetHeight) + 85;
+                window.frameElement.style.height = totalH + "px";
+            }}
+        }} catch (e) {{}}
+    }}
+    window.addEventListener("load", fitA4Sheet);
+    window.addEventListener("resize", fitA4Sheet);
+    if (document.fonts && document.fonts.ready) {{ document.fonts.ready.then(fitA4Sheet); }}
+    setTimeout(fitA4Sheet, 150);
+    setTimeout(fitA4Sheet, 600);
 </script>
 </body>
 </html>
