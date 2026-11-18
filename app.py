@@ -6,6 +6,7 @@ import base64
 import io
 import random
 import hashlib
+from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from PIL import Image, ImageDraw
 
@@ -18,7 +19,7 @@ except ImportError:
 KSA_TZ = timezone(timedelta(hours=3))
 
 st.set_page_config(
-    page_title="ميدان الخفر | قسم مرور العارضة",
+    page_title="قسم مرور العارضة | الإقرارات والمحاضر",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -30,6 +31,16 @@ def safe_rerun():
         st.rerun()
     else:
         st.experimental_rerun()
+
+
+def get_traffic_logo_b64() -> str:
+    """قراءة شعار المرور تلقائياً من مجلد المشروع"""
+    base_dir = Path(__file__).resolve().parent
+    for fname in ("traffic_logo.png", "traffic_logo.PNG", "traffic_logo.jpg", "traffic_logo.jpeg"):
+        fpath = base_dir / fname
+        if fpath.exists():
+            return base64.b64encode(fpath.read_bytes()).decode("utf-8")
+    return ""
 
 
 def format_entity(role_label: str, optional_name: str) -> str:
@@ -85,7 +96,7 @@ section[data-testid="stSidebar"] { display: none !important; }
     background: linear-gradient(135deg, #0d4432 0%, #08291e 100%);
     border: 1px solid #1e6b50;
     border-radius: 18px 18px 0 0;
-    padding: 18px 22px 14px 22px;
+    padding: 18px 24px 16px 24px;
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
 }
 .header-brand-row {
@@ -93,33 +104,37 @@ section[data-testid="stSidebar"] { display: none !important; }
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 16px;
 }
-.shield-badge {
-    width: 46px;
-    height: 46px;
-    border-radius: 12px;
-    background: rgba(212, 168, 83, 0.12);
-    border: 1.5px solid var(--gold-main);
+.official-5lines {
+    line-height: 1.55;
+    font-weight: 800;
+    color: #ffffff;
+    font-size: 14px;
+    text-align: center;
+}
+.logo-frame {
+    width: 82px;
+    height: 82px;
+    border-radius: 16px;
+    background: #ffffff;
+    border: 2px solid var(--gold-main);
+    padding: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 22px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
 }
-.indep-pill {
-    background: rgba(212, 168, 83, 0.16);
-    border: 1px solid rgba(212, 168, 83, 0.55);
-    color: var(--gold-soft);
-    font-size: 12px;
-    font-weight: 700;
-    padding: 2px 12px;
-    border-radius: 20px;
-    margin-right: 8px;
+.logo-frame img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
 }
-.status-pills-row {
+.status-pills-col {
     display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
 }
 .pill-offline {
     background: rgba(6, 34, 24, 0.85);
@@ -127,7 +142,7 @@ section[data-testid="stSidebar"] { display: none !important; }
     color: #a7f3d0;
     padding: 5px 14px;
     border-radius: 20px;
-    font-size: 12.5px;
+    font-size: 12px;
     font-weight: 700;
 }
 .pill-usb {
@@ -136,7 +151,7 @@ section[data-testid="stSidebar"] { display: none !important; }
     color: var(--gold-soft);
     padding: 5px 14px;
     border-radius: 20px;
-    font-size: 12.5px;
+    font-size: 12px;
     font-weight: 700;
 }
 
@@ -178,7 +193,7 @@ section[data-testid="stSidebar"] { display: none !important; }
     background: linear-gradient(135deg, #0f3d2c 0%, #112421 65%, #151d21 100%);
     border: 1px solid #21634b;
     border-radius: 16px;
-    padding: 22px 24px;
+    padding: 20px 24px;
     margin-bottom: 18px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
@@ -190,7 +205,7 @@ section[data-testid="stSidebar"] { display: none !important; }
 }
 .hero-title {
     color: #ffffff;
-    font-size: 23px;
+    font-size: 22px;
     font-weight: 900;
     margin: 0 0 8px 0;
 }
@@ -198,7 +213,7 @@ section[data-testid="stSidebar"] { display: none !important; }
     color: #cbd5e1;
     font-size: 13.5px;
     line-height: 1.75;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
 }
 .shift-summary-inner {
     background: rgba(11, 20, 22, 0.65);
@@ -796,7 +811,7 @@ def generate_qr_png_b64(data_text: str) -> str:
 
 
 # =====================================================================
-# 4. قاعدة البيانات المحلية SQLite (تثبيت المسميات الثلاثة وتنظيف التجريبي)
+# 4. قاعدة البيانات المحلية SQLite
 # =====================================================================
 DB_PATH = "khafar_system.db"
 
@@ -820,21 +835,6 @@ def init_db():
             INSERT INTO shift_settings (id, dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps)
             VALUES (1, 'قسم مرور العارضة', 'وحدة الحوادث', '', 'ضابط الخفر', '', '17.0924° N, 43.0956° E')
         """)
-    else:
-        # تحديث أي بيانات افتراضية سابقة لتقتصر على المسميات الثلاثة فقط دون أسماء شخصية
-        row = c.execute("SELECT dept_name, officer_name, duty_name FROM shift_settings WHERE id = 1").fetchone()
-        if row and (
-            "شعبة المرور" in (row[0] or "")
-            or "محافظة" in (row[0] or "")
-            or "وحدة الحوادث والخفر" in (row[0] or "")
-            or row[1] in ("فهد بن عبدالله القحطاني", "فهد بن أحمد مجرشي", "الفرد المباشر المناوب")
-            or row[2] in ("سالم بن محمد الدوسري", "سلمان بن علي دوشي", "ضابط الخفر المستلم")
-        ):
-            c.execute("""
-                UPDATE shift_settings
-                SET dept_name='قسم مرور العارضة', officer_rank='وحدة الحوادث', officer_name='', duty_rank='ضابط الخفر', duty_name=''
-                WHERE id = 1
-            """)
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS records (
@@ -860,9 +860,6 @@ def init_db():
             verify_hash TEXT
         )
     """)
-
-    # إزالة السجلات التجريبية القديمة تلقائياً إن وجدت
-    c.execute("DELETE FROM records WHERE doc_no IN ('KH-261118-001', 'KH-261118-002', 'KH-261118-003')")
     conn.commit()
     conn.close()
 
@@ -932,9 +929,9 @@ def delete_record_db(rec_id: int):
 
 
 # =====================================================================
-# 5. قالب الطباعة الرسمي مقاس A4
+# 5. قالب الطباعة الرسمي مقاس A4 بالترويسة الخماسية المعتمدة وشعار المرور
 # =====================================================================
-def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bool = False) -> str:
+def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, interactive_sig: bool = False) -> str:
     fields_map = rec["fields"] if isinstance(rec.get("fields"), dict) else json.loads(rec["fields_json"])
     rows_html = ""
     if form_def:
@@ -948,16 +945,22 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
     qr_payload = f"DOC:{rec['doc_no']}|ID:{rec['party_id']}|PLATE:{rec['plate_no']}|SEAL:{rec['verify_hash']}"
     qr_b64 = generate_qr_png_b64(qr_payload)
 
+    center_logo_html = (
+        f"<img src='data:image/png;base64,{logo_b64}' style='height:82px; width:auto; object-fit:contain;' alt='شعار المرور' />"
+        if logo_b64
+        else "<div style='font-size:13px; font-weight:800; color:#0f3d2e;'>الإدارة العامة للمرور</div>"
+    )
+
     is_medical = rec.get("category") == "إحالة طبية"
     col1_header = "ختم وتوقيع جهة الاستلام (المستشفى / المختبر)" if is_medical else "بصمة / توقيع الطرف المعني"
     col1_top_name = "المختص المناوب بالاستلام" if (is_medical and "ختم وتوقيع" in rec.get("citizen_auth_mode", "")) else rec["party_name"]
 
     if rec.get("citizen_stamp_b64"):
-        citizen_box_inner = f"<img src='data:image/png;base64,{rec['citizen_stamp_b64']}' style='height:64px; object-fit:contain;' />"
+        citizen_box_inner = f"<img src='data:image/png;base64,{rec['citizen_stamp_b64']}' style='height:62px; object-fit:contain;' />"
     elif interactive_sig and "توقيع حي" in rec.get("citizen_auth_mode", ""):
         citizen_box_inner = """
         <div>
-            <canvas id="liveSigCanvas" width="180" height="64" style="border:1px dashed #0d47a1; border-radius:6px; background:#f8fafc; touch-action:none; cursor:crosshair;"></canvas>
+            <canvas id="liveSigCanvas" width="180" height="62" style="border:1px dashed #0d47a1; border-radius:6px; background:#f8fafc; touch-action:none; cursor:crosshair;"></canvas>
             <div class="no-print" style="margin-top:2px;">
                 <button onclick="clearSig()" style="font-size:10px; padding:1px 6px; cursor:pointer;">مسح التوقيع</button>
             </div>
@@ -974,7 +977,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
         citizen_box_inner = "<div style='padding:16px 0; font-weight:700; color:#7f1d1d; font-size:11px;'>غياب الطرف / امتناع مثبت بالمحضر</div>"
 
     officer_img = (
-        f"<img src='data:image/png;base64,{rec['officer_stamp_b64']}' style='height:64px; object-fit:contain;' />"
+        f"<img src='data:image/png;base64,{rec['officer_stamp_b64']}' style='height:62px; object-fit:contain;' />"
         if rec.get("officer_stamp_b64") else ""
     )
 
@@ -983,7 +986,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
         attachment_block = f"""
         <div style="margin-top:6px; border:1px dashed #64748b; border-radius:6px; padding:5px 10px; display:flex; align-items:center; justify-content:space-between;">
             <span style="font-size:10.5px; font-weight:700; color:#0f3d2e;">📎 مرفق موثق بالمعاملة:</span>
-            <img src="data:image/png;base64,{rec['attachment_b64']}" style="height:44px; border-radius:4px; border:1px solid #cbd5e1;" />
+            <img src="data:image/png;base64,{rec['attachment_b64']}" style="height:42px; border-radius:4px; border:1px solid #cbd5e1;" />
         </div>
         """
 
@@ -1008,17 +1011,21 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
         font-size: 14px; font-weight: 800; border-radius: 8px; cursor: pointer;
     }}
     .a4-sheet {{
-        width: 210mm; min-height: 282mm; margin: 0 auto;
-        background: #ffffff; color: #0f172a; padding: 10mm 12mm; border: 2px solid #0f3d2e;
+        width: 210mm; min-height: 280mm; margin: 0 auto;
+        background: #ffffff; color: #0f172a; padding: 9mm 12mm; border: 2px solid #0f3d2e;
         display: flex; flex-direction: column; justify-content: space-between;
         box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+        page-break-inside: avoid;
     }}
-    .hdr {{ display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f3d2e; padding-bottom: 7px; }}
-    .hdr-right p, .hdr-left p {{ margin: 1.5px 0; font-size: 11.5px; font-weight: 800; color: #0f172a; }}
-    .hdr-center {{
-        background: #f1f5f3; border: 1.5px solid #0f3d2e; border-radius: 8px;
-        padding: 6px 16px; text-align: center;
+    .hdr {{
+        display: grid; grid-template-columns: 1.35fr 0.9fr 1.15fr;
+        align-items: center; border-bottom: 2px solid #0f3d2e; padding-bottom: 8px;
     }}
+    .hdr-right {{ text-align: center; line-height: 1.48; }}
+    .hdr-right p {{ margin: 0; font-size: 11.5px; font-weight: 800; color: #0f172a; }}
+    .hdr-center {{ text-align: center; display: flex; justify-content: center; align-items: center; }}
+    .hdr-left {{ text-align: right; padding-right: 12px; line-height: 1.65; }}
+    .hdr-left p {{ margin: 0; font-size: 10.5px; font-weight: 700; color: #0f172a; }}
     .doc-banner {{
         background: #0f3d2e; color: #ffffff; text-align: center;
         padding: 5px; border-radius: 6px; font-size: 14.5px; font-weight: 800; margin: 8px 0;
@@ -1029,11 +1036,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
     table.data-tbl td.val {{ width: 68%; color: #0f172a; font-weight: 600; white-space: pre-line; }}
     .legal-box {{
         background: #f8fafc; border: 1px solid #0f3d2e; border-right: 5px solid #0f3d2e;
-        border-radius: 6px; padding: 9px 12px; font-size: 11.5px; line-height: 1.75; text-align: justify; color: #0f172a;
+        border-radius: 6px; padding: 9px 12px; font-size: 11.5px; line-height: 1.72; text-align: justify; color: #0f172a;
     }}
     table.sig-tbl {{ width: 100%; border-collapse: collapse; margin-top: 8px; text-align: center; }}
     table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #94a3b8; padding: 4px; font-size: 10.5px; color: #0f3d2e; }}
-    table.sig-tbl td {{ border: 1px solid #94a3b8; padding: 5px; width: 33.3%; vertical-align: middle; height: 102px; color: #0f172a; }}
+    table.sig-tbl td {{ border: 1px solid #94a3b8; padding: 5px; width: 33.3%; vertical-align: middle; height: 98px; color: #0f172a; }}
     .footer-qr {{
         margin-top: 7px; background: #f4f7f6; border: 1px solid #cbd5e1; border-radius: 6px;
         padding: 5px 10px; display: flex; justify-content: space-between; align-items: center;
@@ -1042,7 +1049,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
         @page {{ size: A4 portrait; margin: 6mm; }}
         body {{ background: #fff; padding: 0; }}
         .toolbar, .no-print {{ display: none !important; }}
-        .a4-sheet {{ width: 100%; min-height: 276mm; box-shadow: none; margin: 0; }}
+        .a4-sheet {{ width: 100%; min-height: 274mm; box-shadow: none; margin: 0; }}
     }}
 </style>
 </head>
@@ -1055,18 +1062,19 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
         <div>
             <div class="hdr">
                 <div class="hdr-right">
-                    <p style="color:#0f3d2e; font-size:13px;">{rec['dept_name']}</p>
-                    <p>وحدة الحوادث</p>
-                    <p>ضابط الخفر</p>
+                    <p>المملكة العربية السعودية</p>
+                    <p>وزارة الداخلية</p>
+                    <p>الأمن العام - الإدارة العامة للمرور</p>
+                    <p>إدارة مرور منطقة جازان</p>
+                    <p style="color:#0f3d2e;">قسم مرور العارضة</p>
                 </div>
                 <div class="hdr-center">
-                    <div style="font-size:12.5px; font-weight:800; color:#0f3d2e;">{rec['dept_name']}</div>
-                    <div style="font-size:10.5px; color:#475569;">وحدة الحوادث • ضابط الخفر</div>
+                    {center_logo_html}
                 </div>
                 <div class="hdr-left">
                     <p>الرقم المرجعي: {rec['doc_no']}</p>
                     <p>التاريخ والوقت: {rec['created_at']}</p>
-                    <p style="font-size:10px;">إحداثيات GPS: {rec['gps_coords']}</p>
+                    <p>إحداثيات الموقع: {rec['gps_coords']}</p>
                 </div>
             </div>
 
@@ -1106,7 +1114,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
                             <div style="display:inline-block; border:1.5px solid #0f3d2e; color:#0f3d2e; padding:3px 10px; border-radius:5px; font-size:10.5px; font-weight:800;">
                                 مُصادق ومُعتمد نظاماً
                             </div>
-                            <div style="font-size:9px; color:#475569; margin-top:8px;">{rec['dept_name']}</div>
+                            <div style="font-size:9px; color:#475569; margin-top:8px;">قسم مرور العارضة</div>
                         </td>
                     </tr>
                 </tbody>
@@ -1115,11 +1123,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
             <div class="footer-qr">
                 <div>
                     <div style="font-size:9.5px; font-weight:800; color:#0f3d2e;">
-                        {rec['dept_name']} — وحدة الحوادث — ضابط الخفر (وثيقة مقفلة إلكترونياً ضد الكشط أو التعديل).
+                        وثيقة رسمية مقفلة إلكترونياً ضد الكشط أو التعديل اليدوي — قسم مرور العارضة.
                     </div>
                     <div style="font-size:9px; color:#475569;">ختم التحقق الرقمي (SHA-256 Seal): {rec['verify_hash']}</div>
                 </div>
-                <img src="data:image/png;base64,{qr_b64}" style="width:50px; height:50px;" />
+                <img src="data:image/png;base64,{qr_b64}" style="width:48px; height:48px;" />
             </div>
         </div>
     </div>
@@ -1156,6 +1164,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, interactive_sig: bo
 # =====================================================================
 init_db()
 shift = get_shift_settings()
+logo_b64_global = get_traffic_logo_b64()
 now_ksa = datetime.now(KSA_TZ)
 
 unit_display = format_entity(shift["officer_rank"], shift["officer_name"])
@@ -1209,25 +1218,29 @@ def reset_doc_state():
 all_archived = search_records_db("")
 archive_count = len(all_archived)
 
+header_logo_widget = (
+    f"<div class='logo-frame'><img src='data:image/png;base64,{logo_b64_global}' alt='شعار المرور' /></div>"
+    if logo_b64_global
+    else "<div class='logo-frame' style='font-size:32px;'>🛡️</div>"
+)
+
 # =====================================================================
-# 7. الترويسة العلوية المثبتة
+# 7. الترويسة الرسمية الخماسية مع شعار المرور
 # =====================================================================
 st.markdown(f"""
 <div class="khafar-top-header">
     <div class="header-brand-row">
-        <div style="display:flex; align-items:center; gap:14px;">
-            <div class="shield-badge">🛡️</div>
-            <div>
-                <div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
-                    <span style="font-size:22px; font-weight:900; color:#ffffff;">{shift['dept_name']}</span>
-                    <span class="indep-pill">ضابط الخفر</span>
-                </div>
-                <div style="font-size:13.5px; color:#a7f3d0; font-weight:700;">
-                    وحدة الحوادث • ضابط الخفر
-                </div>
-            </div>
+        <div class="official-5lines">
+            <div>المملكة العربية السعودية</div>
+            <div>وزارة الداخلية</div>
+            <div>الأمن العام - الإدارة العامة للمرور</div>
+            <div>إدارة مرور منطقة جازان</div>
+            <div style="color:#f3cc7a; font-size:15px;">قسم مرور العارضة</div>
         </div>
-        <div class="status-pills-row">
+        <div>
+            {header_logo_widget}
+        </div>
+        <div class="status-pills-col">
             <span class="pill-offline">🟢 وضع العمل المحلي - جاهز</span>
             <span class="pill-usb">🧬 قارئ البصمة Type-C: {st.session_state.scanner_model}</span>
         </div>
@@ -1277,19 +1290,19 @@ if st.session_state.nav_tab == "النماذج الميدانية":
     if st.session_state.opened_form_id is None:
         st.markdown(f"""
         <div class="hero-shift-card">
-            <div class="hero-eyebrow">{shift['dept_name']} • وحدة الحوادث • ضابط الخفر</div>
-            <h2 class="hero-title">منصة الإقرارات والمحاضر والإحالات الطبية</h2>
+            <div class="hero-eyebrow">إدارة مرور منطقة جازان • قسم مرور العارضة</div>
+            <h2 class="hero-title">منصة تحرير وتوثيق الإقرارات والمحاضر والإحالات الطبية</h2>
             <div class="hero-desc">
-                اختر النموذج المطلوب لتعبئة الحقول وتوثيق البصمة عبر منفذ الشحن (USB Type-C) لقفل الحقول نهائياً وتصدير وثيقة A4 PDF رسمية.
+                اختر النموذج المطلوب لتعبئة الحقول وتوثيق البصمة عبر منفذ الشحن (USB Type-C) لقفل الحقول نهائياً وتصدير وثيقة A4 PDF رسمية بالترويسة المعتمدة وشعار المرور.
             </div>
             <div class="shift-summary-inner">
                 <div style="display:flex; gap:24px; flex-wrap:wrap;">
-                    <div style="font-size:13px; color:#cbd5e1;">القسم: <strong style="color:#ffffff;">{shift['dept_name']}</strong></div>
+                    <div style="font-size:13px; color:#cbd5e1;">القسم: <strong style="color:#ffffff;">قسم مرور العارضة</strong></div>
                     <div style="font-size:13px; color:#cbd5e1;">الوحدة: <strong style="color:#34d399;">{unit_display}</strong></div>
-                    <div style="font-size:13px; color:#cbd5e1;">الإشراف: <strong style="color:#d4a853;">{duty_display}</strong></div>
+                    <div style="font-size:13px; color:#cbd5e1;">الاعتماد: <strong style="color:#d4a853;">{duty_display}</strong></div>
                 </div>
                 <div style="font-size:12px; color:#34d399; font-weight:700;">
-                    طباعة A4 رسمية مقفلة ✓
+                    الترويسة الرسمية وشعار المرور مفعلان ✓
                 </div>
             </div>
         </div>
@@ -1416,7 +1429,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
         <div class="hero-shift-card" style="padding:16px 20px; margin-top:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
                 <div>
-                    <span class="badge-{cat_badge_cls}">{shift['dept_name']} • {unit_display} • {duty_display}</span>
+                    <span class="badge-{cat_badge_cls}">قسم مرور العارضة</span>
                     <h3 style="margin:6px 0 2px 0; color:#ffffff; font-size:20px;">{form_def['icon']} {form_def['title']}</h3>
                 </div>
                 <div style="font-size:12.5px; color:#d4a853; font-weight:700;">
@@ -1525,7 +1538,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
         with s2_col:
             st.markdown("<div class='auth-panel'>", unsafe_allow_html=True)
             st.markdown("#### 2️⃣ توثيق وحدة الحوادث ومصادقة ضابط الخفر")
-            st.caption(f"{shift['dept_name']}  •  {unit_display}  •  {duty_display}")
+            st.caption(f"{unit_display}  •  {duty_display}")
 
             if not st.session_state.officer_approved:
                 if st.button("🛡️ اعتماد الوثيقة وإصدار رمز التحقق QR", type="primary", use_container_width=True, disabled=not st.session_state.citizen_locked):
@@ -1564,7 +1577,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 "verify_hash": verify_hash,
             }
 
-            a4_html = build_official_a4_html(ready_record, form_def, interactive_sig=True)
+            a4_html = build_official_a4_html(ready_record, form_def, logo_b64_global, interactive_sig=True)
             st.write("")
             act1, act2 = st.columns(2)
             with act1:
@@ -1607,7 +1620,7 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
                     st.write(f"**رقم الهوية:** `{r['party_id']}`  |  **الوقت:** `{r['created_at']}`  |  **التوثيق:** {r['citizen_auth_mode']}")
                     st.write(f"**ختم التحقق الرقمي:** `{r['verify_hash']}`")
                 f_def = TRAFFIC_FORMS.get(r["form_id"])
-                arch_html = build_official_a4_html(r, f_def, interactive_sig=False)
+                arch_html = build_official_a4_html(r, f_def, logo_b64_global, interactive_sig=False)
                 with c_dl:
                     st.download_button(
                         "⬇️ تنزيل A4",
@@ -1627,38 +1640,38 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
 
 
 # =====================================================================
-# القسم الثالث: البيانات الثابتة (اختياري للمناوبة)
+# القسم الثالث: البيانات الثابتة
 # =====================================================================
 elif st.session_state.nav_tab == "مناوبة الخفر":
     st.markdown("""
     <div class="hero-shift-card">
-        <div class="hero-eyebrow">قسم مرور العارضة • وحدة الحوادث • ضابط الخفر</div>
-        <h3 style="margin:4px 0 8px 0; color:#ffffff;">👮 إعدادات الترويسة المثبتة</h3>
+        <div class="hero-eyebrow">إدارة مرور منطقة جازان • قسم مرور العارضة</div>
+        <h3 style="margin:4px 0 8px 0; color:#ffffff;">👮 إعدادات التوقيعات والإحداثيات</h3>
         <div style="font-size:13px; color:#cbd5e1;">
-            المسميات مثبتة افتراضياً على (قسم مرور العارضة / وحدة الحوادث / ضابط الخفر) دون أسماء شخصية، مع إمكانية إضافة اسم المناوب اختيارياً عند الحاجة.
+            الترويسة الرسمية الخماسية وشعار المرور مثبتان تلقائياً في رأس جميع الوثائق، ويمكن من هنا تحديث الإحداثيات أو إضافة اسم المناوب اختيارياً.
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     with st.form("shift_update_form"):
-        s_dept = st.text_input("القسم الثابت", value=shift["dept_name"])
+        s_dept = st.text_input("القسم", value=shift["dept_name"], disabled=True)
         r1, r2 = st.columns([1, 2])
         with r1:
-            s_orank = st.text_input("الوحدة الثابتة", value=shift["officer_rank"])
+            s_orank = st.text_input("خانة التوثيق الأولى", value=shift["officer_rank"])
         with r2:
-            s_oname = st.text_input("اسم المعد (اختياري - يترك فارغاً للاكتفاء بالمسمى)", value=shift["officer_name"])
+            s_oname = st.text_input("اسم المعد (اختياري)", value=shift["officer_name"])
 
         r3, r4 = st.columns([1, 2])
         with r3:
-            s_drank = st.text_input("جهة الاعتماد الثابتة", value=shift["duty_rank"])
+            s_drank = st.text_input("خانة المصادقة الثانية", value=shift["duty_rank"])
         with r4:
-            s_dname = st.text_input("اسم المناوب (اختياري - يترك فارغاً للاكتفاء بالمسمى)", value=shift["duty_name"])
+            s_dname = st.text_input("اسم المناوب (اختياري)", value=shift["duty_name"])
 
         s_gps = st.text_input("إحداثيات الموقع (GPS)", value=shift["default_gps"])
 
-        if st.form_submit_button("💾 حفظ واعتماد الإعدادات", type="primary", use_container_width=True):
-            update_shift_settings(s_dept, s_orank, s_oname, s_drank, s_dname, s_gps)
-            st.success("تم حفظ الإعدادات وتعميمها على جميع النماذج.")
+        if st.form_submit_button("💾 حفظ الإعدادات", type="primary", use_container_width=True):
+            update_shift_settings("قسم مرور العارضة", s_orank, s_oname, s_drank, s_dname, s_gps)
+            st.success("تم حفظ الإعدادات بنجاح.")
             safe_rerun()
 
 
