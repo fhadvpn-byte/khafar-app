@@ -833,8 +833,10 @@ def init_db():
     if c.execute("SELECT COUNT(*) FROM shift_settings").fetchone()[0] == 0:
         c.execute("""
             INSERT INTO shift_settings (id, dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps)
-            VALUES (1, 'قسم مرور العارضة', 'وحدة الحوادث', '', 'ضابط الخفر', '', '17.0924° N, 43.0956° E')
+            VALUES (1, 'قسم مرور العارضة', 'ضابط الخفر', '', 'وحدة الحوادث', '', '17.0924° N, 43.0956° E')
         """)
+
+    c.execute('UPDATE shift_settings SET officer_rank=?, duty_rank=? WHERE id=1 AND officer_rank=? AND duty_rank=?', ('ضابط الخفر','وحدة الحوادث','وحدة الحوادث','ضابط الخفر'))
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS records (
@@ -1093,8 +1095,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 <thead>
                     <tr>
                         <th>{col1_header}</th>
-                        <th>وحدة الحوادث</th>
                         <th>ضابط الخفر</th>
+                        <th>وحدة الحوادث</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1537,7 +1539,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
 
         with s2_col:
             st.markdown("<div class='auth-panel'>", unsafe_allow_html=True)
-            st.markdown("#### 2️⃣ توثيق وحدة الحوادث ومصادقة ضابط الخفر")
+            st.markdown("#### 2️⃣ توثيق ضابط الخفر ومصادقة وحدة الحوادث")
             st.caption(f"{unit_display}  •  {duty_display}")
 
             if not st.session_state.officer_approved:
@@ -1547,7 +1549,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     st.session_state.officer_approved = True
                     safe_rerun()
             else:
-                st.success("تم التوثيق ومصادقة ضابط الخفر.")
+                st.success("تم التوثيق ومصادقة وحدة الحوادث.")
                 st.image(base64.b64decode(st.session_state.officer_stamp_b64), caption="ختم التوثيق المعتمد", width=105)
             st.markdown("</div>", unsafe_allow_html=True)
 
