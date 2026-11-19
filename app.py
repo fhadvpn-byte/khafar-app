@@ -811,10 +811,15 @@ def _settlement_legal(values: dict) -> str:
     clauses = []
     for index in range(1, count + 1):
         ordinal = _PARTY_ORDINALS[index]
+        role = str(values.get(f"p{index}_role") or "")
+        if "مبلغ مالي" in role:
+            role_text = f"بصفته في الإقرار (صلح وتنازل عن مبلغ مالي وقدره: {_val(values, f'p{index}_amount')})"
+        else:
+            role_text = f"صفته ({_val(values, f'p{index}_role')})"
         clause = (
             f"الطرف {ordinal}: ({_val(values, f'p{index}_name')})، هوية رقم ({_val(values, f'p{index}_id')})، "
             f"جوال ({_val(values, f'p{index}_phone')})، مركبة ({_val(values, f'p{index}_vehicle')})، "
-            f"صفته ({_val(values, f'p{index}_role')})، وتوقيعه ({_val(values, f'p{index}_capacity')})"
+            f"{role_text}، وتوقيعه ({_val(values, f'p{index}_capacity')})"
         )
         if "وكيل" in str(values.get(f"p{index}_capacity") or ""):
             clause += (
@@ -918,6 +923,7 @@ def _party_block(index: int, sample: dict) -> list[dict]:
     ordinal = _PARTY_ORDINALS[index]
     count_rule = {"key": "party_count", "contains_any": _count_visible_tokens(index)}
     agent_rule = {"all": [count_rule, {"key": f"p{index}_capacity", "contains_any": ["وكيل"]}]}
+    money_rule = {"all": [count_rule, {"key": f"p{index}_role", "contains_any": ["مبلغ مالي"]}]}
     prefix = f"p{index}_"
     return [
         {"key": f"{prefix}name", "label": f"الاسم الرباعي للطرف {ordinal}", "type": "text", "sample": sample["name"],
@@ -930,9 +936,18 @@ def _party_block(index: int, sample: dict) -> list[dict]:
         {"key": f"{prefix}vehicle", "label": f"نوع المركبة ورقم لوحتها — الطرف {ordinal}", "type": "text", "sample": sample["vehicle"],
          "visible_if": count_rule, "a4_label": f"مركبة الطرف {ordinal}", "a4_keep_pair": True},
         {"key": f"{prefix}role", "label": f"صفته في الإقرار — الطرف {ordinal}", "type": "select",
-         "options": ["متنازل ومبرئ للذمة", "متنازل له", "صلح وتنازل متبادل"], "sample": sample["role"],
+         "options": ["متنازل ومبرئ للذمة", "متنازل له", "صلح وتنازل متبادل", "صلح وتنازل عن مبلغ مالي"],
+         "sample": sample["role"],
          "visible_if": count_rule, "a4_label": f"صفة الطرف {ordinal}", "a4_keep_pair": True,
-         "a4_compose": {"keys": [f"{prefix}capacity"], "fmt": "{value} — التوقيع: {" + prefix + "capacity}"}},
+         "a4_compose": {
+             "keys": [f"{prefix}capacity"],
+             "fmt": "{value} — التوقيع: {" + prefix + "capacity}",
+             "append_if": f"{prefix}amount",
+             "append_fmt": " — وقدره: {extra}",
+         }},
+        {"key": f"{prefix}amount", "label": f"💰 مقدار المبلغ المالي — الطرف {ordinal}", "type": "text",
+         "placeholder": "اكتب المبلغ رقماً أو كتابة (مثال: 5000 ريال سعودي)",
+         "sample": "5000 ريال سعودي", "visible_if": money_rule, "stack_under": True, "a4_hidden": True},
         {"key": f"{prefix}capacity", "label": f"صفة التوقيع — الطرف {ordinal}", "type": "select",
          "options": ["أصالة عن نفسه", "وكيل شرعي مخول بالتنازل"], "sample": sample["cap"],
          "visible_if": count_rule, "a4_hidden": True},
@@ -1869,6 +1884,10 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool) -> st
             for key in compose.get("keys") or []:
                 mapping[key] = str(fields_map.get(key, "") or "").strip() or "-"
             shown = compose["fmt"].format_map(mapping)
+            extra_key = compose.get("append_if")
+            extra = str(fields_map.get(extra_key, "") or "").strip() if extra_key else ""
+            if extra and compose.get("append_fmt"):
+                shown += str(compose["append_fmt"]).replace("{extra}", extra)
         field = {**field, "label": label}
         wide = dense and _field_is_wide(field, shown)
         if not dense or wide:
@@ -2970,7 +2989,12 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 return st.selectbox(fld["label"], options=opts, index=default_idx, key=wkey, disabled=locked)
             if fld["type"] == "textarea":
                 return st.text_area(fld["label"], key=wkey, height=88, disabled=locked)
-            return st.text_input(fld["label"], key=wkey, disabled=locked)
+            return st.text_input(
+                fld["label"],
+                key=wkey,
+                disabled=locked,
+                placeholder=fld.get("placeholder") or "",
+            )
 
         def render_field_grid(fields):
             if not fields:
@@ -3013,7 +3037,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     ordinal = _PARTY_ORDINALS[int(fld["key"][1])]
                     st.markdown(f"**الطرف {ordinal}**")
                     pair_slot = 0
-                if fld["type"] == "textarea":
+                if fld["type"] == "textarea" or fld.get("stack_under"):
                     current_values[fld["key"]] = render_field(fld)
                     pair_slot = 0
                     continue
