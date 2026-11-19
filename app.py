@@ -746,12 +746,24 @@ iframe[data-testid="stIFrame"],
 .legal-dark-box .legal-title { direction: rtl !important; text-align: right !important; color: #d4a853 !important; font-weight: 800 !important; margin-bottom: 8px !important; }
 .legal-dark-box .legal-body { direction: rtl !important; unicode-bidi: embed !important; text-align: justify !important; text-align-last: right !important; text-justify: inter-word !important; line-height: 2.0 !important; color: #e2e8f0 !important; }
 @media print {
-    @page { size: A4 portrait; margin: 0mm !important; }
+    @page { size: A4 portrait; margin: 4mm !important; }
     html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], .main, .block-container {
         direction: rtl !important;
         transform: none !important;
-        margin: 0 !important; padding: 0 !important; min-height: 0 !important; height: auto !important;
-        max-height: 297mm !important; overflow: hidden !important; background: #ffffff !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: visible !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+        background: #ffffff !important;
+    }
+    .stButton, [data-testid="stHorizontalBlock"], [data-testid="stVerticalBlockBorderWrapper"],
+    .stTabs, header, footer, [data-testid="stHeader"], [data-testid="stToolbar"],
+    [data-testid="stSidebar"], [data-testid="stDecoration"] {
+        display: none !important;
     }
 }
 </style>
@@ -2738,16 +2750,26 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-compact .footer-qr {{ padding: 4px 8px !important; }}
     .a4-compact .footer-qr img {{ width: 32px !important; height: 32px !important; }}
     @media print {{
-        @page {{ size: A4 portrait; margin: 6mm !important; }}
+        @page {{ size: A4 portrait; margin: 4mm !important; }}
         html, body, .a4-preview-viewport, .a4-preview-wrapper {{
             direction: rtl !important;
             text-align: right !important;
             transform: none !important;
-            margin: 0 !important; padding: 0 !important; background: #ffffff !important;
-            height: auto !important; max-height: none !important; overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            background: #ffffff !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            overflow: visible !important;
         }}
         .toolbar, .no-print, .live-sig-dock, .clear-sig-btn, .sig-guide-hint, .sig-mode-note,
         .live-pad-actions, .live-sig-dock-head {{ display: none !important; }}
+        .a4-preview-viewport ~ *, .a4-paper ~ * {{ display: none !important; }}
         .sig-guide, .sig-guide-print-clean {{
             border: none !important; padding: 0 !important; margin: 0 !important; background: transparent !important;
         }}
@@ -2764,18 +2786,19 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             transform: none !important;
             zoom: 1 !important;
             width: 100% !important;
-            max-width: 198mm !important;
-            margin: 0 auto !important;
+            max-width: 202mm !important;
             height: auto !important;
             min-height: 0 !important;
             max-height: none !important;
-            padding: 5mm 6mm !important;
+            padding: 3.5mm 5mm !important;
+            margin: 0 auto !important;
             display: flex !important;
             flex-direction: column !important;
             box-sizing: border-box !important;
             page-break-inside: avoid !important;
             page-break-after: avoid !important;
             break-inside: avoid !important;
+            break-after: avoid !important;
             box-shadow: none !important;
             overflow: visible !important;
         }}
@@ -2785,6 +2808,70 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             height: auto !important;
             zoom: 1 !important;
             transform: none !important;
+            margin-bottom: 0 !important;
+            padding-bottom: 0 !important;
+        }}
+        .a4-paper .hdr {{
+            margin-bottom: 5px !important;
+            padding-bottom: 4px !important;
+            line-height: 1.3 !important;
+        }}
+        .a4-paper .hdr-right p, .a4-paper .hdr-left p {{
+            line-height: 1.3 !important;
+        }}
+        .a4-paper .doc-banner {{
+            margin-bottom: 5px !important;
+            padding: 4px 8px !important;
+            line-height: 1.3 !important;
+        }}
+        .a4-paper table.data-tbl {{
+            margin-bottom: 5px !important;
+        }}
+        .a4-paper table.data-tbl th,
+        .a4-paper table.data-tbl td {{
+            padding: 3px 6px !important;
+            font-size: 10.5px !important;
+            line-height: 1.3 !important;
+        }}
+        .a4-paper .legal-box {{
+            padding: 6px 9px !important;
+            margin-bottom: 5px !important;
+            font-size: 10.5px !important;
+            line-height: 1.4 !important;
+        }}
+        .a4-paper .legal-box div {{
+            font-size: 10.5px !important;
+            line-height: 1.4 !important;
+        }}
+        .a4-paper table.sig-tbl {{
+            margin-top: 4px !important;
+            table-layout: fixed !important;
+            width: 100% !important;
+        }}
+        .a4-paper .sig-head,
+        .a4-paper table.sig-tbl th,
+        .a4-paper table.sig-tbl td,
+        .a4-paper .sig-cell {{
+            padding: 3px 4px !important;
+            min-height: 44px !important;
+            max-height: 52px !important;
+            height: auto !important;
+        }}
+        .a4-paper .sig-slot-img {{
+            height: 32px !important;
+            max-height: 32px !important;
+        }}
+        .a4-paper .footer-qr {{
+            margin-top: 4px !important;
+            padding-top: 3px !important;
+            margin-bottom: 0 !important;
+            padding-bottom: 0 !important;
+        }}
+        .a4-paper > *:last-child,
+        .a4-fit > *:last-child,
+        .sig-footer > *:last-child {{
+            margin-bottom: 0 !important;
+            padding-bottom: 0 !important;
         }}
         .sig-footer, table.sig-tbl, .sig-grid, .footer-qr, .attachment-section {{
             page-break-inside: avoid !important; break-inside: avoid !important;
@@ -2792,81 +2879,25 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         .att-card img,
         .attachment-grid.atts-single .att-card img,
         .attachment-grid.atts-multi .att-card img {{
-            max-height: 80px !important;
+            max-height: 70px !important;
         }}
         a, a[href^="tel"] {{
             color: #0f172a !important; text-decoration: none !important; pointer-events: none !important;
         }}
-        @page {{ size: A4 portrait; margin: 5mm !important; }}
         div.a4-paper.a4-dense-print {{
             width: 100% !important;
-            max-width: 200mm !important;
+            max-width: 202mm !important;
             height: auto !important;
             min-height: 0 !important;
-            padding: 4mm 6mm !important;
+            padding: 3.5mm 5mm !important;
             margin: 0 auto !important;
         }}
-        div.a4-paper.a4-dense-print .hdr {{
-            margin-bottom: 6px !important;
-            padding-bottom: 5px !important;
-            line-height: 1.35 !important;
-        }}
-        div.a4-paper.a4-dense-print .hdr-right p,
-        div.a4-paper.a4-dense-print .hdr-left p {{
-            line-height: 1.35 !important;
-        }}
-        div.a4-paper.a4-dense-print .doc-banner {{
-            margin-bottom: 6px !important;
-            padding: 5px 10px !important;
-            line-height: 1.35 !important;
-        }}
-        div.a4-paper.a4-dense-print table.data-tbl {{
-            margin-bottom: 6px !important;
-        }}
-        div.a4-paper.a4-dense-print table.data-tbl th,
-        div.a4-paper.a4-dense-print table.data-tbl td {{
-            padding: 3.5px 6px !important;
-            font-size: 10.5px !important;
-            line-height: 1.35 !important;
-        }}
-        div.a4-paper.a4-dense-print .legal-box {{
-            padding: 7px 10px !important;
-            margin-bottom: 6px !important;
-            font-size: 10.8px !important;
-            line-height: 1.45 !important;
-        }}
-        div.a4-paper.a4-dense-print .legal-box div {{
-            font-size: 10.8px !important;
-            line-height: 1.45 !important;
-        }}
-        div.a4-paper.a4-dense-print .legal-box > div:first-child {{
-            margin-bottom: 4px !important;
-        }}
-        div.a4-paper.a4-dense-print table.sig-tbl {{
-            table-layout: fixed !important;
-            width: 100% !important;
+        div.a4-paper.a4-dense-print .footer-qr {{
+            margin-top: 4px !important;
+            padding-top: 3px !important;
         }}
         div.a4-paper.a4-dense-print table.sig-multi.cols-4 > tbody > tr:first-child > td {{
             width: 25% !important;
-        }}
-        div.a4-paper.a4-dense-print .sig-head,
-        div.a4-paper.a4-dense-print table.sig-tbl th {{
-            padding: 3px 4px !important;
-            font-size: 10px !important;
-        }}
-        div.a4-paper.a4-dense-print .sig-cell,
-        div.a4-paper.a4-dense-print table.sig-tbl td {{
-            padding: 4px !important;
-            min-height: 48px !important;
-            height: 48px !important;
-        }}
-        div.a4-paper.a4-dense-print .sig-slot-img {{
-            height: 36px !important;
-            max-height: 36px !important;
-        }}
-        div.a4-paper.a4-dense-print .footer-qr {{
-            margin-top: 5px !important;
-            padding-top: 4px !important;
         }}
     }}
 </style>
