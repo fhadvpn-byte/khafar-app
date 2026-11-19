@@ -744,6 +744,13 @@ iframe[data-testid="stIFrame"],
 .legal-dark-box { direction: rtl !important; text-align: justify !important; text-align-last: right !important; unicode-bidi: embed !important; color: #e2e8f0 !important; }
 .legal-dark-box .legal-title { direction: rtl !important; text-align: right !important; color: #d4a853 !important; font-weight: 800 !important; margin-bottom: 8px !important; }
 .legal-dark-box .legal-body { direction: rtl !important; unicode-bidi: embed !important; text-align: justify !important; text-align-last: right !important; text-justify: inter-word !important; line-height: 2.0 !important; color: #e2e8f0 !important; }
+@media print {
+    @page { size: A4 portrait; margin: 0mm !important; }
+    html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], .main, .block-container {
+        margin: 0 !important; padding: 0 !important; min-height: 0 !important; height: auto !important;
+        max-height: 297mm !important; overflow: hidden !important; background: #ffffff !important;
+    }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1554,7 +1561,7 @@ def _field_is_wide(field: dict, value: str) -> bool:
     if field.get("key") in _WIDE_FIELD_KEYS:
         return True
     label = str(field.get("label") or "")
-    if len(label) > 42 or len(value) > 48:
+    if len(label) > 56 or len(value) > 96:
         return True
     return False
 
@@ -1634,15 +1641,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         field_count = sum(1 for field in form_def["fields"] if _include_field_on_a4(field, fields_map))
     else:
         field_count = len(fields_map)
-    dense = field_count > 10
+    dense = True
     rows_html = _data_table_rows(form_def, fields_map, dense)
-    data_tbl_cls = "data-tbl cols-4" if dense else "data-tbl"
+    data_tbl_cls = "data-tbl cols-4"
 
     qr_payload = f"DOC:{rec['doc_no']}|ID:{rec['party_id']}|PLATE:{rec['plate_no']}|SEAL:{rec['verify_hash']}"
     qr_b64 = generate_qr_png_b64(qr_payload)
 
     center_logo_html = (
-        f"<img src='data:image/png;base64,{logo_b64}' style='height:82px; width:auto; object-fit:contain;' alt='شعار المرور' />"
+        f"<img src='data:image/png;base64,{logo_b64}' style='height:58px; width:auto; object-fit:contain;' alt='شعار المرور' />"
         if logo_b64
         else "<div style='font-size:13px; font-weight:800; color:#0f3d2e;'>الإدارة العامة للمرور</div>"
     )
@@ -1785,30 +1792,30 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     att_items = parse_attachments(rec.get("attachment_b64"))
     if show_atts and att_items:
         cards = []
+        image_count = 0
         for att in att_items:
-            safe_name = html.escape(str(att.get("name") or "مرفق"))
             kind = (att.get("kind") or "image").lower()
             if kind == "pdf":
                 cards.append(
-                    f'<div class="att-card att-pdf-card">'
-                    f'<div class="att-pdf-icon">📄</div>'
-                    f'<div class="att-pdf-name">{safe_name}</div>'
-                    f'<div class="att-pdf-note">مرفق PDF محفوظ مع المعاملة</div>'
-                    f"</div>"
+                    '<div class="att-card att-pdf-card">'
+                    '<div class="att-pdf-icon">📄</div>'
+                    '<div class="att-pdf-note">مرفق PDF</div>'
+                    "</div>"
                 )
             else:
+                image_count += 1
                 mime = html.escape(str(att.get("mime") or "image/png"))
                 b64 = att.get("b64") or ""
                 cards.append(
                     f'<div class="att-card">'
-                    f'<img src="data:{mime};base64,{b64}" alt="{safe_name}" />'
-                    f'<div class="att-caption">{safe_name}</div>'
+                    f'<img src="data:{mime};base64,{b64}" alt="" />'
                     f"</div>"
                 )
+        att_grid_cls = "attachment-grid atts-single" if image_count <= 1 else "attachment-grid atts-multi"
         attachment_block = f"""
         <div class="attachment-section">
             <div class="attachment-title">📎 المرفقات المصورة المعتمدة في التقرير</div>
-            <div class="attachment-grid">{"".join(cards)}</div>
+            <div class="{att_grid_cls}">{"".join(cards)}</div>
         </div>
         """
 
@@ -1819,7 +1826,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     else:
         legal_box_title = f"الصيغة النظامية المعتمدة ({rec['category']}):"
     banner_title = (form_def or {}).get("official_title") or rec["form_title"]
-    sheet_cls = "a4-sheet dense-fit" if dense else "a4-sheet"
+    sheet_cls = "a4-sheet a4-paper dense-fit"
     gps_line_html = gps_header_line(str(rec.get("gps_coords") or ""))
 
     return f"""
@@ -1827,6 +1834,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
+<meta name="format-detection" content="telephone=no">
 <title>{rec['doc_no']} - {banner_title}</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -1876,57 +1884,49 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         .toolbar {{ width: 100%; max-width: 794px; padding: 8px; }}
         .print-btn {{ width: 100%; max-width: 360px; font-size: 13px; padding: 8px 14px; }}
         .sheet-stage {{ width: 100%; max-width: 794px; margin: 0 auto; height: var(--stage-h, auto); overflow: hidden; position: relative; }}
-        .a4-sheet {{
-            width: 794px !important; min-height: 1100px; margin: 0;
-            background: #ffffff !important; color: #0f172a !important; padding: 9mm 12mm; border: 2px solid #0f3d2e;
+        .a4-sheet, .a4-paper {{
+            width: 210mm !important; height: 296mm !important; max-height: 296mm !important; margin: 0 auto;
+            background: #ffffff !important; color: #0f172a !important; padding: 6mm 8mm; border: 2px solid #0f3d2e;
+            box-sizing: border-box !important; overflow: hidden !important;
             display: flex; flex-direction: column; justify-content: space-between;
             box-shadow: 0 12px 32px rgba(0,0,0,0.45);
-            transform-origin: top right; transform: scale(var(--a4-scale, 1));
+            transform-origin: top center; transform: scale(var(--a4-scale, 1));
         }}
         .a4-sheet, .a4-sheet p, .a4-sheet td, .a4-sheet th, .a4-sheet div, .a4-sheet span {{
             color: #0f172a;
         }}
         .a4-sheet .doc-banner {{ color: #ffffff !important; }}
     }}
+    .a4-fit {{ display: flex; flex-direction: column; justify-content: space-between; flex: 1 1 auto; min-height: 100%; }}
     .hdr {{
-        display: grid; grid-template-columns: 1.35fr 0.9fr 1.15fr;
-        align-items: center; border-bottom: 2px solid #0f3d2e; padding-bottom: 8px;
+        display: grid; grid-template-columns: 1.35fr 0.8fr 1.15fr;
+        align-items: center; border-bottom: 2px solid #0f3d2e; padding-bottom: 3px;
     }}
-    .hdr-right {{ text-align: center; line-height: 1.48; }}
-    .hdr-right p {{ margin: 0; font-size: 11.5px; font-weight: 800; color: #0f172a !important; }}
+    .hdr-right {{ text-align: center; line-height: 1.28; }}
+    .hdr-right p {{ margin: 0; font-size: 11px; font-weight: 800; color: #0f172a !important; }}
     .hdr-center {{ text-align: center; display: flex; justify-content: center; align-items: center; }}
-    .hdr-left {{ text-align: right; padding-right: 12px; line-height: 1.65; }}
+    .hdr-center img {{ height: 58px !important; width: auto; object-fit: contain; }}
+    .hdr-left {{ text-align: right; padding-right: 8px; line-height: 1.35; }}
     .hdr-left p {{ margin: 0; font-size: 10.5px; font-weight: 700; color: #0f172a !important; }}
     .doc-banner {{
         background: #0f3d2e; color: #ffffff !important; text-align: center;
-        padding: 5px; border-radius: 6px; font-size: 14.5px; font-weight: 800; margin: 8px 0;
+        padding: 3px 6px; border-radius: 6px; font-size: 13px; font-weight: 800; margin: 4px 0;
     }}
-    table.data-tbl {{ width: 100%; border-collapse: collapse; margin-bottom: 8px; }}
-    table.data-tbl td {{ border: 1px solid #cbd5e1; padding: 4px 8px; font-size: 11px; vertical-align: top; direction: rtl; text-align: right; color: #0f172a !important; }}
-    table.data-tbl td.lbl {{ width: 32%; background: #f4f7f6; font-weight: 700; color: #0f3d2e !important; }}
-    table.data-tbl td.val {{ width: 68%; color: #0f172a !important; font-weight: 600; white-space: pre-line; }}
+    table.data-tbl {{ width: 100%; border-collapse: collapse; margin-bottom: 5px; }}
+    table.data-tbl td {{ border: 1px solid #cbd5e1; padding: 4px 7px; font-size: 11.5px; vertical-align: top; direction: rtl; text-align: right; color: #0f172a !important; }}
+    table.data-tbl td.lbl {{ width: 17%; background: #f4f7f6; font-weight: 700; color: #0f3d2e !important; }}
+    table.data-tbl td.val {{ width: 33%; color: #0f172a !important; font-weight: 600; white-space: pre-line; font-size: 12px; }}
     table.data-tbl.cols-4 td.lbl.half {{ width: 17%; }}
     table.data-tbl.cols-4 td.val.half {{ width: 33%; }}
     table.data-tbl.cols-4 td.lbl {{ width: 17%; }}
     table.data-tbl.cols-4 td.val.span3 {{ width: auto; }}
-    .a4-sheet.dense-fit {{ min-height: 1040px; padding: 6mm 8mm; }}
-    .a4-sheet.dense-fit .hdr {{ padding-bottom: 4px; }}
-    .a4-sheet.dense-fit .hdr-right p {{ font-size: 10.5px; line-height: 1.32; }}
-    .a4-sheet.dense-fit .hdr-left p {{ font-size: 10px; line-height: 1.4; }}
-    .a4-sheet.dense-fit .doc-banner {{ font-size: 13px; margin: 4px 0; padding: 3px 6px; }}
-    .a4-sheet.dense-fit table.data-tbl {{ margin-bottom: 5px; }}
-    .a4-sheet.dense-fit table.data-tbl td {{ padding: 3px 6px; font-size: 10px; }}
-    .a4-sheet.dense-fit .legal-box {{ padding: 6px 8px; font-size: 10.5px; line-height: 1.55; }}
-    .a4-sheet.dense-fit table.sig-tbl td {{ height: 70px; padding: 3px; }}
-    .a4-sheet.dense-fit .sig-slot-img {{ height: 46px !important; }}
-    .a4-sheet.dense-fit .footer-qr {{ margin-top: 4px; padding: 3px 8px; }}
     .legal-box {{
         background: #f8fafc; border: 1px solid #0f3d2e; border-right: 5px solid #0f3d2e;
-        border-radius: 6px; padding: 9px 12px; font-size: 11.5px; line-height: 1.72; text-align: justify; color: #0f172a !important;
+        border-radius: 6px; padding: 6px 8px; font-size: 11.5px; line-height: 1.5; text-align: justify; color: #0f172a !important;
     }}
-    table.sig-tbl {{ width: 100%; border-collapse: collapse; margin-top: 8px; text-align: center; page-break-inside: avoid; break-inside: avoid; }}
-    table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #94a3b8; padding: 4px; font-size: 10.5px; color: #0f3d2e !important; }}
-    table.sig-tbl td {{ border: 1px solid #94a3b8; padding: 5px; width: {col_width}; vertical-align: middle; height: 86px; color: #0f172a !important; }}
+    table.sig-tbl {{ width: 100%; border-collapse: collapse; margin-top: 4px; text-align: center; page-break-inside: avoid; break-inside: avoid; }}
+    table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #94a3b8; padding: 3px; font-size: 10.5px; color: #0f3d2e !important; }}
+    table.sig-tbl td {{ border: 1px solid #94a3b8; padding: 3px; width: {col_width}; vertical-align: middle; height: 62px; color: #0f172a !important; }}
     .sig-footer {{ page-break-inside: avoid; break-inside: avoid; }}
     .footer-qr {{
         margin-top: 7px; background: #f4f7f6; border: 1px solid #cbd5e1; border-radius: 6px;
@@ -1934,59 +1934,73 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         page-break-inside: avoid; break-inside: avoid;
     }}
     .attachment-section {{
-        margin-top: 8px; border: 1px dashed #64748b; border-radius: 8px; padding: 8px 10px;
-        background: #f8fafc; page-break-inside: avoid;
+        margin-top: 4px; border: 1px dashed #94a3b8; border-radius: 6px; padding: 3px 6px;
+        background: #f8fafc; page-break-inside: avoid; break-inside: avoid;
     }}
     .attachment-title {{
-        font-size: 11px; font-weight: 800; color: #0f3d2e; margin-bottom: 8px; text-align: right;
+        font-size: 10.5px; font-weight: 800; color: #0f3d2e; margin-bottom: 2px; text-align: right;
     }}
     .attachment-grid {{
-        display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; align-items: flex-start;
+        display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; overflow: hidden;
     }}
-    .att-card {{
-        width: calc(50% - 5px); max-width: 320px; text-align: center;
-    }}
+    .att-card {{ flex: 1 1 0; text-align: center; min-width: 0; }}
     .att-card img {{
-        max-width: 100%; max-height: 180px; width: auto; height: auto;
-        object-fit: contain; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;
+        max-width: 100%; width: auto; height: auto; object-fit: contain;
+        border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; display: block; margin: 0 auto;
     }}
-    .att-caption {{
-        font-size: 9.5px; color: #475569; margin-top: 4px; font-weight: 600; word-break: break-word;
-    }}
+    .attachment-grid.atts-single .att-card img {{ max-height: 85px; }}
+    .attachment-grid.atts-multi .att-card img {{ max-height: 75px; }}
+    .att-caption, .att-pdf-name {{ display: none !important; }}
     .att-pdf-card {{
-        border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 8px; background: #fff;
-        min-height: 90px; display: flex; flex-direction: column; justify-content: center;
+        border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px; background: #fff;
+        max-height: 75px; display: flex; align-items: center; justify-content: center; gap: 4px;
     }}
-    .att-pdf-icon {{ font-size: 22px; line-height: 1; }}
-    .att-pdf-name {{ font-size: 10.5px; font-weight: 700; color: #0f172a; margin-top: 4px; word-break: break-word; }}
-    .att-pdf-note {{ font-size: 9px; color: #64748b; margin-top: 2px; }}
+    .att-pdf-icon {{ font-size: 16px; line-height: 1; }}
+    .att-pdf-note {{ font-size: 9px; color: #475569; }}
+    .a4-sheet table a, .a4-sheet .legal-box a, a[href^="tel"] {{
+        color: #0f172a !important; text-decoration: none !important; pointer-events: none !important;
+    }}
+    #a4MmProbe {{ position: absolute; visibility: hidden; height: 296mm; width: 0; overflow: hidden; pointer-events: none; }}
     @media print {{
-        @page {{ size: A4 portrait; margin: 7mm; }}
-        html, body {{ background: #fff !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }}
+        @page {{ size: A4 portrait; margin: 0mm !important; }}
+        html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], .main, .block-container {{
+            margin: 0 !important; padding: 0 !important; min-height: 0 !important; height: auto !important;
+            max-height: 297mm !important; overflow: hidden !important; background: #ffffff !important;
+        }}
         .toolbar, .no-print, .live-sig-dock, .clear-sig-btn, .sig-guide-hint, .sig-mode-note,
         .live-pad-actions, .live-sig-dock-head {{ display: none !important; }}
         .sig-guide, .sig-guide-print-clean {{
             border: none !important; padding: 0 !important; margin: 0 !important; background: transparent !important;
         }}
         .live-pad-canvas {{ display: none !important; border: none !important; }}
-        .sheet-stage {{ width: 100% !important; max-width: none !important; height: auto !important; overflow: visible !important; margin: 0 !important; }}
-        table.data-tbl td {{ padding: 3.5px 7px; }}
-        table.sig-tbl td {{ height: 72px; padding: 3px 4px; }}
-        .sig-footer, table.sig-tbl, .footer-qr {{ page-break-inside: avoid !important; break-inside: avoid !important; }}
-        .a4-sheet {{
-            width: 100% !important; min-height: 270mm !important; margin: 0 !important;
-            background: #ffffff; color: #0f172a; padding: 5mm 6mm; border: 2px solid #0f3d2e;
-            display: flex; flex-direction: column; justify-content: space-between;
-            box-shadow: none !important; transform: none !important; page-break-inside: avoid;
+        .sheet-stage {{
+            width: 210mm !important; max-width: 210mm !important; height: 296mm !important;
+            overflow: hidden !important; margin: 0 auto !important;
         }}
-        .a4-sheet.dense-fit {{
-            min-height: 0 !important; height: auto !important; padding: 3mm 4mm;
-            page-break-after: avoid; page-break-inside: avoid;
+        .sig-footer, table.sig-tbl, .footer-qr, .attachment-section {{
+            page-break-inside: avoid !important; break-inside: avoid !important;
         }}
-        .a4-sheet.dense-fit table.data-tbl td {{ padding: 3.5px 7px; font-size: 9.5px; }}
-        .a4-sheet.dense-fit .legal-box {{ font-size: 10px; line-height: 1.48; padding: 5px 7px; }}
-        .a4-sheet.dense-fit table.sig-tbl td {{ height: 58px; }}
-        .a4-sheet.dense-fit .sig-slot-img {{ height: 40px !important; }}
+        .a4-sheet, .a4-paper {{
+            width: 210mm !important;
+            height: 296mm !important;
+            max-height: 296mm !important;
+            padding: 6mm 8mm !important;
+            margin: 0 auto !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+            page-break-inside: avoid !important;
+            page-break-after: avoid !important;
+            break-inside: avoid !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+            background: #ffffff !important;
+            box-shadow: none !important;
+            transform: none !important;
+        }}
+        a, a[href^="tel"] {{
+            color: #0f172a !important; text-decoration: none !important; pointer-events: none !important;
+        }}
     }}
 </style>
 </head>
@@ -1997,7 +2011,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     {live_dock_html}
 
+    <div id="a4MmProbe"></div>
     <div class="sheet-stage" id="sheetStage"><div class="{sheet_cls}" id="a4Sheet">
+        <div class="a4-fit" id="a4Fit">
         <div>
             <div class="hdr">
                 <div class="hdr-right">
@@ -2062,8 +2078,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                     </div>
                     <div style="font-size:9px; color:#475569;">ختم التحقق الرقمي (SHA-256 Seal): {rec['verify_hash']}</div>
                 </div>
-                <img src="data:image/png;base64,{qr_b64}" style="width:48px; height:48px;" />
+                <img src="data:image/png;base64,{qr_b64}" style="width:42px; height:42px;" />
             </div>
+        </div>
         </div>
     </div>
 </div>
@@ -2169,11 +2186,60 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             }}
         }} catch (e) {{}}
     }}
-    window.addEventListener("load", fitA4Sheet);
-    window.addEventListener("resize", fitA4Sheet);
-    if (document.fonts && document.fonts.ready) {{ document.fonts.ready.then(fitA4Sheet); }}
-    setTimeout(fitA4Sheet, 150);
-    setTimeout(fitA4Sheet, 600);
+
+    function lockA4ToOnePage() {{
+        const sheet = document.getElementById("a4Sheet");
+        const fit = document.getElementById("a4Fit");
+        const probe = document.getElementById("a4MmProbe");
+        if (!sheet || !fit) return;
+        fit.style.zoom = "1";
+        fit.style.transform = "none";
+        fit.style.minHeight = "0";
+        fit.style.height = "auto";
+        const limit = (probe && probe.offsetHeight) ? probe.offsetHeight : Math.round(296 * 96 / 25.4);
+        const cs = window.getComputedStyle(sheet);
+        const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+        const available = Math.max(240, limit - pad);
+        const natural = fit.scrollHeight;
+        let scale = natural > available + 1 ? Math.max(0.72, (available - 2) / natural) : 1;
+        scale = Math.round(scale * 1000) / 1000;
+        fit.style.transformOrigin = "top center";
+        if (scale < 0.999) {{
+            fit.style.zoom = String(scale);
+            const zoomed = fit.getBoundingClientRect().height;
+            if (zoomed > available + 8) {{
+                fit.style.zoom = "1";
+                fit.style.transform = "scale(" + scale.toFixed(4) + ")";
+            }}
+            fit.style.minHeight = "0";
+        }} else {{
+            fit.style.zoom = "1";
+            fit.style.transform = "none";
+            fit.style.minHeight = "100%";
+        }}
+    }}
+
+    function prepareA4Print() {{
+        const sheet = document.getElementById("a4Sheet");
+        if (sheet) sheet.style.transform = "none";
+        lockA4ToOnePage();
+    }}
+
+    window.onbeforeprint = prepareA4Print;
+    window.addEventListener("beforeprint", prepareA4Print);
+    window.addEventListener("afterprint", function () {{
+        const sheet = document.getElementById("a4Sheet");
+        if (sheet) sheet.style.transform = "";
+        fitA4Sheet();
+        lockA4ToOnePage();
+    }});
+    window.addEventListener("load", function () {{ fitA4Sheet(); lockA4ToOnePage(); }});
+    window.addEventListener("resize", function () {{ fitA4Sheet(); lockA4ToOnePage(); }});
+    if (document.fonts && document.fonts.ready) {{
+        document.fonts.ready.then(function () {{ fitA4Sheet(); lockA4ToOnePage(); }});
+    }}
+    setTimeout(function () {{ fitA4Sheet(); lockA4ToOnePage(); }}, 150);
+    setTimeout(function () {{ fitA4Sheet(); lockA4ToOnePage(); }}, 600);
 </script>
 </body>
 </html>
