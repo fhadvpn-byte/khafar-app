@@ -2282,7 +2282,18 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         )
 
     if multi_sig:
-        grid_cells = []
+        def _sig_td(header: str, name: str, role: str, inner: str, colspan: int = 1) -> str:
+            span = f" colspan='{colspan}'" if colspan > 1 else ""
+            name_html = f'<div class="sig-person">{html.escape(name)}</div>' if name else ""
+            role_html = f'<div class="sig-role">{html.escape(role)}</div>' if role else ""
+            return (
+                f"<td class='sig-cell'{span}>"
+                f"<div class='sig-head'>{html.escape(header)}</div>"
+                f"{name_html}{role_html}{inner}"
+                "</td>"
+            )
+
+        sig_slots = []
         for signer in party_signers:
             if needs_party_live:
                 inner = "<div class='sig-guide'>" + _sig_slot_img("", f"slot_{signer['pad']}") + "</div>"
@@ -2290,14 +2301,26 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 inner = _sig_slot_img(rec["citizen_stamp_b64"], f"slot_{signer['pad']}")
             else:
                 inner = _sig_slot_img("", f"slot_{signer['pad']}")
-            grid_cells.append(_sig_cell(signer["header"], signer["name"], signer["role"], inner))
-        grid_cells.append(_sig_cell("ضابط الخفر", str(rec.get("officer_full") or ""), "", officer_box_inner))
-        grid_cells.append(_sig_cell("وحدة الحوادث", str(rec.get("duty_full") or ""), "", duty_box_inner))
-        grid_cols = 3 if len(grid_cells) <= 3 else 4
+            sig_slots.append((signer["header"], signer["name"], signer["role"], inner))
+        sig_slots.append(("ضابط الخفر", str(rec.get("officer_full") or ""), "", officer_box_inner))
+        sig_slots.append(("وحدة الحوادث", str(rec.get("duty_full") or ""), "", duty_box_inner))
+        grid_cols = 3 if len(sig_slots) <= 3 else 4
+        sig_rows = []
+        for start in range(0, len(sig_slots), grid_cols):
+            chunk = sig_slots[start:start + grid_cols]
+            last_span = (grid_cols - len(chunk) + 1) if len(chunk) < grid_cols else 1
+            sig_rows.append(
+                "<tr>"
+                + "".join(
+                    _sig_td(*slot, last_span if index == len(chunk) - 1 else 1)
+                    for index, slot in enumerate(chunk)
+                )
+                + "</tr>"
+            )
         sig_table_html = (
-            f'<div class="sig-grid" style="grid-template-columns: repeat({grid_cols}, minmax(0, 1fr));">'
-            + "".join(grid_cells)
-            + "</div>"
+            "<table class='sig-tbl sig-multi'><tbody>"
+            + "".join(sig_rows)
+            + "</tbody></table>"
         )
     else:
         sig_table_html = f"""
@@ -2356,11 +2379,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         )
 
     attachment_block = ""
+    image_count = 0
     show_atts = rec.get("show_attachments_in_print", True)
     att_items = parse_attachments(rec.get("attachment_b64"))
     if show_atts and att_items:
         cards = []
-        image_count = 0
         for att in att_items:
             kind = (att.get("kind") or "image").lower()
             if kind == "pdf":
@@ -2395,6 +2418,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         legal_box_title = f"الصيغة النظامية المعتمدة ({rec['category']}):"
     banner_title = (form_def or {}).get("official_title") or rec["form_title"]
     sheet_cls = "a4-sheet a4-paper dense-fit"
+    table_rows = rows_html.count("<tr")
+    if len(party_signers) >= 3 or table_rows > 10 or image_count > 0:
+        sheet_cls += " a4-dense-print"
     gps_line_html = gps_header_line(str(rec.get("gps_coords") or ""))
 
     return f"""
@@ -2474,6 +2500,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         background: #f1f5f3; color: #0f3d2e !important; font-size: 12px; font-weight: 800; padding: 9px !important; line-height: 1.65 !important;
     }}
     .sig-grid .sig-slot-img {{ height: 34px !important; max-width: 96%; }}
+    .sig-multi .sig-slot-img {{ height: 34px !important; max-width: 96%; }}
     .sig-grid .sig-person {{ font-size: 9px; }}
     .sig-grid .sig-role {{ font-size: 8.5px; }}
     .sig-slot-img {{ background: transparent; }}
@@ -2652,6 +2679,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         .a4-sheet, .a4-paper {{
             direction: rtl !important;
             transform: none !important;
+            zoom: var(--print-zoom, 1) !important;
             width: 210mm !important;
             max-width: 210mm !important;
             margin: 0 auto !important;
@@ -2675,6 +2703,54 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             zoom: 1 !important;
             transform: none !important;
         }}
+        .a4-paper.a4-dense-print {{
+            padding: 7mm 9mm !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            overflow: visible !important;
+        }}
+        .a4-dense-print .hdr {{
+            padding-bottom: 6px !important;
+            margin-bottom: 8px !important;
+        }}
+        .a4-dense-print .doc-banner {{
+            margin-top: 0 !important;
+            margin-bottom: 8px !important;
+            padding: 6px 10px !important;
+        }}
+        .a4-dense-print table.data-tbl {{ margin-bottom: 8px !important; }}
+        .a4-dense-print table.data-tbl th,
+        .a4-dense-print table.data-tbl td {{
+            padding: 4px 8px !important;
+            font-size: 11px !important;
+            line-height: 1.4 !important;
+        }}
+        .a4-dense-print .legal-box {{
+            padding: 8px 12px !important;
+            margin-bottom: 8px !important;
+            font-size: 11.2px !important;
+            line-height: 1.55 !important;
+        }}
+        .a4-dense-print .legal-box div {{
+            font-size: 11.2px !important;
+            line-height: 1.55 !important;
+        }}
+        .a4-dense-print .legal-box > div:first-child {{ margin-bottom: 6px !important; }}
+        .a4-dense-print .sig-head,
+        .a4-dense-print table.sig-tbl th {{
+            padding: 4px 6px !important;
+        }}
+        .a4-dense-print .sig-cell,
+        .a4-dense-print table.sig-tbl td {{
+            padding: 6px !important;
+            min-height: 55px !important;
+            height: auto !important;
+        }}
+        .a4-dense-print .sig-slot-img {{
+            height: 42px !important;
+            max-height: 42px !important;
+        }}
         .sig-footer, table.sig-tbl, .sig-grid, .footer-qr, .attachment-section {{
             page-break-inside: avoid !important; break-inside: avoid !important;
         }}
@@ -2691,7 +2767,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 </head>
 <body>
     <div class="toolbar no-print">
-        <button class="print-btn" onclick="window.print()">🖨️ طباعة الوثيقة الرسمية / حفظ كملف A4 PDF</button>
+        <button class="print-btn" onclick="applyPrintZoom(); window.print()">🖨️ طباعة الوثيقة الرسمية / حفظ كملف A4 PDF</button>
     </div>
 
     {live_dock_html}
@@ -2825,10 +2901,39 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
 
     function fitA4Density() {{
+        return;
+    }}
+
+    function applyPrintZoom() {{
         const paper = document.getElementById("a4Sheet");
-        if (!paper || (window.matchMedia && window.matchMedia("print").matches)) return;
-        if (!paper.classList.contains("a4-compact") && paper.scrollHeight > a4PagePx() + 4) {{
-            paper.classList.add("a4-compact");
+        if (!paper) return;
+        const printing = window.matchMedia && window.matchMedia("print").matches;
+        const prevTransform = paper.style.transform;
+        paper.style.setProperty("transform", "none", "important");
+        paper.style.setProperty("height", "auto", "important");
+        paper.style.setProperty("min-height", "0", "important");
+        paper.style.setProperty("max-height", "none", "important");
+        paper.style.setProperty("overflow", "visible", "important");
+        const contentH = paper.scrollHeight || paper.offsetHeight;
+        const limit = 1060;
+        const zoom = contentH > limit ? Math.round((limit / contentH) * 1000) / 1000 : 1;
+        paper.style.setProperty("--print-zoom", String(zoom));
+        if (!printing) {{
+            paper.style.removeProperty("transform");
+            if (prevTransform) paper.style.transform = prevTransform;
+            paper.style.removeProperty("height");
+            paper.style.removeProperty("min-height");
+            paper.style.removeProperty("max-height");
+            paper.style.removeProperty("overflow");
+            return;
+        }}
+        paper.style.removeProperty("zoom");
+        paper.style.setProperty("transform", "none", "important");
+        if (zoom === 1 && !paper.classList.contains("a4-dense-print")) {{
+            paper.style.removeProperty("height");
+            paper.style.removeProperty("min-height");
+            paper.style.removeProperty("max-height");
+            paper.style.removeProperty("overflow");
         }}
     }}
 
@@ -2874,30 +2979,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             viewport.style.overflow = "visible";
         }}
         if (!paper) return;
-        paper.style.zoom = "1";
-        paper.style.setProperty("transform", "none", "important");
-        paper.style.transformOrigin = "top center";
+        paper.style.removeProperty("zoom");
         paper.style.margin = "0 auto";
         paper.style.width = "210mm";
-        paper.style.setProperty("height", "auto", "important");
-        paper.style.setProperty("max-height", "none", "important");
-        paper.style.overflow = "visible";
-        paper.classList.remove("a4-compact");
-        const limit = a4PagePx();
-        let scale = 1;
-        if (paper.scrollHeight > limit + 4) {{
-            paper.classList.add("a4-compact");
-            const natural = paper.scrollHeight;
-            if (natural > limit + 4) {{
-                scale = Math.max(0.72, Math.round((limit / natural) * 1000) / 1000);
-                paper.style.zoom = String(scale);
-            }}
-        }}
-        if (scale === 1) {{
-            paper.style.setProperty("height", "296mm", "important");
-            paper.style.setProperty("max-height", "296mm", "important");
-            paper.style.overflow = "hidden";
-        }}
+        applyPrintZoom();
     }}
 
     function restoreA4Preview() {{
@@ -2909,6 +2994,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         if (paper) {{
             paper.style.zoom = "";
+            paper.style.removeProperty("--print-zoom");
             paper.style.removeProperty("transform");
             paper.style.margin = "";
             paper.style.width = "";
@@ -2923,8 +3009,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     window.addEventListener("beforeprint", prepareA4Print);
     window.addEventListener("afterprint", restoreA4Preview);
     function scheduleA4Fit() {{
-        fitA4Density();
         fitA4Preview();
+        applyPrintZoom();
     }}
     window.addEventListener("load", scheduleA4Fit);
     window.addEventListener("resize", scheduleA4Fit);
