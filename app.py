@@ -4,11 +4,12 @@ import sqlite3
 import json
 import base64
 import io
+import html
 import random
 import hashlib
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 
 try:
     import qrcode
@@ -47,6 +48,86 @@ def format_entity(role_label: str, optional_name: str) -> str:
     r = (role_label or "").strip()
     n = (optional_name or "").strip()
     return f"{r} / {n}" if (r and n) else (r or n)
+
+
+ATTACH_MAX_PX = 1200
+ATTACH_JPEG_QUALITY = 85
+ATTACH_TYPES = ["png", "jpg", "jpeg", "webp", "pdf"]
+
+
+def parse_attachments(raw) -> list:
+    """قراءة المرفقات من الجلسة أو قاعدة البيانات (يدعم الصيغة القديمة: صورة واحدة Base64)."""
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return [a for a in raw if isinstance(a, dict) and a.get("b64")]
+    if not isinstance(raw, str):
+        return []
+    s = raw.strip()
+    if not s:
+        return []
+    if s.startswith("["):
+        try:
+            data = json.loads(s)
+            if isinstance(data, list):
+                return [a for a in data if isinstance(a, dict) and a.get("b64")]
+        except Exception:
+            return []
+    return [{"name": "مرفق.png", "mime": "image/png", "b64": s, "kind": "image"}]
+
+
+def serialize_attachments(items: list) -> str:
+    return json.dumps(items or [], ensure_ascii=False)
+
+
+def process_uploaded_attachment(uploaded_file) -> dict | None:
+    """معالجة مرفق جوال: تصحيح اتجاه EXIF وتصغير الصور، وحفظ PDF كما هو."""
+    if uploaded_file is None:
+        return None
+    fname = (getattr(uploaded_file, "name", None) or "مرفق").strip()
+    lower = fname.lower()
+    try:
+        if lower.endswith(".pdf") or (getattr(uploaded_file, "type", "") or "").lower() == "application/pdf":
+            raw = uploaded_file.getvalue() if hasattr(uploaded_file, "getvalue") else uploaded_file.read()
+            if not raw:
+                return None
+            return {
+                "name": fname if lower.endswith(".pdf") else f"{Path(fname).stem}.pdf",
+                "mime": "application/pdf",
+                "b64": base64.b64encode(raw).decode("utf-8"),
+                "kind": "pdf",
+                "orig_name": fname,
+            }
+
+        img = Image.open(uploaded_file)
+        img = ImageOps.exif_transpose(img)
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGBA") if "A" in (img.getbands() or ()) else img.convert("RGB")
+        img.thumbnail((ATTACH_MAX_PX, ATTACH_MAX_PX), Image.Resampling.LANCZOS)
+
+        buf = io.BytesIO()
+        if img.mode == "RGBA":
+            img.save(buf, format="PNG", optimize=True)
+            mime, ext = "image/png", "png"
+        else:
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            img.save(buf, format="JPEG", quality=ATTACH_JPEG_QUALITY, optimize=True)
+            mime, ext = "image/jpeg", "jpg"
+        out_name = f"{Path(fname).stem}.{ext}"
+        return {
+            "name": out_name,
+            "mime": mime,
+            "b64": base64.b64encode(buf.getvalue()).decode("utf-8"),
+            "kind": "image",
+            "orig_name": fname,
+        }
+    except Exception:
+        return None
+
+
+def attachment_fingerprint(item: dict) -> str:
+    return hashlib.sha1(f"{item.get('orig_name') or item.get('name')}|{item.get('b64', '')[:64]}".encode("utf-8")).hexdigest()
 
 
 # =====================================================================
@@ -1124,11 +1205,34 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     duty_mode_label = duty_mode or "قسم مرور العارضة"
 
     attachment_block = ""
-    if rec.get("attachment_b64"):
+    show_atts = rec.get("show_attachments_in_print", True)
+    att_items = parse_attachments(rec.get("attachment_b64"))
+    if show_atts and att_items:
+        cards = []
+        for att in att_items:
+            safe_name = html.escape(str(att.get("name") or "مرفق"))
+            kind = (att.get("kind") or "image").lower()
+            if kind == "pdf":
+                cards.append(
+                    f'<div class="att-card att-pdf-card">'
+                    f'<div class="att-pdf-icon">📄</div>'
+                    f'<div class="att-pdf-name">{safe_name}</div>'
+                    f'<div class="att-pdf-note">مرفق PDF محفوظ مع المعاملة</div>'
+                    f"</div>"
+                )
+            else:
+                mime = html.escape(str(att.get("mime") or "image/png"))
+                b64 = att.get("b64") or ""
+                cards.append(
+                    f'<div class="att-card">'
+                    f'<img src="data:{mime};base64,{b64}" alt="{safe_name}" />'
+                    f'<div class="att-caption">{safe_name}</div>'
+                    f"</div>"
+                )
         attachment_block = f"""
-        <div style="margin-top:6px; border:1px dashed #64748b; border-radius:6px; padding:5px 10px; display:flex; align-items:center; justify-content:space-between;">
-            <span style="font-size:10.5px; font-weight:700; color:#0f3d2e;">📎 مرفق موثق بالمعاملة:</span>
-            <img src="data:image/png;base64,{rec['attachment_b64']}" style="height:42px; border-radius:4px; border:1px solid #cbd5e1;" />
+        <div class="attachment-section">
+            <div class="attachment-title">📎 المرفقات المصورة المعتمدة في التقرير</div>
+            <div class="attachment-grid">{"".join(cards)}</div>
         </div>
         """
 
@@ -1220,6 +1324,33 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         margin-top: 7px; background: #f4f7f6; border: 1px solid #cbd5e1; border-radius: 6px;
         padding: 5px 10px; display: flex; justify-content: space-between; align-items: center;
     }}
+    .attachment-section {{
+        margin-top: 8px; border: 1px dashed #64748b; border-radius: 8px; padding: 8px 10px;
+        background: #f8fafc; page-break-inside: avoid;
+    }}
+    .attachment-title {{
+        font-size: 11px; font-weight: 800; color: #0f3d2e; margin-bottom: 8px; text-align: right;
+    }}
+    .attachment-grid {{
+        display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-start; align-items: flex-start;
+    }}
+    .att-card {{
+        width: calc(50% - 5px); max-width: 320px; text-align: center;
+    }}
+    .att-card img {{
+        max-width: 100%; max-height: 180px; width: auto; height: auto;
+        object-fit: contain; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;
+    }}
+    .att-caption {{
+        font-size: 9.5px; color: #475569; margin-top: 4px; font-weight: 600; word-break: break-word;
+    }}
+    .att-pdf-card {{
+        border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 8px; background: #fff;
+        min-height: 90px; display: flex; flex-direction: column; justify-content: center;
+    }}
+    .att-pdf-icon {{ font-size: 22px; line-height: 1; }}
+    .att-pdf-name {{ font-size: 10.5px; font-weight: 700; color: #0f172a; margin-top: 4px; word-break: break-word; }}
+    .att-pdf-note {{ font-size: 9px; color: #64748b; margin-top: 2px; }}
     @media print {{
         @page {{ size: A4 portrait; margin: 6mm; }}
         html, body {{ background: #fff !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }}
@@ -1484,8 +1615,21 @@ if "officer_full_override" not in st.session_state:
     st.session_state.officer_full_override = ""
 if "attachment_b64" not in st.session_state:
     st.session_state.attachment_b64 = ""
+if "attachments" not in st.session_state:
+    st.session_state.attachments = parse_attachments(st.session_state.attachment_b64)
+elif st.session_state.attachment_b64 and not st.session_state.attachments:
+    st.session_state.attachments = parse_attachments(st.session_state.attachment_b64)
+if "show_attachments_in_print" not in st.session_state:
+    st.session_state.show_attachments_in_print = True
 if "scanner_model" not in st.session_state:
     st.session_state.scanner_model = "وضع المحاكاة متصل (معزول العتاد)"
+
+
+def sync_attachments_to_session():
+    """مزامنة قائمة المرفقات مع حقل Base64 المحفوظ في الجلسة وقاعدة البيانات."""
+    items = st.session_state.get("attachments") or []
+    st.session_state.attachments = items
+    st.session_state.attachment_b64 = serialize_attachments(items)
 
 
 def reset_doc_state():
@@ -1503,7 +1647,10 @@ def reset_doc_state():
     st.session_state.receiver_name = ""
     st.session_state.receiver_role = RECEIVER_ROLE_OPTIONS[0]
     st.session_state.officer_full_override = ""
+    st.session_state.attachments = []
     st.session_state.attachment_b64 = ""
+    st.session_state.show_attachments_in_print = True
+    st.session_state.att_upload_nonce = int(st.session_state.get("att_upload_nonce") or 0) + 1
 
 
 all_archived = search_records_db("")
@@ -1770,13 +1917,89 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             if form_def["require_image"]
             else "📎 إرفاق صورة الهوية / التقرير الأولي أو مرفق داعم (اختياري)"
         )
-        uploaded_img = st.file_uploader(att_label, type=["png", "jpg", "jpeg"], disabled=st.session_state.citizen_locked, key=f"att_{st.session_state.doc_no}")
-        if uploaded_img is not None and not st.session_state.citizen_locked:
-            img_pil = Image.open(uploaded_img)
-            img_pil.thumbnail((420, 420))
-            b_io = io.BytesIO()
-            img_pil.save(b_io, format="PNG")
-            st.session_state.attachment_b64 = base64.b64encode(b_io.getvalue()).decode("utf-8")
+        if "att_upload_nonce" not in st.session_state:
+            st.session_state.att_upload_nonce = 0
+        # خارج أي st.form حتى تظهر المعاينة فوراً على الجوال دون انتظار زر إرسال
+        uploaded_files = st.file_uploader(
+            att_label,
+            type=ATTACH_TYPES,
+            accept_multiple_files=True,
+            disabled=st.session_state.citizen_locked,
+            key=f"att_{st.session_state.doc_no}_{st.session_state.att_upload_nonce}",
+            help="الصيغ المدعومة: PNG / JPG / JPEG / WEBP / PDF — تُصحَّح اتجاه كاميرا الجوال تلقائياً وتُصغَّر للرفع السريع.",
+        )
+        if uploaded_files and not st.session_state.citizen_locked:
+            existing = list(st.session_state.get("attachments") or [])
+            known = {attachment_fingerprint(a) for a in existing}
+            added = 0
+            for uf in uploaded_files:
+                item = process_uploaded_attachment(uf)
+                if not item:
+                    st.warning(f"تعذّر معالجة المرفق: {getattr(uf, 'name', 'ملف')}")
+                    continue
+                fp = attachment_fingerprint(item)
+                if fp in known:
+                    continue
+                existing.append(item)
+                known.add(fp)
+                added += 1
+            if added:
+                st.session_state.attachments = existing
+                sync_attachments_to_session()
+                st.session_state.att_upload_nonce = int(st.session_state.att_upload_nonce) + 1
+                st.toast(f"تم حفظ {added} مرفق في الجلسة", icon="📎")
+                st.rerun()
+
+        st.checkbox(
+            "إظهار المرفق المصور في التقرير المطبوع",
+            key="show_attachments_in_print",
+            help="عند التفعيل تُدرج الصور المرفوعة داخل ورقة A4 ونسخة الطباعة/PDF.",
+        )
+
+        persisted_atts = list(st.session_state.get("attachments") or [])
+        if not persisted_atts and st.session_state.get("attachment_b64"):
+            persisted_atts = parse_attachments(st.session_state.attachment_b64)
+            st.session_state.attachments = persisted_atts
+
+        if persisted_atts:
+            st.markdown("##### 🖼️ معاينة المرفقات المحفوظة في الجلسة")
+            for idx, att in enumerate(persisted_atts):
+                kind = (att.get("kind") or "image").lower()
+                mime = att.get("mime") or ("application/pdf" if kind == "pdf" else "image/png")
+                try:
+                    raw_bytes = base64.b64decode(att.get("b64") or "")
+                except Exception:
+                    raw_bytes = b""
+                c_prev, c_dl, c_del = st.columns([3, 1, 1])
+                with c_prev:
+                    if kind == "pdf":
+                        st.info(f"📄 مستند PDF: **{att.get('name', 'مرفق.pdf')}**")
+                    elif raw_bytes:
+                        st.image(raw_bytes, caption=att.get("name") or f"مرفق {idx + 1}", use_container_width=True)
+                    else:
+                        st.warning(f"تعذّر عرض المرفق: {att.get('name') or idx + 1}")
+                with c_dl:
+                    st.download_button(
+                        "⬇️ تحميل المرفق",
+                        data=raw_bytes,
+                        file_name=att.get("name") or f"attachment_{idx + 1}",
+                        mime=mime,
+                        key=f"dl_att_{st.session_state.doc_no}_{idx}_{attachment_fingerprint(att)[:8]}",
+                        use_container_width=True,
+                    )
+                with c_del:
+                    if st.button(
+                        "🗑️ حذف المرفق",
+                        key=f"del_att_{st.session_state.doc_no}_{idx}_{attachment_fingerprint(att)[:8]}",
+                        disabled=st.session_state.citizen_locked,
+                        use_container_width=True,
+                    ):
+                        new_list = [a for i, a in enumerate(st.session_state.attachments) if i != idx]
+                        st.session_state.attachments = new_list
+                        sync_attachments_to_session()
+                        st.rerun()
+        elif form_def["require_image"]:
+            st.caption("⚠️ هذا النموذج يتطلب إرفاق صورة قبل اعتماد الوثيقة.")
 
         live_legal_text = " ".join(form_def["legal_fn"](current_values).splitlines())
         st.markdown(
@@ -1829,27 +2052,31 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             if not st.session_state.citizen_locked:
                 btn_lbl = "✅ اعتماد صيغة الإحالة وقفل الحقول النصية" if is_med_form else "🧬 اعتماد التوثيق وقفل الحقول النصية"
                 if st.button(btn_lbl, type="primary", use_container_width=True):
-                    if is_med_form:
-                        st.session_state.receiver_name = (st.session_state.get(f"receiver_name_{st.session_state.doc_no}") or "").strip()
-                        st.session_state.receiver_role = st.session_state.get(f"receiver_role_{st.session_state.doc_no}") or RECEIVER_ROLE_OPTIONS[0]
+                    sync_attachments_to_session()
+                    if form_def.get("require_image") and not (st.session_state.get("attachments") or []):
+                        st.error("هذا النموذج يتطلب إرفاق صورة قبل اعتماد التوثيق.")
                     else:
-                        st.session_state.receiver_name = ""
-                        st.session_state.receiver_role = ""
-                    if "بصمة منفذ الشحن" in chosen_auth:
-                        seed = f"{st.session_state.doc_no}_{current_values.get('party_id', '')}_CITIZEN"
-                        st.session_state.citizen_stamp_b64 = generate_fingerprint_png_b64(seed, ink_rgb=(13, 71, 161))
-                        st.session_state.citizen_auth_mode = "بصمة منفذ الشحن (Type-C)"
-                    elif "توقيع حي" in chosen_auth:
-                        st.session_state.citizen_stamp_b64 = ""
-                        st.session_state.citizen_auth_mode = "توقيع حي على الشاشة"
-                    elif "ختم وتوقيع" in chosen_auth:
-                        st.session_state.citizen_stamp_b64 = ""
-                        st.session_state.citizen_auth_mode = "ختم وتوقيع جهة الاستلام الرسمية"
-                    else:
-                        st.session_state.citizen_stamp_b64 = ""
-                        st.session_state.citizen_auth_mode = "غياب الطرف / امتناع مثبت بالمحضر"
-                    st.session_state.citizen_locked = True
-                    safe_rerun()
+                        if is_med_form:
+                            st.session_state.receiver_name = (st.session_state.get(f"receiver_name_{st.session_state.doc_no}") or "").strip()
+                            st.session_state.receiver_role = st.session_state.get(f"receiver_role_{st.session_state.doc_no}") or RECEIVER_ROLE_OPTIONS[0]
+                        else:
+                            st.session_state.receiver_name = ""
+                            st.session_state.receiver_role = ""
+                        if "بصمة منفذ الشحن" in chosen_auth:
+                            seed = f"{st.session_state.doc_no}_{current_values.get('party_id', '')}_CITIZEN"
+                            st.session_state.citizen_stamp_b64 = generate_fingerprint_png_b64(seed, ink_rgb=(13, 71, 161))
+                            st.session_state.citizen_auth_mode = "بصمة منفذ الشحن (Type-C)"
+                        elif "توقيع حي" in chosen_auth:
+                            st.session_state.citizen_stamp_b64 = ""
+                            st.session_state.citizen_auth_mode = "توقيع حي على الشاشة"
+                        elif "ختم وتوقيع" in chosen_auth:
+                            st.session_state.citizen_stamp_b64 = ""
+                            st.session_state.citizen_auth_mode = "ختم وتوقيع جهة الاستلام الرسمية"
+                        else:
+                            st.session_state.citizen_stamp_b64 = ""
+                            st.session_state.citizen_auth_mode = "غياب الطرف / امتناع مثبت بالمحضر"
+                        st.session_state.citizen_locked = True
+                        safe_rerun()
             else:
                 st.success(f"تم القفل والتوثيق: {st.session_state.citizen_auth_mode}")
                 if is_med_form:
@@ -1933,6 +2160,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             verify_hash = "KHF-" + hashlib.sha256(raw_seal.encode("utf-8")).hexdigest()[:16].upper()
             officer_full_final = (st.session_state.officer_full_override or "").strip() or unit_display
 
+            sync_attachments_to_session()
             ready_record = {
                 "doc_no": st.session_state.doc_no,
                 "form_id": fid,
@@ -1949,6 +2177,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 "citizen_auth_mode": st.session_state.citizen_auth_mode,
                 "officer_stamp_b64": st.session_state.officer_stamp_b64,
                 "attachment_b64": st.session_state.attachment_b64,
+                "show_attachments_in_print": bool(st.session_state.get("show_attachments_in_print", True)),
                 "officer_full": officer_full_final,
                 "duty_full": duty_display,
                 "dept_name": shift["dept_name"],
@@ -1982,6 +2211,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 or ("توقيع حي" in ready_record.get("officer_auth_mode", ""))
                 or ("توقيع حي" in ready_record.get("duty_auth_mode", ""))
             ) else 1160
+            if ready_record.get("show_attachments_in_print") and parse_attachments(ready_record.get("attachment_b64")):
+                preview_h += 220
             components.html(a4_html, height=preview_h, scrolling=True)
 
 
