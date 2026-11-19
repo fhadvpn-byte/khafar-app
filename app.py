@@ -744,10 +744,10 @@ def _handover_capacity(values: dict) -> str:
     role = str(values.get("receiver_role") or "").strip()
     if _is_agent_role(role):
         return (
-            f"وكيل شرعي بموجب الوكالة السارية رقم: {_val(values, 'wakala_no')} "
-            f"وتاريخ: {_val(values, 'wakala_date')}"
+            f"بصفتي وكيلاً شرعياً عن مالك المركبة ({_val(values, 'principal_name')} - هوية رقم: {_val(values, 'principal_id')}) "
+            f"بموجب الوكالة السارية رقم ({_val(values, 'wakala_no')}) وتاريخ ({_val(values, 'wakala_date')})"
         )
-    return _val(values, "receiver_role")
+    return f"بصفتي ({_val(values, 'receiver_role')})"
 
 
 def _include_field_on_a4(field: dict, fields_map: dict) -> bool:
@@ -816,9 +816,15 @@ TRAFFIC_FORMS = {
                 "مفوض رسمي بقيادة المركبة",
                 "وكيل شرعي بموجب وكالة سارية"
             ], "sample": "مالك المركبة بموجب رخصة السير"},
+            {"key": "principal_name", "label": "اسم الموكّل (مالك المركبة الأصلي)", "type": "text", "sample": "محمد بن علي بن سعد السبيعي", "prefill_sample": True,
+             "visible_if": {"key": "receiver_role", "contains_any": ["وكيل", "وكالة"]},
+             "a4_label": "الموكّل والوكالة الشرعية", "a4_compose": ["principal_id", "wakala_no", "wakala_date"]},
+            {"key": "principal_id", "label": "رقم هوية / إقامة الموكّل", "type": "text", "sample": "1023456789", "prefill_sample": True,
+             "visible_if": {"key": "receiver_role", "contains_any": ["وكيل", "وكالة"]},
+             "a4_hidden": True},
             {"key": "wakala_no", "label": "رقم الوكالة الشرعية / الإلكترونية", "type": "text", "sample": "461829405", "prefill_sample": True,
              "visible_if": {"key": "receiver_role", "contains_any": ["وكيل", "وكالة"]},
-             "a4_with": "wakala_date", "a4_label": "رقم الوكالة وتاريخها"},
+             "a4_hidden": True},
             {"key": "wakala_date", "label": "تاريخ إصدار الوكالة", "type": "text", "sample": "1448/04/15 هـ", "prefill_sample": True,
              "visible_if": {"key": "receiver_role", "contains_any": ["وكيل", "وكالة"]},
              "a4_hidden": True},
@@ -832,7 +838,7 @@ TRAFFIC_FORMS = {
         ],
         "legal_fn": lambda m: (
             f"أقر أنا الموقع والمبصم أدناه ({_val(m, 'party_name')})، حامل الهوية رقم ({_val(m, 'party_id')})، "
-            f"بصفتي ({_handover_capacity(m)})، بأنني استلمت المركبة ({_val(m, 'vehicle_desc')}) التي تحمل اللوحة رقم ({_val(m, 'plate_no')}) "
+            f"{_handover_capacity(m)}، بأنني استلمت المركبة ({_val(m, 'vehicle_desc')}) التي تحمل اللوحة رقم ({_val(m, 'plate_no')}) "
             f"في موقع الحادث رقم ({_val(m, 'incident_no')}) مباشرةً بحالتها الراهنة ({_val(m, 'vehicle_state')}) وبكامل مقتنياتها الشخصية دون نقص، "
             f"وبموجبه أخلي مسؤولية قسم مرور العارضة والفرقة المباشرة من سحب المركبة أو حجزها، وأتعهد بعدم قيادتها في حال وجود أي خلل يؤثر على السلامة العامة."
         ),
@@ -1450,6 +1456,12 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool) -> st
             sibling = str(fields_map.get(sibling_key, "") or "").strip()
             if sibling:
                 shown = f"{shown} — {sibling}"
+        compose_keys = field.get("a4_compose") or []
+        if compose_keys:
+            principal_id = str(fields_map.get("principal_id", "") or "").strip()
+            wakala_no = str(fields_map.get("wakala_no", "") or "").strip()
+            wakala_date = str(fields_map.get("wakala_date", "") or "").strip()
+            shown = f"{shown} — هوية: {principal_id or '-'} | وكالة رقم {wakala_no or '-'} بتاريخ {wakala_date or '-'}"
         field = {**field, "label": label}
         wide = dense and _field_is_wide(field, shown)
         if not dense or wide:
@@ -1488,8 +1500,11 @@ def _distinct_role(name: str, role: str) -> str:
 
 def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, interactive_sig: bool = False) -> str:
     fields_map = rec["fields"] if isinstance(rec.get("fields"), dict) else json.loads(rec["fields_json"])
-    field_count = len(form_def["fields"]) if form_def else len(fields_map)
-    dense = bool(form_def) and field_count > 10
+    if form_def:
+        field_count = sum(1 for field in form_def["fields"] if _include_field_on_a4(field, fields_map))
+    else:
+        field_count = len(fields_map)
+    dense = field_count > 10
     rows_html = _data_table_rows(form_def, fields_map, dense)
     data_tbl_cls = "data-tbl cols-4" if dense else "data-tbl"
 
@@ -2317,10 +2332,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             role_field = by_key["receiver_role"]
             current_values["receiver_role"] = render_field(role_field)
             if _is_agent_role(current_values.get("receiver_role")):
-                wakala_cols = st.columns(2)
-                for col, key in zip(wakala_cols, ("wakala_no", "wakala_date")):
-                    with col:
-                        current_values[key] = render_field(by_key[key])
+                for pair in (("principal_name", "principal_id"), ("wakala_no", "wakala_date")):
+                    pair_cols = st.columns(2)
+                    for col, key in zip(pair_cols, pair):
+                        with col:
+                            current_values[key] = render_field(by_key[key])
             render_field_grid(trailing)
         else:
             render_field_grid([fld for fld in form_def["fields"] if not fld.get("visible_if")])
