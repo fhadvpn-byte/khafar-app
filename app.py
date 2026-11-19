@@ -1881,23 +1881,48 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .sig-slot-img {{ background: transparent; }}
     @media screen {{
         body {{ padding: 8px !important; overflow-x: hidden; }}
-        .toolbar {{ width: 100%; max-width: 794px; padding: 8px; }}
+        .toolbar {{ width: 100%; padding: 8px; }}
         .print-btn {{ width: 100%; max-width: 360px; font-size: 13px; padding: 8px 14px; }}
-        .sheet-stage {{ width: 100%; max-width: 794px; margin: 0 auto; height: var(--stage-h, auto); overflow: hidden; position: relative; }}
+        .a4-preview-viewport {{
+            direction: ltr !important;
+            width: 100% !important;
+            overflow: hidden !important;
+            display: block !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            height: auto;
+        }}
         .a4-sheet, .a4-paper {{
-            width: 210mm !important; height: 296mm !important; max-height: 296mm !important; margin: 0 auto;
-            background: #ffffff !important; color: #0f172a !important; padding: 6mm 8mm; border: 2px solid #0f3d2e;
-            box-sizing: border-box !important; overflow: hidden !important;
-            display: flex; flex-direction: column; justify-content: space-between;
+            direction: rtl !important;
+            width: 794px !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            box-sizing: border-box !important;
+            margin: 0 auto;
+            background: #ffffff !important;
+            color: #0f172a !important;
+            padding: 8mm 10mm;
+            border: 2px solid #0f3d2e;
+            overflow: visible !important;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start !important;
             box-shadow: 0 12px 32px rgba(0,0,0,0.45);
-            transform-origin: top center; transform: scale(var(--a4-scale, 1));
+            transform: none;
+        }}
+        .a4-fit {{
+            justify-content: flex-start !important;
+            min-height: 0 !important;
+            height: auto !important;
+            flex: 0 0 auto;
         }}
         .a4-sheet, .a4-sheet p, .a4-sheet td, .a4-sheet th, .a4-sheet div, .a4-sheet span {{
             color: #0f172a;
         }}
         .a4-sheet .doc-banner {{ color: #ffffff !important; }}
     }}
-    .a4-fit {{ display: flex; flex-direction: column; justify-content: space-between; flex: 1 1 auto; min-height: 100%; }}
+    .a4-fit {{ display: flex; flex-direction: column; justify-content: flex-start; min-height: 0; height: auto; }}
     .hdr {{
         display: grid; grid-template-columns: 1.35fr 0.8fr 1.15fr;
         align-items: center; border-bottom: 2px solid #0f3d2e; padding-bottom: 3px;
@@ -1948,8 +1973,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         max-width: 100%; width: auto; height: auto; object-fit: contain;
         border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; display: block; margin: 0 auto;
     }}
-    .attachment-grid.atts-single .att-card img {{ max-height: 85px; }}
-    .attachment-grid.atts-multi .att-card img {{ max-height: 75px; }}
+    .attachment-grid.atts-single .att-card img,
+    .attachment-grid.atts-multi .att-card img {{ max-height: 80px; }}
     .att-caption, .att-pdf-name {{ display: none !important; }}
     .att-pdf-card {{
         border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px; background: #fff;
@@ -1960,12 +1985,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-sheet table a, .a4-sheet .legal-box a, a[href^="tel"] {{
         color: #0f172a !important; text-decoration: none !important; pointer-events: none !important;
     }}
-    #a4MmProbe {{ position: absolute; visibility: hidden; height: 296mm; width: 0; overflow: hidden; pointer-events: none; }}
     @media print {{
-        @page {{ size: A4 portrait; margin: 0mm !important; }}
-        html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], .main, .block-container {{
-            margin: 0 !important; padding: 0 !important; min-height: 0 !important; height: auto !important;
-            max-height: 297mm !important; overflow: hidden !important; background: #ffffff !important;
+        @page {{ size: A4 portrait; margin: 6mm !important; }}
+        html, body {{
+            margin: 0 !important; padding: 0 !important; background: #ffffff !important;
+            height: auto !important; max-height: none !important; overflow: visible !important;
         }}
         .toolbar, .no-print, .live-sig-dock, .clear-sig-btn, .sig-guide-hint, .sig-mode-note,
         .live-pad-actions, .live-sig-dock-head {{ display: none !important; }}
@@ -1973,30 +1997,40 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             border: none !important; padding: 0 !important; margin: 0 !important; background: transparent !important;
         }}
         .live-pad-canvas {{ display: none !important; border: none !important; }}
-        .sheet-stage {{
-            width: 210mm !important; max-width: 210mm !important; height: 296mm !important;
-            overflow: hidden !important; margin: 0 auto !important;
+        .a4-preview-viewport {{
+            height: auto !important;
+            overflow: visible !important;
+            width: 100% !important;
+            direction: ltr !important;
+        }}
+        .a4-sheet, .a4-paper {{
+            transform: none !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            page-break-inside: avoid !important;
+            page-break-after: avoid !important;
+            break-inside: avoid !important;
+            box-shadow: none !important;
+            overflow: visible !important;
+        }}
+        .a4-fit {{
+            justify-content: flex-start !important;
+            min-height: 0 !important;
+            height: auto !important;
+            zoom: 1 !important;
+            transform: none !important;
         }}
         .sig-footer, table.sig-tbl, .footer-qr, .attachment-section {{
             page-break-inside: avoid !important; break-inside: avoid !important;
         }}
-        .a4-sheet, .a4-paper {{
-            width: 210mm !important;
-            height: 296mm !important;
-            max-height: 296mm !important;
-            padding: 6mm 8mm !important;
-            margin: 0 auto !important;
-            box-sizing: border-box !important;
-            overflow: hidden !important;
-            page-break-inside: avoid !important;
-            page-break-after: avoid !important;
-            break-inside: avoid !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: space-between !important;
-            background: #ffffff !important;
-            box-shadow: none !important;
-            transform: none !important;
+        .att-card img,
+        .attachment-grid.atts-single .att-card img,
+        .attachment-grid.atts-multi .att-card img {{
+            max-height: 80px !important;
         }}
         a, a[href^="tel"] {{
             color: #0f172a !important; text-decoration: none !important; pointer-events: none !important;
@@ -2011,8 +2045,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     {live_dock_html}
 
-    <div id="a4MmProbe"></div>
-    <div class="sheet-stage" id="sheetStage"><div class="{sheet_cls}" id="a4Sheet">
+    <div class="a4-preview-viewport" id="a4PreviewViewport"><div class="{sheet_cls}" id="a4Sheet">
         <div class="a4-fit" id="a4Fit">
         <div>
             <div class="hdr">
@@ -2167,79 +2200,80 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     LIVE_PADS.forEach(wireLivePad);
 
-    function fitA4Sheet() {{
-        const stage = document.getElementById("sheetStage");
-        const sheet = document.getElementById("a4Sheet");
-        if (!stage || !sheet) return;
-        const baseW = 794;
-        const availW = stage.clientWidth || baseW;
-        const scale = availW < baseW ? (availW / baseW) : 1;
-        stage.style.setProperty("--a4-scale", scale.toFixed(4));
-        const scaledH = Math.ceil(sheet.offsetHeight * scale);
-        stage.style.setProperty("--stage-h", scale < 1 ? (scaledH + 6) + "px" : "auto");
+    function fitA4Preview() {{
+        if (window.matchMedia && window.matchMedia("print").matches) return;
+        const viewport = document.getElementById("a4PreviewViewport");
+        const paper = document.getElementById("a4Sheet");
+        if (!viewport || !paper) return;
+        const availW = viewport.clientWidth;
+        paper.style.width = "794px";
+        paper.style.height = "auto";
+        paper.style.minHeight = "0";
+        paper.style.maxHeight = "none";
+        if (availW > 0 && availW < 794) {{
+            const scale = availW / 794;
+            paper.style.transformOrigin = "top left";
+            paper.style.transform = "scale(" + scale + ")";
+            paper.style.margin = "0";
+            viewport.style.height = Math.ceil(paper.offsetHeight * scale) + 12 + "px";
+        }} else {{
+            paper.style.transform = "none";
+            paper.style.margin = "0 auto";
+            viewport.style.height = "auto";
+        }}
         try {{
             if (window.frameElement) {{
-                const dock = document.querySelector('.live-sig-dock');
+                const dock = document.querySelector(".live-sig-dock");
                 const dockH = dock ? dock.offsetHeight + 18 : 0;
-                const totalH = (scale < 1 ? scaledH : sheet.offsetHeight) + 85 + dockH;
-                window.frameElement.style.height = totalH + "px";
+                const viewH = viewport.getBoundingClientRect().height || paper.offsetHeight;
+                window.frameElement.style.height = Math.ceil(viewH + 85 + dockH) + "px";
             }}
         }} catch (e) {{}}
     }}
 
-    function lockA4ToOnePage() {{
-        const sheet = document.getElementById("a4Sheet");
-        const fit = document.getElementById("a4Fit");
-        const probe = document.getElementById("a4MmProbe");
-        if (!sheet || !fit) return;
-        fit.style.zoom = "1";
-        fit.style.transform = "none";
-        fit.style.minHeight = "0";
-        fit.style.height = "auto";
-        const limit = (probe && probe.offsetHeight) ? probe.offsetHeight : Math.round(296 * 96 / 25.4);
-        const cs = window.getComputedStyle(sheet);
-        const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-        const available = Math.max(240, limit - pad);
-        const natural = fit.scrollHeight;
-        let scale = natural > available + 1 ? Math.max(0.72, (available - 2) / natural) : 1;
-        scale = Math.round(scale * 1000) / 1000;
-        fit.style.transformOrigin = "top center";
-        if (scale < 0.999) {{
-            fit.style.zoom = String(scale);
-            const zoomed = fit.getBoundingClientRect().height;
-            if (zoomed > available + 8) {{
-                fit.style.zoom = "1";
-                fit.style.transform = "scale(" + scale.toFixed(4) + ")";
-            }}
-            fit.style.minHeight = "0";
-        }} else {{
-            fit.style.zoom = "1";
-            fit.style.transform = "none";
-            fit.style.minHeight = "100%";
+    function prepareA4Print() {{
+        const viewport = document.getElementById("a4PreviewViewport");
+        const paper = document.getElementById("a4Sheet");
+        if (viewport) {{
+            viewport.style.height = "auto";
+            viewport.style.overflow = "visible";
+        }}
+        if (paper) {{
+            paper.style.transform = "none";
+            paper.style.margin = "0";
+            paper.style.width = "100%";
+            paper.style.height = "auto";
+            paper.style.maxHeight = "none";
         }}
     }}
 
-    function prepareA4Print() {{
-        const sheet = document.getElementById("a4Sheet");
-        if (sheet) sheet.style.transform = "none";
-        lockA4ToOnePage();
+    function restoreA4Preview() {{
+        const viewport = document.getElementById("a4PreviewViewport");
+        const paper = document.getElementById("a4Sheet");
+        if (viewport) {{
+            viewport.style.height = "";
+            viewport.style.overflow = "";
+        }}
+        if (paper) {{
+            paper.style.transform = "";
+            paper.style.margin = "";
+            paper.style.width = "";
+            paper.style.height = "";
+            paper.style.maxHeight = "";
+        }}
+        fitA4Preview();
     }}
 
     window.onbeforeprint = prepareA4Print;
     window.addEventListener("beforeprint", prepareA4Print);
-    window.addEventListener("afterprint", function () {{
-        const sheet = document.getElementById("a4Sheet");
-        if (sheet) sheet.style.transform = "";
-        fitA4Sheet();
-        lockA4ToOnePage();
-    }});
-    window.addEventListener("load", function () {{ fitA4Sheet(); lockA4ToOnePage(); }});
-    window.addEventListener("resize", function () {{ fitA4Sheet(); lockA4ToOnePage(); }});
+    window.addEventListener("afterprint", restoreA4Preview);
+    window.addEventListener("load", fitA4Preview);
+    window.addEventListener("resize", fitA4Preview);
     if (document.fonts && document.fonts.ready) {{
-        document.fonts.ready.then(function () {{ fitA4Sheet(); lockA4ToOnePage(); }});
+        document.fonts.ready.then(fitA4Preview);
     }}
-    setTimeout(function () {{ fitA4Sheet(); lockA4ToOnePage(); }}, 150);
-    setTimeout(function () {{ fitA4Sheet(); lockA4ToOnePage(); }}, 600);
+    setTimeout(fitA4Preview, 150);
+    setTimeout(fitA4Preview, 600);
 </script>
 </body>
 </html>
