@@ -882,11 +882,22 @@ def init_db():
         ("preparer_full", "TEXT"),
         ("preparer_stamp_b64", "TEXT"),
         ("duty_stamp_b64", "TEXT"),
+        ("receiver_name", "TEXT"),
+        ("receiver_role", "TEXT"),
     ):
         if col_name not in existing_cols:
             c.execute(f"ALTER TABLE records ADD COLUMN {col_name} {col_type}")
     conn.commit()
     conn.close()
+
+
+RECEIVER_ROLE_OPTIONS = [
+    "المختص المناوب بالطوارئ",
+    "الطبيب المناوب",
+    "المسعف المستلم",
+    "مأمور ثلاجة الموتى",
+    "أخصائي المختبر المناوب",
+]
 
 
 def get_shift_settings() -> dict:
@@ -916,8 +927,8 @@ def save_record_to_db(rec: dict):
             gps_coords, created_at, fields_json, legal_text, citizen_stamp_b64,
             citizen_auth_mode, officer_stamp_b64, attachment_b64, officer_full,
             duty_full, dept_name, verify_hash, officer_auth_mode, duty_auth_mode,
-            preparer_full, preparer_stamp_b64, duty_stamp_b64
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            preparer_full, preparer_stamp_b64, duty_stamp_b64, receiver_name, receiver_role
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         rec["doc_no"], rec["form_id"], rec["form_title"], rec["category"],
         rec["party_name"], rec["party_id"], rec["plate_no"], rec["gps_coords"],
@@ -928,6 +939,7 @@ def save_record_to_db(rec: dict):
         rec.get("officer_auth_mode", ""), rec.get("duty_auth_mode", ""),
         rec.get("preparer_full", ""), rec.get("preparer_stamp_b64", ""),
         rec.get("duty_stamp_b64", ""),
+        rec.get("receiver_name", ""), rec.get("receiver_role", ""),
     ))
     conn.commit()
     conn.close()
@@ -1008,33 +1020,54 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     )
 
     is_medical = rec.get("category") == "إحالة طبية"
-    col1_header = "ختم وتوقيع جهة الاستلام (المستشفى / المختبر)" if is_medical else "بصمة / توقيع الطرف المعني"
-    col1_top_name = "المختص المناوب بالاستلام" if (is_medical and "ختم وتوقيع" in rec.get("citizen_auth_mode", "")) else rec["party_name"]
-
     citizen_mode = rec.get("citizen_auth_mode", "") or ""
     officer_mode = rec.get("officer_auth_mode", "") or ""
     duty_mode = rec.get("duty_auth_mode", "") or ""
     preparer_full = (rec.get("preparer_full") or "").strip()
     has_preparer = bool(preparer_full)
+    receiver_name = (rec.get("receiver_name") or "").strip()
+    receiver_role = (rec.get("receiver_role") or "").strip()
+
+    # فصل اسم المصاب/الحالة عن اسم المناوب المستلم في الإحالات الطبية
+    col1_header = "ختم وتوقيع جهة الاستلام (المستشفى / المختبر)" if is_medical else "بصمة / توقيع الطرف المعني"
+    if is_medical:
+        col1_top_name = receiver_name or "المناوب المستلم"
+        col1_role_line = receiver_role
+        citizen_pad_title = "لوحة توقيع: المختص المناوب المستلم"
+        citizen_pad_sub = " — ".join([x for x in (receiver_name, receiver_role) if x]) or "جهة الاستلام"
+    else:
+        col1_top_name = rec.get("party_name") or "الطرف المعني"
+        col1_role_line = ""
+        citizen_pad_title = "لوحة توقيع: المواطن / المقر / الطرف المعني"
+        citizen_pad_sub = col1_top_name
+
+    col1_role_html = (
+        f'<div style="font-size:9.5px; font-weight:700; color:#0f3d2e; margin-bottom:3px;">{col1_role_line}</div>'
+        if col1_role_line else ""
+    )
 
     needs_citizen_pad = interactive_sig and ("توقيع حي" in citizen_mode) and not rec.get("citizen_stamp_b64")
-    needs_preparer_pad = interactive_sig and has_preparer and not rec.get("preparer_stamp_b64")
+    needs_preparer_pad = (
+        interactive_sig and has_preparer and ("توقيع حي" in officer_mode) and not rec.get("preparer_stamp_b64")
+    )
     needs_officer_pad = interactive_sig and ("توقيع حي" in officer_mode) and not rec.get("officer_stamp_b64")
     needs_duty_pad = interactive_sig and ("توقيع حي" in duty_mode) and not rec.get("duty_stamp_b64")
 
-    # --- Citizen cell ---
+    guide_hint = "<div class='sig-guide-hint no-print'>وقع بإصبعك على الشاشة</div>"
+
+    # --- Citizen / receiver cell ---
     if rec.get("citizen_stamp_b64"):
         citizen_box_inner = _sig_slot_img(rec["citizen_stamp_b64"], "slot_citizen")
     elif needs_citizen_pad:
         citizen_box_inner = (
             "<div class='sig-guide'>"
             + _sig_slot_img("", "slot_citizen")
-            + "<div class='sig-guide-hint no-print'>ارسم التوقيع في اللوحة أعلاه</div></div>"
+            + guide_hint
+            + "</div>"
         )
     elif is_medical and "ختم وتوقيع" in citizen_mode:
         citizen_box_inner = """
-        <div class='sig-guide' style='border:1px dashed #64748b; border-radius:6px; padding:8px 6px; margin:3px 4px; font-size:10px; color:#334155; line-height:1.6;'>
-            الاسم: .........................................<br>
+        <div class='sig-guide sig-guide-print-clean' style='border:1px dashed #64748b; border-radius:6px; padding:8px 6px; margin:3px 4px; font-size:10px; color:#334155; line-height:1.6;'>
             التوقيع والختم الرسمي لجهة الاستلام
         </div>
         """
@@ -1052,7 +1085,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             preparer_box_inner = (
                 "<div class='sig-guide'>"
                 + _sig_slot_img("", "slot_preparer")
-                + "<div class='sig-guide-hint no-print'>ارسم التوقيع في اللوحة أعلاه</div></div>"
+                + guide_hint
+                + "</div>"
             )
         else:
             preparer_box_inner = _sig_slot_img("", "slot_preparer")
@@ -1064,7 +1098,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         officer_box_inner = (
             "<div class='sig-guide'>"
             + _sig_slot_img("", "slot_officer")
-            + "<div class='sig-guide-hint no-print'>ارسم التوقيع في اللوحة أعلاه</div></div>"
+            + guide_hint
+            + "</div>"
         )
     else:
         officer_box_inner = _sig_slot_img("", "slot_officer")
@@ -1076,7 +1111,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         duty_box_inner = (
             "<div class='sig-guide'>"
             + _sig_slot_img("", "slot_duty")
-            + "<div class='sig-guide-hint no-print'>ارسم التوقيع في اللوحة أعلاه</div></div>"
+            + guide_hint
+            + "</div>"
         )
     elif "ختم" in duty_mode or not duty_mode:
         duty_box_inner = """
@@ -1090,21 +1126,21 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     col_count = 4 if has_preparer else 3
     col_width = "25%" if has_preparer else "33.3%"
 
-    preparer_th = "<th>معد المحضر / المحرر</th>" if has_preparer else ""
+    preparer_th = "<th>الفرد المُعد / المباشر</th>" if has_preparer else ""
     preparer_td = ""
     if has_preparer:
         preparer_td = f"""
                         <td style="width:{col_width};">
                             <div style="font-size:10.5px; font-weight:800; margin-bottom:2px;">{preparer_full}</div>
                             {preparer_box_inner}
-                            <div style="font-size:9px; color:#475569; margin-top:2px;">توقيع حي للمعد</div>
+                            <div style="font-size:9px; color:#475569; margin-top:2px;">{officer_mode or 'توثيق الإعداد الميداني'}</div>
                         </td>
         """
 
     # Live signature dock ABOVE A4
     dock_cards = []
     if needs_citizen_pad:
-        dock_cards.append(_live_pad_card("citizen", col1_header, col1_top_name or "الطرف المعني"))
+        dock_cards.append(_live_pad_card("citizen", citizen_pad_title, citizen_pad_sub))
     if needs_preparer_pad:
         dock_cards.append(_live_pad_card("preparer", "لوحة توقيع: الفرد المُعد / المباشر", preparer_full))
     if needs_officer_pad:
@@ -1225,8 +1261,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     @media print {{
         @page {{ size: A4 portrait; margin: 6mm; }}
         html, body {{ background: #fff !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }}
-        .toolbar, .no-print, .live-sig-dock, .clear-sig-btn, .sig-guide-hint {{ display: none !important; }}
-        .sig-guide {{ border: none !important; padding: 0 !important; }}
+        .toolbar, .no-print, .live-sig-dock, .clear-sig-btn, .sig-guide-hint,
+        .live-pad-actions, .live-sig-dock-head {{ display: none !important; }}
+        .sig-guide, .sig-guide-print-clean {{
+            border: none !important; padding: 0 !important; margin: 0 !important; background: transparent !important;
+        }}
+        .live-pad-canvas {{ display: none !important; border: none !important; }}
         .sheet-stage {{ width: 100% !important; max-width: none !important; height: auto !important; overflow: visible !important; margin: 0 !important; }}
         .a4-sheet {{
             width: 100% !important; min-height: 274mm !important; margin: 0 !important;
@@ -1234,7 +1274,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             display: flex; flex-direction: column; justify-content: space-between;
             box-shadow: none !important; transform: none !important; page-break-inside: avoid;
         }}
-        .live-pad-canvas {{ display: none !important; }}
     }}
 </style>
 </head>
@@ -1288,7 +1327,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 <tbody>
                     <tr>
                         <td style="width:{col_width};">
-                            <div style="font-size:10px; font-weight:700; margin-bottom:2px;">{col1_top_name}</div>
+                            <div style="font-size:10.5px; font-weight:800; margin-bottom:2px;">{col1_top_name}</div>
+                            {col1_role_html}
                             {citizen_box_inner}
                             <div style="font-size:9px; color:#475569; margin-top:2px;">{citizen_mode}</div>
                         </td>
@@ -1481,6 +1521,12 @@ if "preparer_full" not in st.session_state:
     st.session_state.preparer_full = ""
 if "preparer_stamp_b64" not in st.session_state:
     st.session_state.preparer_stamp_b64 = ""
+if "receiver_name" not in st.session_state:
+    st.session_state.receiver_name = ""
+if "receiver_role" not in st.session_state:
+    st.session_state.receiver_role = RECEIVER_ROLE_OPTIONS[0]
+if "officer_full_override" not in st.session_state:
+    st.session_state.officer_full_override = ""
 if "attachment_b64" not in st.session_state:
     st.session_state.attachment_b64 = ""
 if "scanner_model" not in st.session_state:
@@ -1501,6 +1547,9 @@ def reset_doc_state():
     st.session_state.duty_stamp_b64 = ""
     st.session_state.preparer_full = ""
     st.session_state.preparer_stamp_b64 = ""
+    st.session_state.receiver_name = ""
+    st.session_state.receiver_role = RECEIVER_ROLE_OPTIONS[0]
+    st.session_state.officer_full_override = ""
     st.session_state.attachment_b64 = ""
 
 
@@ -1789,22 +1838,51 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             st.markdown("<div class='auth-panel'>", unsafe_allow_html=True)
             if is_med_form:
                 st.markdown("#### 1️⃣ توثيق خانة الاستلام (المستشفى / الثلاجة / المختبر)")
+                st.caption("افصل بيانات المناوب المستلم عن اسم المصاب/الحالة الظاهر في حقول النموذج أعلاه.")
+                recv_name_key = f"receiver_name_{st.session_state.doc_no}"
+                recv_role_key = f"receiver_role_{st.session_state.doc_no}"
+                if recv_name_key not in st.session_state:
+                    st.session_state[recv_name_key] = st.session_state.receiver_name
+                if recv_role_key not in st.session_state:
+                    role_default = st.session_state.receiver_role if st.session_state.receiver_role in RECEIVER_ROLE_OPTIONS else RECEIVER_ROLE_OPTIONS[0]
+                    st.session_state[recv_role_key] = role_default
+                st.text_input(
+                    "اسم المناوب المستلم",
+                    key=recv_name_key,
+                    disabled=st.session_state.citizen_locked,
+                    placeholder="مثال: فهد بن علي الحكمي — أو يُترك فارغاً عند الحاجة",
+                )
+                st.selectbox(
+                    "الصفة / القسم",
+                    options=RECEIVER_ROLE_OPTIONS,
+                    key=recv_role_key,
+                    disabled=st.session_state.citizen_locked,
+                )
                 auth_opts = [
+                    "توقيع حي على الشاشة بالإصبع (للمختص المناوب المستلم)",
                     "تخصيص خانة ختم وتوقيع رسمي لجهة الاستلام بالورقة",
-                    "توقيع حي على الشاشة (للمختص المناوب / المسعف المستلم)",
                     "بصمة منفذ الشحن (USB Type-C) للمرافق / المستلم",
                 ]
             else:
                 st.markdown("#### 1️⃣ بصمة / توقيع الطرف المعني (يقفل التعديل)")
-                auth_opts = ["بصمة منفذ الشحن (USB Type-C)", "توقيع حي بالإصبع على الشاشة (بديل الطوارئ)"]
+                auth_opts = [
+                    "توقيع حي بالإصبع على الشاشة",
+                    "بصمة منفذ الشحن (USB Type-C)",
+                ]
                 if form_def["allow_absence"]:
                     auth_opts.append("غياب الطرف / امتناع مثبت بالمحضر")
 
             chosen_auth = st.radio("وسيلة التوثيق المعتمدة:", auth_opts, disabled=st.session_state.citizen_locked)
 
             if not st.session_state.citizen_locked:
-                btn_lbl = "✅ اعتماد صيغة الإحالة وقفل الحقول النصية" if is_med_form else "🧬 التقاط البصمة وقفل الحقول النصية"
+                btn_lbl = "✅ اعتماد صيغة الإحالة وقفل الحقول النصية" if is_med_form else "🧬 اعتماد التوثيق وقفل الحقول النصية"
                 if st.button(btn_lbl, type="primary", use_container_width=True):
+                    if is_med_form:
+                        st.session_state.receiver_name = (st.session_state.get(f"receiver_name_{st.session_state.doc_no}") or "").strip()
+                        st.session_state.receiver_role = st.session_state.get(f"receiver_role_{st.session_state.doc_no}") or RECEIVER_ROLE_OPTIONS[0]
+                    else:
+                        st.session_state.receiver_name = ""
+                        st.session_state.receiver_role = ""
                     if "بصمة منفذ الشحن" in chosen_auth:
                         seed = f"{st.session_state.doc_no}_{current_values.get('party_id', '')}_CITIZEN"
                         st.session_state.citizen_stamp_b64 = generate_fingerprint_png_b64(seed, ink_rgb=(13, 71, 161))
@@ -1822,6 +1900,9 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     safe_rerun()
             else:
                 st.success(f"تم القفل والتوثيق: {st.session_state.citizen_auth_mode}")
+                if is_med_form:
+                    shown_recv = st.session_state.receiver_name or "—"
+                    st.caption(f"المناوب المستلم: {shown_recv} | {st.session_state.receiver_role or '—'}")
                 if st.session_state.citizen_stamp_b64:
                     st.image(base64.b64decode(st.session_state.citizen_stamp_b64), caption="ختم البصمة الصوري المعتمد", width=105)
             st.markdown("</div>", unsafe_allow_html=True)
@@ -1829,16 +1910,27 @@ if st.session_state.nav_tab == "النماذج الميدانية":
         with s2_col:
             st.markdown("<div class='auth-panel'>", unsafe_allow_html=True)
             st.markdown("#### 2️⃣ توثيق ضابط الخفر ومصادقة وحدة الحوادث")
-            st.caption(f"{unit_display}  •  {duty_display}")
+            st.caption(f"الإعدادات الافتراضية: {unit_display}  •  {duty_display}")
 
-            preparer_input = st.text_input(
-                "اسم معد المحضر / المحرر (اختياري — يفتح عمود توقيع مستقل في A4)",
-                value=st.session_state.preparer_full,
-                key=f"preparer_name_{st.session_state.doc_no}",
+            officer_name_key = f"officer_full_input_{st.session_state.doc_no}"
+            preparer_key = f"preparer_name_{st.session_state.doc_no}"
+            if officer_name_key not in st.session_state:
+                st.session_state[officer_name_key] = st.session_state.officer_full_override or unit_display
+            if preparer_key not in st.session_state:
+                st.session_state[preparer_key] = st.session_state.preparer_full or (shift.get("officer_name") or "").strip()
+
+            st.text_input(
+                "رتبة واسم ضابط الخفر المناوب",
+                key=officer_name_key,
                 disabled=st.session_state.officer_approved,
+                placeholder="مثال: الملازم فهد بن ...",
             )
-            if not st.session_state.officer_approved:
-                st.session_state.preparer_full = (preparer_input or "").strip()
+            st.text_input(
+                "رتبة واسم الفرد المُعد / المباشر (اختياري — يفتح عمود توقيع مستقل)",
+                key=preparer_key,
+                disabled=st.session_state.officer_approved,
+                placeholder="مثال: العريف / الجندي ... — أو اتركه فارغاً",
+            )
 
             officer_auth_opts = [
                 "توقيع حي على الشاشة بالإصبع (لضابط الخفر / الفرد المُعد)",
@@ -1848,7 +1940,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             if "بصمة" in (st.session_state.officer_auth_mode or ""):
                 officer_default_idx = 1
             chosen_officer_auth = st.radio(
-                "وسيلة توثيق ضابط الخفر:",
+                "وسيلة توثيق ضابط الخفر / الفرد المُعد:",
                 officer_auth_opts,
                 index=officer_default_idx,
                 key=f"officer_auth_radio_{st.session_state.doc_no}",
@@ -1872,13 +1964,17 @@ if st.session_state.nav_tab == "النماذج الميدانية":
 
             if not st.session_state.officer_approved:
                 if st.button("🛡️ اعتماد الوثيقة وإصدار رمز التحقق QR", type="primary", use_container_width=True, disabled=not st.session_state.citizen_locked):
+                    officer_label = (st.session_state.get(officer_name_key) or "").strip() or unit_display
+                    preparer_label = (st.session_state.get(preparer_key) or "").strip()
+                    st.session_state.officer_full_override = officer_label
+                    st.session_state.preparer_full = preparer_label
                     st.session_state.officer_auth_mode = chosen_officer_auth
                     st.session_state.duty_auth_mode = chosen_duty_auth
                     if "بصمة" in chosen_officer_auth:
-                        seed_off = f"{st.session_state.doc_no}_{unit_display}_OFFICER"
+                        seed_off = f"{st.session_state.doc_no}_{officer_label}_OFFICER"
                         st.session_state.officer_stamp_b64 = generate_fingerprint_png_b64(seed_off, ink_rgb=(15, 61, 46))
-                        if st.session_state.preparer_full:
-                            seed_prep = f"{st.session_state.doc_no}_{st.session_state.preparer_full}_PREPARER"
+                        if preparer_label:
+                            seed_prep = f"{st.session_state.doc_no}_{preparer_label}_PREPARER"
                             st.session_state.preparer_stamp_b64 = generate_fingerprint_png_b64(seed_prep, ink_rgb=(13, 71, 161))
                         else:
                             st.session_state.preparer_stamp_b64 = ""
@@ -1896,12 +1992,13 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 if st.session_state.officer_stamp_b64:
                     st.image(base64.b64decode(st.session_state.officer_stamp_b64), caption="ختم التوثيق المعتمد", width=105)
                 if st.session_state.preparer_full:
-                    st.info(f"عمود توقيع المعد مفعّل: {st.session_state.preparer_full}")
+                    st.info(f"عمود توقيع الفرد المُعد مفعّل: {st.session_state.preparer_full}")
             st.markdown("</div>", unsafe_allow_html=True)
 
         if st.session_state.officer_approved:
             raw_seal = f"{st.session_state.doc_no}|{current_values.get('party_id', '')}|{st.session_state.doc_time}"
             verify_hash = "KHF-" + hashlib.sha256(raw_seal.encode("utf-8")).hexdigest()[:16].upper()
+            officer_full_final = (st.session_state.officer_full_override or "").strip() or unit_display
 
             ready_record = {
                 "doc_no": st.session_state.doc_no,
@@ -1919,7 +2016,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 "citizen_auth_mode": st.session_state.citizen_auth_mode,
                 "officer_stamp_b64": st.session_state.officer_stamp_b64,
                 "attachment_b64": st.session_state.attachment_b64,
-                "officer_full": unit_display,
+                "officer_full": officer_full_final,
                 "duty_full": duty_display,
                 "dept_name": shift["dept_name"],
                 "verify_hash": verify_hash,
@@ -1928,6 +2025,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 "preparer_full": st.session_state.preparer_full,
                 "preparer_stamp_b64": st.session_state.preparer_stamp_b64,
                 "duty_stamp_b64": st.session_state.duty_stamp_b64,
+                "receiver_name": st.session_state.receiver_name if is_med_form else "",
+                "receiver_role": st.session_state.receiver_role if is_med_form else "",
             }
 
             a4_html = build_official_a4_html(ready_record, form_def, logo_b64_global, interactive_sig=True)
