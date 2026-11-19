@@ -2061,7 +2061,46 @@ def _field_is_wide(field: dict, value: str) -> bool:
     return False
 
 
-def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool) -> str:
+def _settlement_party_merged_cells(index: int, fields_map: dict) -> str:
+    ordinal = _PARTY_ORDINALS[index]
+    prefix = f"p{index}_"
+    name = str(fields_map.get(f"{prefix}name") or "-").strip() or "-"
+    nid = str(fields_map.get(f"{prefix}id") or "-").strip() or "-"
+    phone = str(fields_map.get(f"{prefix}phone") or "-").strip() or "-"
+    vehicle = str(fields_map.get(f"{prefix}vehicle") or "-").strip() or "-"
+    role = str(fields_map.get(f"{prefix}role") or "-").strip() or "-"
+    capacity = str(fields_map.get(f"{prefix}capacity") or "").strip()
+    agent = str(fields_map.get(f"{prefix}agent") or "").strip()
+    wakala_no = str(fields_map.get(f"{prefix}wakala_no") or "").strip()
+    wakala_date = str(fields_map.get(f"{prefix}wakala_date") or "").strip()
+    amount = str(fields_map.get(f"{prefix}amount") or "").strip()
+    identity = f"{name} | هوية: {nid} | جوال: {phone}"
+    capacity_bits = [capacity] if capacity else []
+    if capacity and "وكيل" in capacity:
+        if agent:
+            capacity_bits.append(agent)
+        if wakala_no:
+            wakala_line = f"وكالة {wakala_no}"
+            if wakala_date:
+                wakala_line += f" بتاريخ {wakala_date}"
+            capacity_bits.append(wakala_line)
+    capacity_text = " — ".join(part for part in capacity_bits if part)
+    role_line = role
+    if amount and "مبلغ مالي" in role:
+        role_line = f"{role} وقدره: {amount}"
+    if capacity_text:
+        vehicle_line = f"{vehicle} — {role_line} ({capacity_text})"
+    else:
+        vehicle_line = f"{vehicle} — {role_line}"
+    return (
+        f"<td class='lbl half'>{html.escape(f'بيانات الطرف {ordinal}')}</td>"
+        f"<td class='val half'>{html.escape(identity)}</td>"
+        f"<td class='lbl half'>{html.escape('المركبة والصفة')}</td>"
+        f"<td class='val half'>{html.escape(vehicle_line)}</td>"
+    )
+
+
+def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool, form_id: str = "") -> str:
     def pair_cells(label: str, value: str, wide: bool) -> str:
         safe_label = html.escape(label)
         safe_value = html.escape(value)
@@ -2076,12 +2115,28 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool) -> st
             rows.append(f"<tr>{pair_cells(str(key), shown, True)}</tr>")
         return "".join(rows)
 
+    compact_settlement = form_id == "decl_settlement" and _count_parties(fields_map) >= 3
+    party_count = _count_parties(fields_map) if compact_settlement else 0
+    skip_keys = set()
+    if compact_settlement:
+        for index in range(1, party_count + 1):
+            for suffix in (
+                "name", "id", "phone", "vehicle", "role", "amount",
+                "capacity", "wakala_no", "wakala_date", "agent",
+            ):
+                skip_keys.add(f"p{index}_{suffix}")
+        skip_keys.update({"settlement_basis", "compensation", "injury_statement"})
+
     rows = []
     pending = None
+    parties_emitted = False
     for field in form_def["fields"]:
+        key = str(field.get("key") or "")
+        if key in skip_keys:
+            continue
         if not _include_field_on_a4(field, fields_map):
             continue
-        shown = str(fields_map.get(field["key"], "-") or "-")
+        shown = str(fields_map.get(key, "-") or "-")
         label = str(field.get("a4_label") or field["label"])
         sibling_key = field.get("a4_with")
         if sibling_key:
@@ -2091,8 +2146,8 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool) -> st
         compose = field.get("a4_compose") or {}
         if isinstance(compose, dict) and compose.get("fmt"):
             mapping = {"value": shown}
-            for key in compose.get("keys") or []:
-                mapping[key] = str(fields_map.get(key, "") or "").strip() or "-"
+            for compose_key in compose.get("keys") or []:
+                mapping[compose_key] = str(fields_map.get(compose_key, "") or "").strip() or "-"
             shown = compose["fmt"].format_map(mapping)
             extra_key = compose.get("append_if")
             extra = str(fields_map.get(extra_key, "") or "").strip() if extra_key else ""
@@ -2110,8 +2165,7 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool) -> st
                 safe_label = html.escape(str(field["label"]))
                 safe_value = html.escape(shown)
                 rows.append(f"<tr><td class='lbl'>{safe_label}</td><td class='val'>{safe_value}</td></tr>")
-            continue
-        if pending is None:
+        elif pending is None:
             pending = (field["label"], shown)
         else:
             rows.append(
@@ -2121,6 +2175,22 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool) -> st
                 + "</tr>"
             )
             pending = None
+        if compact_settlement and key == "party_count" and not parties_emitted:
+            if pending:
+                rows.append(f"<tr>{pair_cells(pending[0], pending[1], True)}</tr>")
+                pending = None
+            for index in range(1, party_count + 1):
+                rows.append(f"<tr>{_settlement_party_merged_cells(index, fields_map)}</tr>")
+            basis = str(fields_map.get("settlement_basis") or "-").strip() or "-"
+            injury = str(fields_map.get("injury_statement") or "-").strip() or "-"
+            compensation = str(fields_map.get("compensation") or "").strip()
+            summary = f"{basis} | {injury}"
+            if compensation:
+                summary += f" | العوض: {compensation}"
+            rows.append(
+                f"<tr>{pair_cells('أساس الصلح والإقرار المروري', summary, True)}</tr>"
+            )
+            parties_emitted = True
     if pending:
         rows.append(f"<tr>{pair_cells(pending[0], pending[1], True)}</tr>")
     return "".join(rows)
@@ -2141,7 +2211,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     else:
         field_count = len(fields_map)
     dense = True
-    rows_html = _data_table_rows(form_def, fields_map, dense)
+    rows_html = _data_table_rows(form_def, fields_map, dense, str(rec.get("form_id") or ""))
     data_tbl_cls = "data-tbl cols-4"
 
     qr_payload = f"DOC:{rec['doc_no']}|ID:{rec['party_id']}|PLATE:{rec['plate_no']}|SEAL:{rec['verify_hash']}"
@@ -2424,7 +2494,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     banner_title = (form_def or {}).get("official_title") or rec["form_title"]
     sheet_cls = "a4-sheet a4-paper dense-fit"
     table_rows = rows_html.count("<tr")
-    if len(party_signers) >= 3 or table_rows > 10 or image_count > 0:
+    if len(party_signers) >= 3 or table_rows > 9 or image_count > 0:
         sheet_cls += " a4-dense-print"
     gps_line_html = gps_header_line(str(rec.get("gps_coords") or ""))
 
@@ -2716,66 +2786,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             zoom: 1 !important;
             transform: none !important;
         }}
-        .a4-dense-print .hdr {{
-            padding-bottom: 1px !important;
-            margin-bottom: 2px !important;
-        }}
-        .a4-dense-print .hdr-right p,
-        .a4-dense-print .hdr-left p {{
-            font-size: 11px !important;
-            line-height: 1.2 !important;
-        }}
-        .a4-dense-print .hdr-center img {{ height: 30px !important; }}
-        .a4-dense-print .doc-banner {{
-            margin-top: 0 !important;
-            margin-bottom: 2px !important;
-            padding: 2px 8px !important;
-            font-size: 13px !important;
-        }}
-        .a4-dense-print table.data-tbl {{ margin-bottom: 4px !important; }}
-        .a4-dense-print table.data-tbl th,
-        .a4-dense-print table.data-tbl td {{
-            padding: 4px 8px !important;
-            font-size: 11.5px !important;
-            line-height: 1.25 !important;
-        }}
-        .a4-dense-print .legal-box {{
-            padding: 2px 8px !important;
-            margin-bottom: 2px !important;
-            font-size: 11.5px !important;
-            line-height: 1.5 !important;
-        }}
-        .a4-dense-print .legal-box div {{
-            font-size: 11.5px !important;
-            line-height: 1.5 !important;
-        }}
-        .a4-dense-print .legal-box > div:first-child {{ margin-bottom: 2px !important; }}
-        .a4-dense-print .sig-head,
-        .a4-dense-print table.sig-tbl th {{
-            padding: 2px 6px !important;
-            font-size: 10px !important;
-            line-height: 1.2 !important;
-        }}
-        .a4-dense-print .sig-person, .a4-dense-print .sig-role {{
-            font-size: 9px !important;
-            line-height: 1.2 !important;
-            margin-bottom: 0 !important;
-        }}
-        .a4-dense-print .sig-cell,
-        .a4-dense-print table.sig-tbl td {{
-            padding: 3px 6px !important;
-            min-height: 60px !important;
-            height: auto !important;
-        }}
-        .a4-dense-print .sig-slot-img {{
-            height: 28px !important;
-            max-height: 28px !important;
-        }}
-        .a4-dense-print .footer-qr {{
-            margin-top: 2px !important;
-            padding: 2px 8px !important;
-        }}
-        .a4-dense-print .footer-qr img {{ width: 32px !important; height: 32px !important; }}
         .sig-footer, table.sig-tbl, .sig-grid, .footer-qr, .attachment-section {{
             page-break-inside: avoid !important; break-inside: avoid !important;
         }}
@@ -2786,6 +2796,77 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         a, a[href^="tel"] {{
             color: #0f172a !important; text-decoration: none !important; pointer-events: none !important;
+        }}
+        @page {{ size: A4 portrait; margin: 5mm !important; }}
+        div.a4-paper.a4-dense-print {{
+            width: 100% !important;
+            max-width: 200mm !important;
+            height: auto !important;
+            min-height: 0 !important;
+            padding: 4mm 6mm !important;
+            margin: 0 auto !important;
+        }}
+        div.a4-paper.a4-dense-print .hdr {{
+            margin-bottom: 6px !important;
+            padding-bottom: 5px !important;
+            line-height: 1.35 !important;
+        }}
+        div.a4-paper.a4-dense-print .hdr-right p,
+        div.a4-paper.a4-dense-print .hdr-left p {{
+            line-height: 1.35 !important;
+        }}
+        div.a4-paper.a4-dense-print .doc-banner {{
+            margin-bottom: 6px !important;
+            padding: 5px 10px !important;
+            line-height: 1.35 !important;
+        }}
+        div.a4-paper.a4-dense-print table.data-tbl {{
+            margin-bottom: 6px !important;
+        }}
+        div.a4-paper.a4-dense-print table.data-tbl th,
+        div.a4-paper.a4-dense-print table.data-tbl td {{
+            padding: 3.5px 6px !important;
+            font-size: 10.5px !important;
+            line-height: 1.35 !important;
+        }}
+        div.a4-paper.a4-dense-print .legal-box {{
+            padding: 7px 10px !important;
+            margin-bottom: 6px !important;
+            font-size: 10.8px !important;
+            line-height: 1.45 !important;
+        }}
+        div.a4-paper.a4-dense-print .legal-box div {{
+            font-size: 10.8px !important;
+            line-height: 1.45 !important;
+        }}
+        div.a4-paper.a4-dense-print .legal-box > div:first-child {{
+            margin-bottom: 4px !important;
+        }}
+        div.a4-paper.a4-dense-print table.sig-tbl {{
+            table-layout: fixed !important;
+            width: 100% !important;
+        }}
+        div.a4-paper.a4-dense-print table.sig-multi.cols-4 > tbody > tr:first-child > td {{
+            width: 25% !important;
+        }}
+        div.a4-paper.a4-dense-print .sig-head,
+        div.a4-paper.a4-dense-print table.sig-tbl th {{
+            padding: 3px 4px !important;
+            font-size: 10px !important;
+        }}
+        div.a4-paper.a4-dense-print .sig-cell,
+        div.a4-paper.a4-dense-print table.sig-tbl td {{
+            padding: 4px !important;
+            min-height: 48px !important;
+            height: 48px !important;
+        }}
+        div.a4-paper.a4-dense-print .sig-slot-img {{
+            height: 36px !important;
+            max-height: 36px !important;
+        }}
+        div.a4-paper.a4-dense-print .footer-qr {{
+            margin-top: 5px !important;
+            padding-top: 4px !important;
         }}
     }}
 </style>
