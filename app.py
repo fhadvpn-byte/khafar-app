@@ -431,10 +431,122 @@ div[data-testid="stHorizontalBlock"] div.stButton > button {
     white-space: normal !important;
     line-height: 1.35 !important;
 }
-div[data-testid="stTabs"] button[role="tab"] {
+div[data-baseweb="tab-list"],
+[data-testid="stTabs"] [role="tablist"] {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 12px !important;
+    width: 100% !important;
+    background: rgba(8, 24, 21, 0.75) !important;
+    padding: 10px !important;
+    border-radius: 16px !important;
+    border: 1.5px solid rgba(16, 185, 129, 0.35) !important;
+    margin: 14px 0 18px 0 !important;
+}
+div[data-baseweb="tab-highlight"],
+[data-testid="stTabs"] .react-aria-SelectionIndicator {
+    display: none !important;
+}
+div[data-testid="stTabs"] button[data-baseweb="tab"],
+[data-testid="stTabs"] [data-testid="stTab"] {
+    display: flex !important;
+    align-items: center !important;
+    min-height: 74px !important;
+    width: 100% !important;
+    border-radius: 12px !important;
+    padding: 12px 10px !important;
+    background: linear-gradient(145deg, rgba(20, 48, 42, 0.92), rgba(13, 33, 29, 0.95)) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.22) !important;
+    color: #f1f5f9 !important;
+    -webkit-text-fill-color: #f1f5f9 !important;
+    justify-content: center !important;
+    text-align: center !important;
+    white-space: normal !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+    transition: all 0.2s ease-in-out !important;
+}
+div[data-testid="stTabs"] button[data-baseweb="tab"] p,
+div[data-testid="stTabs"] button[data-baseweb="tab"] span,
+[data-testid="stTabs"] [data-testid="stTab"] p {
+    font-size: 17px !important;
     font-weight: 800 !important;
-    font-size: 13px !important;
-    padding: 0.35rem 0.7rem !important;
+    line-height: 1.35 !important;
+    color: #f1f5f9 !important;
+    -webkit-text-fill-color: #f1f5f9 !important;
+    text-align: center !important;
+    white-space: normal !important;
+    margin: 0 !important;
+}
+div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(1),
+[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(1) {
+    border: 1.5px solid #10b981 !important;
+}
+div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(1)[aria-selected="true"],
+[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(1)[aria-selected="true"] {
+    background: linear-gradient(145deg, #059669, #10b981) !important;
+    border: 2px solid #fde68a !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 0 1px rgba(253, 230, 138, 0.45), 0 8px 22px rgba(16, 185, 129, 0.45) !important;
+}
+div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(2),
+[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(2) {
+    border: 1.5px solid rgba(56, 189, 248, 0.5) !important;
+}
+div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(2)[aria-selected="true"],
+[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(2)[aria-selected="true"] {
+    background: linear-gradient(145deg, #0284c7, #0ea5e9) !important;
+    border: 2px solid #fde68a !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 0 1px rgba(253, 230, 138, 0.45), 0 8px 22px rgba(14, 165, 233, 0.4) !important;
+}
+div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(3),
+[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(3) {
+    border: 1.5px solid rgba(244, 63, 94, 0.6) !important;
+}
+div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(3)[aria-selected="true"],
+[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(3)[aria-selected="true"] {
+    background: linear-gradient(145deg, #be123c, #e11d48) !important;
+    border: 2px solid #fde68a !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 0 1px rgba(253, 230, 138, 0.5), 0 8px 22px rgba(225, 29, 72, 0.45) !important;
+}
+div[data-baseweb="tab-list"] button[data-baseweb="tab"][aria-selected="true"] p,
+[data-testid="stTabs"] [data-testid="stTab"][aria-selected="true"] p {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+div[data-testid="stTabs"] div.stButton > button,
+div[data-testid="stTabs"] div.stButton > button[kind="primary"] {
+    background: #112924 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.28) !important;
+    border-right: 6px solid #d4a853 !important;
+    border-radius: 12px !important;
+    font-weight: 800 !important;
+    font-size: 15px !important;
+    min-height: 52px !important;
+    box-shadow: none !important;
+    text-align: right !important;
+}
+div[data-testid="stTabs"] div.stButton > button:hover,
+div[data-testid="stTabs"] div.stButton > button[kind="primary"]:hover {
+    background: #17382f !important;
+    border-color: #fde68a !important;
+    border-right: 6px solid #fde68a !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 16px rgba(253, 230, 138, 0.22) !important;
+}
+@media (max-width: 640px) {
+    div[data-testid="stTabs"] button[data-baseweb="tab"],
+    [data-testid="stTabs"] [data-testid="stTab"] {
+        min-height: 68px !important;
+        padding: 8px 6px !important;
+    }
+    div[data-testid="stTabs"] button[data-baseweb="tab"] p,
+    [data-testid="stTabs"] [data-testid="stTab"] p {
+        font-size: 13.5px !important;
+    }
 }
 
 .legal-dark-box {
@@ -1887,9 +1999,9 @@ NAV_ALIASES = {
     "بصمة الشحن OTG": "الإعدادات والبصمة",
 }
 CATEGORY_TAB_MAP = {
-    "الإقرارات (4)": "إقرار",
-    "المحاضر (5 محاضر نظامية)": "محضر",
-    "الطبية والجنائية (3)": "إحالة طبية",
+    "✍️ الإقرارات الميدانية (4)": "إقرار",
+    "🚓 المحاضر النظامية (5)": "محضر",
+    "🚑 الطبية والجنائية (3)": "إحالة طبية",
 }
 
 if "nav_tab" not in st.session_state:
@@ -2067,7 +2179,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
     if st.session_state.opened_form_id is None:
         tab_decl, tab_min, tab_med = st.tabs(list(CATEGORY_TAB_MAP.keys()))
         with tab_decl:
-            render_compact_form_buttons("إقرار", primary=True)
+            render_compact_form_buttons("إقرار", primary=False)
         with tab_min:
             render_compact_form_buttons("محضر", primary=False)
         with tab_med:
