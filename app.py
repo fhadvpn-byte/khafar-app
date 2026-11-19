@@ -1256,16 +1256,87 @@ def _live_pad_card(pad_id: str, title: str, subtitle: str) -> str:
     """
 
 
+_WIDE_FIELD_KEYS = {
+    "exterior_damages",
+    "interior_inventory",
+    "tow_truck_info",
+    "legal_article",
+    "release_condition",
+    "impound_reason_cat",
+}
+
+
+def _field_is_wide(field: dict, value: str) -> bool:
+    if field.get("type") == "textarea":
+        return True
+    if field.get("key") in _WIDE_FIELD_KEYS:
+        return True
+    label = str(field.get("label") or "")
+    if len(label) > 42 or len(value) > 48:
+        return True
+    return False
+
+
+def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool) -> str:
+    def pair_cells(label: str, value: str, wide: bool) -> str:
+        safe_label = html.escape(label)
+        safe_value = html.escape(value)
+        if wide:
+            return f"<td class='lbl'>{safe_label}</td><td class='val span3' colspan='3'>{safe_value}</td>"
+        return f"<td class='lbl half'>{safe_label}</td><td class='val half'>{safe_value}</td>"
+
+    if not form_def:
+        rows = []
+        for key, value in fields_map.items():
+            shown = str(value or "-")
+            rows.append(f"<tr>{pair_cells(str(key), shown, True)}</tr>")
+        return "".join(rows)
+
+    rows = []
+    pending = None
+    for field in form_def["fields"]:
+        shown = str(fields_map.get(field["key"], "-") or "-")
+        wide = dense and _field_is_wide(field, shown)
+        if not dense or wide:
+            if pending:
+                rows.append(f"<tr>{pair_cells(pending[0], pending[1], True)}</tr>")
+                pending = None
+            if dense and wide:
+                rows.append(f"<tr>{pair_cells(field['label'], shown, True)}</tr>")
+            else:
+                safe_label = html.escape(str(field["label"]))
+                safe_value = html.escape(shown)
+                rows.append(f"<tr><td class='lbl'>{safe_label}</td><td class='val'>{safe_value}</td></tr>")
+            continue
+        if pending is None:
+            pending = (field["label"], shown)
+        else:
+            rows.append(
+                "<tr>"
+                + pair_cells(pending[0], pending[1], False)
+                + pair_cells(field["label"], shown, False)
+                + "</tr>"
+            )
+            pending = None
+    if pending:
+        rows.append(f"<tr>{pair_cells(pending[0], pending[1], True)}</tr>")
+    return "".join(rows)
+
+
+def _distinct_role(name: str, role: str) -> str:
+    name = (name or "").strip()
+    role = (role or "").strip()
+    if not role or role == name:
+        return ""
+    return role
+
+
 def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, interactive_sig: bool = False) -> str:
     fields_map = rec["fields"] if isinstance(rec.get("fields"), dict) else json.loads(rec["fields_json"])
-    rows_html = ""
-    if form_def:
-        for f in form_def["fields"]:
-            val = fields_map.get(f["key"], "-") or "-"
-            rows_html += f"<tr><td class='lbl'>{f['label']}</td><td class='val'>{val}</td></tr>"
-    else:
-        for k, v in fields_map.items():
-            rows_html += f"<tr><td class='lbl'>{k}</td><td class='val'>{v}</td></tr>"
+    field_count = len(form_def["fields"]) if form_def else len(fields_map)
+    dense = bool(form_def) and field_count > 10
+    rows_html = _data_table_rows(form_def, fields_map, dense)
+    data_tbl_cls = "data-tbl cols-4" if dense else "data-tbl"
 
     qr_payload = f"DOC:{rec['doc_no']}|ID:{rec['party_id']}|PLATE:{rec['plate_no']}|SEAL:{rec['verify_hash']}"
     qr_b64 = generate_qr_png_b64(qr_payload)
@@ -1287,26 +1358,34 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     # فصل اسم المصاب/الحالة عن اسم المناوب المستلم في الإحالات الطبية
     if is_letter:
         recipient_title = (form_def or {}).get("recipient_role_title") or "المختص المستلم بحجز مرور أبو عريش"
-        col1_header = "توقيع حي بالإصبع — المختص المستلم بحجز مرور أبو عريش"
-        col1_top_name = receiver_name or recipient_title
-        col1_role_line = receiver_role or recipient_title
+        col1_header = "المختص المستلم (حجز مرور أبو عريش)"
+        col1_top_name = receiver_name
+        col1_role_line = _distinct_role(receiver_name, receiver_role)
+        if col1_role_line == recipient_title or "حجز مرور أبو عريش" in col1_role_line:
+            col1_role_line = ""
         citizen_pad_title = "لوحة توقيع: المختص المستلم بحجز مرور أبو عريش"
-        citizen_pad_sub = " — ".join([x for x in (receiver_name, receiver_role or recipient_title) if x])
+        citizen_pad_sub = " — ".join([x for x in (receiver_name, receiver_role) if x and x != recipient_title]) or recipient_title
     elif is_medical:
-        col1_header = "ختم وتوقيع جهة الاستلام (المستشفى / المختبر)"
-        col1_top_name = receiver_name or "المناوب المستلم"
-        col1_role_line = receiver_role
+        col1_header = "جهة الاستلام (المستشفى / المختبر)"
+        col1_top_name = receiver_name
+        col1_role_line = _distinct_role(receiver_name or col1_header, receiver_role)
         citizen_pad_title = "لوحة توقيع: المختص المناوب المستلم"
         citizen_pad_sub = " — ".join([x for x in (receiver_name, receiver_role) if x]) or "جهة الاستلام"
     else:
-        col1_header = "بصمة / توقيع الطرف المعني"
-        col1_top_name = rec.get("party_name") or "الطرف المعني"
+        col1_header = "الطرف المعني"
+        col1_top_name = (rec.get("party_name") or "").strip()
+        if col1_top_name in {"", "غير محدد", "-"}:
+            col1_top_name = ""
         col1_role_line = ""
         citizen_pad_title = "لوحة توقيع: المواطن / المقر / الطرف المعني"
-        citizen_pad_sub = col1_top_name
+        citizen_pad_sub = col1_top_name or "الطرف المعني"
 
+    col1_name_html = (
+        f'<div class="sig-person">{html.escape(col1_top_name)}</div>'
+        if col1_top_name else ""
+    )
     col1_role_html = (
-        f'<div style="font-size:9.5px; font-weight:700; color:#0f3d2e; margin-bottom:3px;">{col1_role_line}</div>'
+        f'<div class="sig-role">{html.escape(col1_role_line)}</div>'
         if col1_role_line else ""
     )
 
@@ -1314,7 +1393,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     needs_officer_pad = interactive_sig and ("توقيع حي" in officer_mode) and not rec.get("officer_stamp_b64")
     needs_duty_pad = interactive_sig and ("توقيع حي" in duty_mode) and not rec.get("duty_stamp_b64")
 
-    guide_hint = "<div class='sig-guide-hint no-print'>وقع بإصبعك على الشاشة</div>"
+    # إرشاد التوقيع يبقى في لوحة الرسم فوق الورقة، لا داخل خلايا المحضر
+    guide_hint = ""
 
     # --- Citizen / receiver cell ---
     if rec.get("citizen_stamp_b64"):
@@ -1391,9 +1471,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + "</div></div>"
         )
 
-    officer_mode_label = officer_mode or "توثيق الإعداد الميداني"
-    duty_mode_label = duty_mode or "قسم مرور العارضة"
-
     attachment_block = ""
     show_atts = rec.get("show_attachments_in_print", True)
     att_items = parse_attachments(rec.get("attachment_b64"))
@@ -1433,6 +1510,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     else:
         legal_box_title = f"الصيغة النظامية المعتمدة ({rec['category']}):"
     banner_title = (form_def or {}).get("official_title") or rec["form_title"]
+    sheet_cls = "a4-sheet dense-fit" if dense else "a4-sheet"
 
     return f"""
 <!DOCTYPE html>
@@ -1478,8 +1556,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         font-size: 11px; padding: 4px 12px; cursor: pointer; border-radius: 6px;
         border: 1px solid #475569; background: #1e293b; color: #e2e8f0;
     }}
-    .sig-guide {{ border: 1px dashed #94a3b8; border-radius: 6px; padding: 4px; min-height: 68px; }}
-    .sig-guide-hint {{ font-size: 9px; color: #64748b; margin-top: 2px; }}
+    .sig-guide {{ border: 1px dashed #94a3b8; border-radius: 6px; padding: 4px; min-height: 48px; }}
+    .sig-guide-hint, .sig-mode-note {{ display: none !important; }}
+    .sig-person {{ font-size: 10.5px; font-weight: 800; margin-bottom: 2px; }}
+    .sig-role {{ font-size: 9.5px; font-weight: 700; color: #0f3d2e; margin-bottom: 3px; }}
     .sig-slot-img {{ background: transparent; }}
     @media screen {{
         body {{ padding: 8px !important; overflow-x: hidden; }}
@@ -1515,16 +1595,33 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     table.data-tbl td {{ border: 1px solid #cbd5e1; padding: 4px 8px; font-size: 11px; vertical-align: top; direction: rtl; text-align: right; color: #0f172a !important; }}
     table.data-tbl td.lbl {{ width: 32%; background: #f4f7f6; font-weight: 700; color: #0f3d2e !important; }}
     table.data-tbl td.val {{ width: 68%; color: #0f172a !important; font-weight: 600; white-space: pre-line; }}
+    table.data-tbl.cols-4 td.lbl.half {{ width: 17%; }}
+    table.data-tbl.cols-4 td.val.half {{ width: 33%; }}
+    table.data-tbl.cols-4 td.lbl {{ width: 17%; }}
+    table.data-tbl.cols-4 td.val.span3 {{ width: auto; }}
+    .a4-sheet.dense-fit {{ min-height: 1040px; padding: 6mm 8mm; }}
+    .a4-sheet.dense-fit .hdr {{ padding-bottom: 4px; }}
+    .a4-sheet.dense-fit .hdr-right p {{ font-size: 10.5px; line-height: 1.32; }}
+    .a4-sheet.dense-fit .hdr-left p {{ font-size: 10px; line-height: 1.4; }}
+    .a4-sheet.dense-fit .doc-banner {{ font-size: 13px; margin: 4px 0; padding: 3px 6px; }}
+    .a4-sheet.dense-fit table.data-tbl {{ margin-bottom: 5px; }}
+    .a4-sheet.dense-fit table.data-tbl td {{ padding: 3px 6px; font-size: 10px; }}
+    .a4-sheet.dense-fit .legal-box {{ padding: 6px 8px; font-size: 10.5px; line-height: 1.55; }}
+    .a4-sheet.dense-fit table.sig-tbl td {{ height: 70px; padding: 3px; }}
+    .a4-sheet.dense-fit .sig-slot-img {{ height: 46px !important; }}
+    .a4-sheet.dense-fit .footer-qr {{ margin-top: 4px; padding: 3px 8px; }}
     .legal-box {{
         background: #f8fafc; border: 1px solid #0f3d2e; border-right: 5px solid #0f3d2e;
         border-radius: 6px; padding: 9px 12px; font-size: 11.5px; line-height: 1.72; text-align: justify; color: #0f172a !important;
     }}
-    table.sig-tbl {{ width: 100%; border-collapse: collapse; margin-top: 8px; text-align: center; }}
+    table.sig-tbl {{ width: 100%; border-collapse: collapse; margin-top: 8px; text-align: center; page-break-inside: avoid; break-inside: avoid; }}
     table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #94a3b8; padding: 4px; font-size: 10.5px; color: #0f3d2e !important; }}
-    table.sig-tbl td {{ border: 1px solid #94a3b8; padding: 5px; width: {col_width}; vertical-align: middle; height: 98px; color: #0f172a !important; }}
+    table.sig-tbl td {{ border: 1px solid #94a3b8; padding: 5px; width: {col_width}; vertical-align: middle; height: 86px; color: #0f172a !important; }}
+    .sig-footer {{ page-break-inside: avoid; break-inside: avoid; }}
     .footer-qr {{
         margin-top: 7px; background: #f4f7f6; border: 1px solid #cbd5e1; border-radius: 6px;
         padding: 5px 10px; display: flex; justify-content: space-between; align-items: center;
+        page-break-inside: avoid; break-inside: avoid;
     }}
     .attachment-section {{
         margin-top: 8px; border: 1px dashed #64748b; border-radius: 8px; padding: 8px 10px;
@@ -1554,21 +1651,32 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .att-pdf-name {{ font-size: 10.5px; font-weight: 700; color: #0f172a; margin-top: 4px; word-break: break-word; }}
     .att-pdf-note {{ font-size: 9px; color: #64748b; margin-top: 2px; }}
     @media print {{
-        @page {{ size: A4 portrait; margin: 6mm; }}
+        @page {{ size: A4 portrait; margin: 7mm; }}
         html, body {{ background: #fff !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }}
-        .toolbar, .no-print, .live-sig-dock, .clear-sig-btn, .sig-guide-hint,
+        .toolbar, .no-print, .live-sig-dock, .clear-sig-btn, .sig-guide-hint, .sig-mode-note,
         .live-pad-actions, .live-sig-dock-head {{ display: none !important; }}
         .sig-guide, .sig-guide-print-clean {{
             border: none !important; padding: 0 !important; margin: 0 !important; background: transparent !important;
         }}
         .live-pad-canvas {{ display: none !important; border: none !important; }}
         .sheet-stage {{ width: 100% !important; max-width: none !important; height: auto !important; overflow: visible !important; margin: 0 !important; }}
+        table.data-tbl td {{ padding: 3.5px 7px; }}
+        table.sig-tbl td {{ height: 72px; padding: 3px 4px; }}
+        .sig-footer, table.sig-tbl, .footer-qr {{ page-break-inside: avoid !important; break-inside: avoid !important; }}
         .a4-sheet {{
-            width: 100% !important; min-height: 274mm !important; margin: 0 !important;
-            background: #ffffff; color: #0f172a; padding: 9mm 12mm; border: 2px solid #0f3d2e;
+            width: 100% !important; min-height: 270mm !important; margin: 0 !important;
+            background: #ffffff; color: #0f172a; padding: 5mm 6mm; border: 2px solid #0f3d2e;
             display: flex; flex-direction: column; justify-content: space-between;
             box-shadow: none !important; transform: none !important; page-break-inside: avoid;
         }}
+        .a4-sheet.dense-fit {{
+            min-height: 0 !important; height: auto !important; padding: 3mm 4mm;
+            page-break-after: avoid; page-break-inside: avoid;
+        }}
+        .a4-sheet.dense-fit table.data-tbl td {{ padding: 3.5px 7px; font-size: 9.5px; }}
+        .a4-sheet.dense-fit .legal-box {{ font-size: 10px; line-height: 1.48; padding: 5px 7px; }}
+        .a4-sheet.dense-fit table.sig-tbl td {{ height: 58px; }}
+        .a4-sheet.dense-fit .sig-slot-img {{ height: 40px !important; }}
     }}
 </style>
 </head>
@@ -1579,7 +1687,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     {live_dock_html}
 
-    <div class="sheet-stage" id="sheetStage"><div class="a4-sheet" id="a4Sheet">
+    <div class="sheet-stage" id="sheetStage"><div class="{sheet_cls}" id="a4Sheet">
         <div>
             <div class="hdr">
                 <div class="hdr-right">
@@ -1600,7 +1708,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             </div>
 
             <div class="doc-banner">{banner_title}</div>
-            <table class="data-tbl">{rows_html}</table>
+            <table class="{data_tbl_cls}">{rows_html}</table>
 
             <div class="legal-box" dir="rtl" style="direction:rtl; text-align:justify; text-align-last:right;">
                 <div dir="rtl" style="font-weight:800; color:#0f3d2e; margin-bottom:4px; direction:rtl; text-align:right;">{legal_box_title}</div>
@@ -1609,11 +1717,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             {attachment_block}
         </div>
 
-        <div>
+        <div class="sig-footer">
             <table class="sig-tbl">
                 <thead>
                     <tr>
-                        <th>{col1_header}</th>
+                        <th>{html.escape(col1_header)}</th>
                         <th>ضابط الخفر</th>
                         <th>وحدة الحوادث</th>
                     </tr>
@@ -1621,20 +1729,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 <tbody>
                     <tr>
                         <td style="width:{col_width};">
-                            <div style="font-size:10.5px; font-weight:800; margin-bottom:2px;">{col1_top_name}</div>
+                            {col1_name_html}
                             {col1_role_html}
                             {citizen_box_inner}
-                            <div style="font-size:9px; color:#475569; margin-top:2px;">{citizen_mode}</div>
                         </td>
                         <td style="width:{col_width};">
-                            <div style="font-size:10.5px; font-weight:800; margin-bottom:2px;">{rec['officer_full']}</div>
+                            <div class="sig-person">{html.escape(str(rec['officer_full']))}</div>
                             {officer_box_inner}
-                            <div style="font-size:9px; color:#475569; margin-top:2px;">{officer_mode_label}</div>
                         </td>
                         <td style="width:{col_width};">
-                            <div style="font-size:11px; font-weight:800; margin-bottom:8px;">{rec['duty_full']}</div>
+                            <div class="sig-person">{html.escape(str(rec['duty_full']))}</div>
                             {duty_box_inner}
-                            <div style="font-size:9px; color:#475569; margin-top:8px;">{duty_mode_label}</div>
                         </td>
                     </tr>
                 </tbody>
