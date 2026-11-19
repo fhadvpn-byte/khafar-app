@@ -7,6 +7,7 @@ import io
 import html
 import random
 import hashlib
+import re
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from PIL import Image, ImageDraw, ImageOps
@@ -296,6 +297,26 @@ section[data-testid="stSidebar"] { display: none !important; }
     background: #161d24;
     border-color: #2d3846;
     color: #cbd5e1;
+}
+.gps-locate-btn {
+    border: 1px solid rgba(212, 168, 83, 0.7);
+    background: #1a1810;
+    color: #f3cc7a;
+    border-radius: 999px;
+    font-family: 'Cairo', sans-serif;
+    font-weight: 800;
+    font-size: 11px;
+    line-height: 1.35;
+    padding: 3px 10px;
+    cursor: pointer;
+}
+.gps-locate-btn:disabled { opacity: 0.7; cursor: wait; }
+.gps-map-link {
+    color: #7dd3fc;
+    font-size: 11px;
+    font-weight: 800;
+    text-decoration: none;
+    padding: 2px 4px;
 }
 .gps-mono-box {
     font-family: 'JetBrains Mono', monospace !important;
@@ -1283,8 +1304,18 @@ def init_db():
     if c.execute("SELECT COUNT(*) FROM shift_settings").fetchone()[0] == 0:
         c.execute("""
             INSERT INTO shift_settings (id, dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps)
-            VALUES (1, 'قسم مرور العارضة', 'ضابط الخفر', '', 'وحدة الحوادث', '', '17.0924° N, 43.0956° E')
+            VALUES (1, 'قسم مرور العارضة', 'ضابط الخفر', '', 'وحدة الحوادث', '', 'بانتظار رصد الموقع')
         """)
+    c.execute(
+        "UPDATE shift_settings SET default_gps=? WHERE id=1 AND default_gps IN (?, ?, ?, ?)",
+        (
+            "بانتظار رصد الموقع",
+            "17.0924° N, 43.0956° E",
+            "17.09240° N, 43.09560° E",
+            "17.0924, 43.0956",
+            "17.09240, 43.09560",
+        ),
+    )
 
     c.execute('UPDATE shift_settings SET officer_rank=?, duty_rank=? WHERE id=1 AND officer_rank=? AND duty_rank=?', ('ضابط الخفر','وحدة الحوادث','وحدة الحوادث','ضابط الخفر'))
 
@@ -1355,6 +1386,77 @@ def update_shift_settings(dept, o_rank, o_name, d_rank, d_name, gps):
     """, (dept, o_rank, o_name, d_rank, d_name, gps))
     conn.commit()
     conn.close()
+
+
+_LIVE_GPS_PAIR = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$")
+_DISPLAY_GPS = re.compile(
+    r"^\s*(\d+(?:\.\d+)?)\s*°\s*([NSns])\s*,\s*(\d+(?:\.\d+)?)\s*°\s*([EWew])\s*$"
+)
+
+
+def format_live_gps(lat: float, lng: float) -> str:
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
+        raise ValueError("gps out of range")
+    ns = "N" if lat >= 0 else "S"
+    ew = "E" if lng >= 0 else "W"
+    return f"{abs(lat):.5f}° {ns}, {abs(lng):.5f}° {ew}"
+
+
+def signed_gps_pair(text: str) -> tuple[float, float] | None:
+    raw = str(text or "").strip()
+    live = _LIVE_GPS_PAIR.match(raw)
+    if live:
+        lat, lng = float(live.group(1)), float(live.group(2))
+    else:
+        shown = _DISPLAY_GPS.match(raw)
+        if not shown:
+            return None
+        lat = float(shown.group(1)) * (1 if shown.group(2).upper() == "N" else -1)
+        lng = float(shown.group(3)) * (1 if shown.group(4).upper() == "E" else -1)
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
+        return None
+    return lat, lng
+
+
+def google_maps_url(text: str) -> str:
+    pair = signed_gps_pair(text)
+    if not pair:
+        return ""
+    lat, lng = pair
+    return f"https://www.google.com/maps?q={lat:.5f},{lng:.5f}"
+
+
+def update_default_gps(gps: str) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("UPDATE shift_settings SET default_gps=? WHERE id=1", (gps,))
+    conn.commit()
+    conn.close()
+
+
+def consume_live_gps_query() -> None:
+    raw = str(st.query_params.get("live_gps") or "").strip()
+    if not raw:
+        return
+    pair = signed_gps_pair(raw)
+    if pair:
+        update_default_gps(format_live_gps(*pair))
+        st.session_state["gps_toast"] = format_live_gps(*pair)
+    else:
+        st.session_state["gps_toast_err"] = "تعذر قراءة إحداثي الموقع."
+    st.query_params.pop("live_gps", None)
+
+
+def gps_header_line(coords: str) -> str:
+    safe = html.escape(str(coords or "—"))
+    maps = google_maps_url(coords)
+    if not maps:
+        return f"<p>إحداثيات الموقع: {safe}</p>"
+    href = html.escape(maps, quote=True)
+    return (
+        f"<p>إحداثيات الموقع: {safe} "
+        f"<a href='{href}' target='_blank' rel='noopener noreferrer' "
+        f"style='font-size:9px; font-weight:800; color:#0f3d2e; margin-right:6px;'>خرائط</a></p>"
+    )
 
 
 def save_record_to_db(rec: dict):
@@ -1718,6 +1820,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         legal_box_title = f"الصيغة النظامية المعتمدة ({rec['category']}):"
     banner_title = (form_def or {}).get("official_title") or rec["form_title"]
     sheet_cls = "a4-sheet dense-fit" if dense else "a4-sheet"
+    gps_line_html = gps_header_line(str(rec.get("gps_coords") or ""))
 
     return f"""
 <!DOCTYPE html>
@@ -1910,7 +2013,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 <div class="hdr-left">
                     <p>الرقم المرجعي: {rec['doc_no']}</p>
                     <p>التاريخ والوقت: {rec['created_at']}</p>
-                    <p>إحداثيات الموقع: {rec['gps_coords']}</p>
+                    {gps_line_html}
                 </div>
             </div>
 
@@ -2081,6 +2184,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 # 6. إدارة حالة الجلسة والتنقل
 # =====================================================================
 init_db()
+consume_live_gps_query()
 shift = get_shift_settings()
 logo_b64_global = get_traffic_logo_b64()
 now_ksa = datetime.now(KSA_TZ)
@@ -2225,6 +2329,12 @@ def render_compact_form_buttons(category: str, primary: bool = False):
 # =====================================================================
 # 7. الترويسة المدمجة + شريط الحالة الأفقي
 # =====================================================================
+gps_now = str(shift["default_gps"])
+gps_maps = google_maps_url(gps_now)
+gps_maps_html = (
+    f"<a class='gps-map-link' href='{html.escape(gps_maps, quote=True)}' target='_blank' rel='noopener noreferrer'>خرائط</a>"
+    if gps_maps else ""
+)
 st.markdown(f"""
 <div class="khafar-top-header">
     <div class="header-brand-row">
@@ -2238,13 +2348,53 @@ st.markdown(f"""
         </div>
     </div>
 </div>
+""", unsafe_allow_html=True)
+st.html(
+    f"""
 <div class="compact-status-bar">
     <span class="status-chip">🟢 محلي جاهز</span>
     <span class="status-chip gold">🧬 {html.escape(scanner_short)}</span>
-    <span class="status-chip gps">GPS {html.escape(str(shift['default_gps']))}</span>
+    <span class="status-chip gps" id="khafar-gps-chip">GPS {html.escape(gps_now)}</span>
+    {gps_maps_html}
+    <button type="button" class="gps-locate-btn" id="khafar-gps-btn">📍 تحديد موقعي الفعلي</button>
     <span class="status-chip time">{now_ksa.strftime('%Y/%m/%d %H:%M')}</span>
 </div>
-""", unsafe_allow_html=True)
+<script>
+(function () {{
+  var btn = document.getElementById("khafar-gps-btn");
+  if (!btn || btn.dataset.bound === "1") return;
+  btn.dataset.bound = "1";
+  btn.addEventListener("click", function () {{
+    if (!window.isSecureContext) {{
+      btn.textContent = "يلزم HTTPS أو localhost لرصد الموقع";
+      return;
+    }}
+    if (!navigator.geolocation) {{
+      btn.textContent = "المتصفح لا يدعم تحديد الموقع";
+      return;
+    }}
+    btn.disabled = true;
+    btn.textContent = "⏳ جارِ رصد الموقع...";
+    navigator.geolocation.getCurrentPosition(function (pos) {{
+      var lat = Number(pos.coords.latitude).toFixed(5);
+      var lng = Number(pos.coords.longitude).toFixed(5);
+      var url = new URL(window.location.href);
+      url.searchParams.set("live_gps", lat + "," + lng);
+      window.location.assign(url.toString());
+    }}, function () {{
+      btn.disabled = false;
+      btn.textContent = "📍 تعذر الرصد — اسمح بالموقع وأعد المحاولة";
+    }}, {{ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }});
+  }});
+}})();
+</script>
+""",
+    unsafe_allow_javascript=True,
+)
+if st.session_state.pop("gps_toast", None):
+    st.toast("تم حفظ موقعك الفعلي في الشريط والتقرير.", icon="📍")
+if st.session_state.pop("gps_toast_err", None):
+    st.toast("تعذر قراءة إحداثي الموقع.", icon="⚠️")
 
 nav_cols = st.columns(3)
 nav_items = [
@@ -2801,7 +2951,16 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
             with r4:
                 s_dname = st.text_input("اسم المناوب (اختياري)", value=shift["duty_name"])
 
-            s_gps = st.text_input("إحداثيات الموقع (GPS)", value=shift["default_gps"])
+            s_gps = st.text_input(
+                "إحداثيات الموقع (GPS)",
+                value=shift["default_gps"],
+                key=f"shift_gps_{shift['default_gps']}",
+            )
+            maps_for_field = google_maps_url(s_gps or shift["default_gps"])
+            if maps_for_field:
+                st.markdown(
+                    f"[🗺️ فتح الإحداثي في خرائط Google]({maps_for_field})",
+                )
 
             if st.form_submit_button("💾 حفظ الإعدادات", type="primary", use_container_width=True):
                 update_shift_settings("قسم مرور العارضة", s_orank, s_oname, s_drank, s_dname, s_gps)
