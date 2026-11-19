@@ -747,6 +747,8 @@ iframe[data-testid="stIFrame"],
 @media print {
     @page { size: A4 portrait; margin: 0mm !important; }
     html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], .main, .block-container {
+        direction: rtl !important;
+        transform: none !important;
         margin: 0 !important; padding: 0 !important; min-height: 0 !important; height: auto !important;
         max-height: 297mm !important; overflow: hidden !important; background: #ffffff !important;
     }
@@ -2177,8 +2179,25 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 <style>
     * {{ box-sizing: border-box; font-family: 'Cairo', sans-serif; }}
     /* ورقة A4 معزولة داخل iframe: نص داكن فوق خلفية بيضاء بغض النظر عن ثيم الجهاز */
-    html, body {{ color-scheme: light; }}
-    body {{ margin: 0; padding: 14px; background: #0d1316; direction: rtl; color: #e2e8f0; }}
+    html, body {{ color-scheme: light; direction: rtl; }}
+    body {{ margin: 0; padding: 14px; background: #0d1316; direction: rtl; text-align: right; color: #e2e8f0; }}
+    .a4-sheet, .a4-paper,
+    .a4-paper table, .a4-sheet table, .a4-paper thead, .a4-paper tbody, .a4-paper tr,
+    .a4-sheet thead, .a4-sheet tbody, .a4-sheet tr,
+    .a4-paper .hdr, .a4-sheet .hdr,
+    .a4-paper .sig-footer, .a4-sheet .sig-footer,
+    .a4-paper .sig-tbl, .a4-sheet .sig-tbl,
+    .a4-paper .sig-grid, .a4-sheet .sig-grid,
+    .a4-paper .footer-qr, .a4-sheet .footer-qr {{
+        direction: rtl !important;
+    }}
+    .a4-paper th, .a4-paper td, .a4-sheet th, .a4-sheet td {{
+        text-align: right !important;
+    }}
+    .a4-paper .sig-tbl th, .a4-paper .sig-tbl td, .a4-sheet .sig-tbl th, .a4-sheet .sig-tbl td,
+    .a4-paper .sig-cell, .a4-sheet .sig-cell, .a4-paper .sig-head, .a4-sheet .sig-head {{
+        text-align: center !important;
+    }}
     .toolbar {{
         max-width: 210mm; margin: 0 auto 12px auto; display: flex; gap: 10px;
         justify-content: center; background: #0f3d2e; border: 1px solid #d4a853; padding: 10px; border-radius: 10px;
@@ -2286,6 +2305,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .doc-banner {{
         background: #0f3d2e; color: #ffffff !important; text-align: center;
         padding: 3px 6px; border-radius: 6px; font-size: 13px; font-weight: 800; margin: 4px 0;
+        -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+    }}
+    table.data-tbl td.lbl, table.sig-tbl th, .sig-head {{
+        -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }}
     table.data-tbl {{ width: 100%; border-collapse: collapse; margin-bottom: 5px; }}
     table.data-tbl td {{ border: 1px solid #cbd5e1; padding: 4px 7px; font-size: 11.5px; vertical-align: top; direction: rtl; text-align: right; color: #0f172a !important; }}
@@ -2305,7 +2328,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .sig-footer {{ page-break-inside: avoid; break-inside: avoid; }}
     .footer-qr {{
         margin-top: 7px; background: #f4f7f6; border: 1px solid #cbd5e1; border-radius: 6px;
-        padding: 5px 10px; display: flex; justify-content: space-between; align-items: center;
+        padding: 5px 10px; display: flex; flex-direction: row; justify-content: space-between; align-items: center;
+        direction: rtl !important;
         page-break-inside: avoid; break-inside: avoid;
     }}
     .attachment-section {{
@@ -2337,7 +2361,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     @media print {{
         @page {{ size: A4 portrait; margin: 6mm !important; }}
-        html, body {{
+        html, body, .a4-preview-viewport, .a4-preview-wrapper {{
+            direction: rtl !important;
+            text-align: right !important;
+            transform: none !important;
             margin: 0 !important; padding: 0 !important; background: #ffffff !important;
             height: auto !important; max-height: none !important; overflow: visible !important;
         }}
@@ -2351,9 +2378,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             height: auto !important;
             overflow: visible !important;
             width: 100% !important;
-            direction: ltr !important;
+            direction: rtl !important;
+            transform: none !important;
         }}
         .a4-sheet, .a4-paper {{
+            direction: rtl !important;
             transform: none !important;
             width: 100% !important;
             max-width: 100% !important;
