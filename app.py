@@ -559,7 +559,7 @@ div[data-testid="stTabs"] div.stButton > button[kind="primary"]:hover {
     color: #ffffff !important;
     box-shadow: 0 0 16px rgba(253, 230, 138, 0.22) !important;
 }
-@media (max-width: 640px) {
+@media only screen and (max-width: 640px) {
     div[data-testid="stTabs"] button[data-baseweb="tab"],
     [data-testid="stTabs"] [data-testid="stTab"] {
         min-height: 68px !important;
@@ -2482,7 +2482,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         .toolbar {{ width: 100%; padding: 8px; }}
         .print-btn {{ width: 100%; max-width: 360px; font-size: 13px; padding: 8px 14px; }}
         .a4-preview-viewport {{
-            direction: ltr !important;
+            direction: rtl !important;
             width: 100% !important;
             overflow: hidden !important;
             display: block !important;
@@ -2519,6 +2519,22 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             color: #0f172a;
         }}
         .a4-sheet .doc-banner {{ color: #ffffff !important; }}
+    }}
+    @media only screen and (max-width: 820px) {{
+        .a4-preview-viewport {{
+            direction: rtl !important;
+            width: 100% !important;
+            overflow: hidden !important;
+            display: block !important;
+            padding: 0 !important;
+        }}
+        .a4-sheet, .a4-paper {{
+            width: 794px !important;
+            max-width: none !important;
+            direction: rtl !important;
+            margin: 0 !important;
+            transform-origin: top right !important;
+        }}
     }}
     .a4-fit {{ display: flex; flex-direction: column; justify-content: flex-start; min-height: 0; height: auto; }}
     .hdr {{
@@ -2797,20 +2813,23 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         const paper = document.getElementById("a4Sheet");
         if (!viewport || !paper) return;
         const availW = viewport.clientWidth;
-        paper.style.width = "794px";
-        paper.style.height = "auto";
-        paper.style.minHeight = "0";
-        paper.style.maxHeight = "none";
-        if (availW > 0 && availW < 794) {{
+        const mobile = window.matchMedia("(max-width: 820px)").matches && availW > 0 && availW < 794;
+        if (mobile) {{
             const scale = availW / 794;
-            paper.style.transformOrigin = "top left";
-            paper.style.transform = "scale(" + scale + ")";
+            paper.style.width = "794px";
             paper.style.margin = "0";
-            viewport.style.height = Math.ceil(paper.offsetHeight * scale) + 12 + "px";
+            paper.style.direction = "rtl";
+            paper.style.transformOrigin = "top right";
+            paper.style.transform = "scale(" + scale + ")";
+            const nextH = Math.ceil(paper.offsetHeight * scale) + "px";
+            if (viewport.style.height !== nextH) viewport.style.height = nextH;
         }} else {{
             paper.style.transform = "none";
+            paper.style.transformOrigin = "";
+            paper.style.direction = "";
             paper.style.margin = "0 auto";
-            viewport.style.height = "auto";
+            paper.style.width = "";
+            if (viewport.style.height !== "auto") viewport.style.height = "auto";
         }}
         try {{
             if (window.frameElement) {{
@@ -2831,6 +2850,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         if (paper) {{
             paper.style.transform = "none";
+            paper.style.transformOrigin = "";
             paper.style.margin = "0";
             paper.style.width = "100%";
             paper.style.height = "auto";
@@ -2860,6 +2880,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     window.addEventListener("afterprint", restoreA4Preview);
     window.addEventListener("load", fitA4Preview);
     window.addEventListener("resize", fitA4Preview);
+    if (window.ResizeObserver) {{
+        const previewBox = document.getElementById("a4PreviewViewport");
+        if (previewBox) new ResizeObserver(fitA4Preview).observe(previewBox);
+    }}
     if (document.fonts && document.fonts.ready) {{
         document.fonts.ready.then(fitA4Preview);
     }}
