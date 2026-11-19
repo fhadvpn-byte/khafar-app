@@ -8,6 +8,7 @@ import html
 import random
 import hashlib
 import re
+import uuid
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from PIL import Image, ImageDraw, ImageOps
@@ -1577,6 +1578,22 @@ def generate_qr_png_b64(data_text: str) -> str:
 DB_PATH = "khafar_system.db"
 
 
+BLANK_SHIFT = {
+    "dept_name": "قسم مرور العارضة",
+    "officer_rank": "ضابط الخفر",
+    "officer_name": "",
+    "duty_rank": "وحدة الحوادث",
+    "duty_name": "",
+    "default_gps": "بانتظار رصد الموقع",
+}
+DEVICE_COOKIE = "khafar_device_uid"
+SHIFT_COOKIE = "khafar_shift"
+_UUID4_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+
+
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -1596,18 +1613,23 @@ def init_db():
             INSERT INTO shift_settings (id, dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps)
             VALUES (1, 'قسم مرور العارضة', 'ضابط الخفر', '', 'وحدة الحوادث', '', 'بانتظار رصد الموقع')
         """)
-    c.execute(
-        "UPDATE shift_settings SET default_gps=? WHERE id=1 AND default_gps IN (?, ?, ?, ?)",
-        (
-            "بانتظار رصد الموقع",
-            "17.0924° N, 43.0956° E",
-            "17.09240° N, 43.09560° E",
-            "17.0924, 43.0956",
-            "17.09240, 43.09560",
-        ),
-    )
-
-    c.execute('UPDATE shift_settings SET officer_rank=?, duty_rank=? WHERE id=1 AND officer_rank=? AND duty_rank=?', ('ضابط الخفر','وحدة الحوادث','وحدة الحوادث','ضابط الخفر'))
+    # السجل العام لم يعد مصدراً للبيانات الشخصية: تُمسح الأسماء والإحداثيات منه دائماً.
+    c.execute("""
+        UPDATE shift_settings
+        SET dept_name=?, officer_rank=?, officer_name='', duty_rank=?, duty_name='', default_gps=?
+        WHERE id=1
+    """, ("قسم مرور العارضة", "ضابط الخفر", "وحدة الحوادث", "بانتظار رصد الموقع"))
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS device_shifts (
+            device_hash TEXT PRIMARY KEY,
+            dept_name TEXT,
+            officer_rank TEXT,
+            officer_name TEXT,
+            duty_rank TEXT,
+            duty_name TEXT,
+            default_gps TEXT
+        )
+    """)
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS records (
@@ -1643,6 +1665,7 @@ def init_db():
         ("duty_stamp_b64", "TEXT"),
         ("receiver_name", "TEXT"),
         ("receiver_role", "TEXT"),
+        ("device_hash", "TEXT"),
     ):
         if col_name not in existing_cols:
             c.execute(f"ALTER TABLE records ADD COLUMN {col_name} {col_type}")
@@ -1659,23 +1682,122 @@ RECEIVER_ROLE_OPTIONS = [
 ]
 
 
-def get_shift_settings() -> dict:
+def _blank_shift() -> dict:
+    return dict(BLANK_SHIFT)
+
+
+def _clean_shift(data: dict | None) -> dict:
+    cleaned = _blank_shift()
+    if not isinstance(data, dict):
+        return cleaned
+    for key in cleaned:
+        if data.get(key) is None:
+            continue
+        cleaned[key] = str(data.get(key) or "")[:180]
+    cleaned["dept_name"] = "قسم مرور العارضة"
+    if not cleaned["officer_rank"].strip():
+        cleaned["officer_rank"] = "ضابط الخفر"
+    if not cleaned["duty_rank"].strip():
+        cleaned["duty_rank"] = "وحدة الحوادث"
+    if not cleaned["default_gps"].strip():
+        cleaned["default_gps"] = "بانتظار رصد الموقع"
+    return cleaned
+
+
+def device_hash_for(uid: str) -> str:
+    return hashlib.sha256(uid.encode("utf-8")).hexdigest()
+
+
+def read_request_cookie(name: str) -> str:
+    try:
+        cookies = st.context.cookies
+    except Exception:
+        return ""
+    if not cookies:
+        return ""
+    try:
+        value = cookies.get(name, "")
+    except Exception:
+        return ""
+    return str(value or "").strip().strip('"')
+
+
+def read_device_uid() -> str:
+    uid = read_request_cookie(DEVICE_COOKIE)
+    return uid if _UUID4_RE.match(uid) else ""
+
+
+def get_device_shift(device_hash: str) -> dict:
+    if not device_hash:
+        return _blank_shift()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    row = conn.execute("SELECT * FROM shift_settings WHERE id = 1").fetchone()
+    row = conn.execute(
+        "SELECT dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps FROM device_shifts WHERE device_hash=?",
+        (device_hash,),
+    ).fetchone()
     conn.close()
-    return dict(row)
+    if not row:
+        return _blank_shift()
+    return _clean_shift(dict(row))
 
 
-def update_shift_settings(dept, o_rank, o_name, d_rank, d_name, gps):
+def device_shift_exists(device_hash: str) -> bool:
+    if not device_hash:
+        return False
+    conn = sqlite3.connect(DB_PATH)
+    found = conn.execute("SELECT 1 FROM device_shifts WHERE device_hash=?", (device_hash,)).fetchone()
+    conn.close()
+    return bool(found)
+
+
+def save_device_shift(device_hash: str, data: dict) -> dict:
+    cleaned = _clean_shift(data)
+    if not device_hash:
+        return cleaned
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
-        UPDATE shift_settings
-        SET dept_name=?, officer_rank=?, officer_name=?, duty_rank=?, duty_name=?, default_gps=?
-        WHERE id = 1
-    """, (dept, o_rank, o_name, d_rank, d_name, gps))
+        INSERT INTO device_shifts (device_hash, dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(device_hash) DO UPDATE SET
+            dept_name=excluded.dept_name,
+            officer_rank=excluded.officer_rank,
+            officer_name=excluded.officer_name,
+            duty_rank=excluded.duty_rank,
+            duty_name=excluded.duty_name,
+            default_gps=excluded.default_gps
+    """, (
+        device_hash, cleaned["dept_name"], cleaned["officer_rank"], cleaned["officer_name"],
+        cleaned["duty_rank"], cleaned["duty_name"], cleaned["default_gps"],
+    ))
     conn.commit()
     conn.close()
+    return cleaned
+
+
+def clear_device_shift(device_hash: str) -> None:
+    if not device_hash:
+        return
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("DELETE FROM device_shifts WHERE device_hash=?", (device_hash,))
+    conn.commit()
+    conn.close()
+
+
+def shift_from_cookie() -> dict | None:
+    raw = read_request_cookie(SHIFT_COOKIE)
+    if not raw:
+        return None
+    parsed = None
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        try:
+            from urllib.parse import unquote
+            parsed = json.loads(unquote(raw))
+        except Exception:
+            return None
+    return _clean_shift(parsed) if isinstance(parsed, dict) else None
 
 
 _LIVE_GPS_PAIR = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$")
@@ -1716,21 +1838,22 @@ def google_maps_url(text: str) -> str:
     return f"https://www.google.com/maps?q={lat:.5f},{lng:.5f}"
 
 
-def update_default_gps(gps: str) -> None:
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("UPDATE shift_settings SET default_gps=? WHERE id=1", (gps,))
-    conn.commit()
-    conn.close()
+def update_default_gps(device_hash: str, gps: str) -> None:
+    current = get_device_shift(device_hash)
+    current["default_gps"] = gps
+    save_device_shift(device_hash, current)
 
 
-def consume_live_gps_query() -> None:
+def consume_live_gps_query(device_hash: str) -> None:
     raw = str(st.query_params.get("live_gps") or "").strip()
     if not raw:
         return
     pair = signed_gps_pair(raw)
-    if pair:
-        update_default_gps(format_live_gps(*pair))
+    if pair and device_hash:
+        update_default_gps(device_hash, format_live_gps(*pair))
         st.session_state["gps_toast"] = format_live_gps(*pair)
+    elif pair:
+        st.session_state["gps_toast_err"] = "تعذر ربط الموقع بهذا الجهاز بعد."
     else:
         st.session_state["gps_toast_err"] = "تعذر قراءة إحداثي الموقع."
     st.query_params.pop("live_gps", None)
@@ -1749,7 +1872,9 @@ def gps_header_line(coords: str) -> str:
     )
 
 
-def save_record_to_db(rec: dict):
+def save_record_to_db(rec: dict, device_hash: str) -> bool:
+    if not device_hash:
+        return False
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
         INSERT INTO records (
@@ -1757,8 +1882,8 @@ def save_record_to_db(rec: dict):
             gps_coords, created_at, fields_json, legal_text, citizen_stamp_b64,
             citizen_auth_mode, officer_stamp_b64, attachment_b64, officer_full,
             duty_full, dept_name, verify_hash, officer_auth_mode, duty_auth_mode,
-            duty_stamp_b64, receiver_name, receiver_role
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            duty_stamp_b64, receiver_name, receiver_role, device_hash
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         rec["doc_no"], rec["form_id"], rec["form_title"], rec["category"],
         rec["party_name"], rec["party_id"], rec["plate_no"], rec["gps_coords"],
@@ -1769,33 +1894,118 @@ def save_record_to_db(rec: dict):
         rec.get("officer_auth_mode", ""), rec.get("duty_auth_mode", ""),
         rec.get("duty_stamp_b64", ""),
         rec.get("receiver_name", ""), rec.get("receiver_role", ""),
+        device_hash,
     ))
     conn.commit()
     conn.close()
+    return True
 
 
-def search_records_db(q: str = "") -> list:
+def search_records_db(q: str = "", device_hash: str = "") -> list:
+    if not device_hash:
+        return []
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     q = q.strip()
     if not q:
-        rows = conn.execute("SELECT * FROM records ORDER BY id DESC").fetchall()
+        rows = conn.execute(
+            "SELECT * FROM records WHERE device_hash=? ORDER BY id DESC",
+            (device_hash,),
+        ).fetchall()
     else:
         like = f"%{q}%"
         rows = conn.execute("""
             SELECT * FROM records
-            WHERE party_id LIKE ? OR plate_no LIKE ? OR party_name LIKE ? OR doc_no LIKE ? OR form_title LIKE ?
+            WHERE device_hash=? AND (
+                party_id LIKE ? OR plate_no LIKE ? OR party_name LIKE ? OR doc_no LIKE ? OR form_title LIKE ?
+            )
             ORDER BY id DESC
-        """, (like, like, like, like, like)).fetchall()
+        """, (device_hash, like, like, like, like, like)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def delete_record_db(rec_id: int):
+def delete_record_db(rec_id: int, device_hash: str):
+    if not device_hash:
+        return
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("DELETE FROM records WHERE id = ?", (rec_id,))
+    conn.execute("DELETE FROM records WHERE id=? AND device_hash=?", (rec_id, device_hash))
     conn.commit()
     conn.close()
+
+
+def render_device_bootstrap(server_has_uid: bool, shift_payload: dict | None, wipe: bool) -> None:
+    """يبقي معرّف الجهاز في الكوكيز والتخزين المحلي دون إضافته إلى الرابط."""
+    shift_js = json.dumps(shift_payload, ensure_ascii=True) if shift_payload else "null"
+    st.html(
+        f"""
+<script>
+(function () {{
+  var uidKey = "khafar_device_uid";
+  var shiftKey = "khafar_shift";
+  var serverHasUid = {"true" if server_has_uid else "false"};
+  var wipe = {"true" if wipe else "false"};
+  var officialShift = {shift_js};
+  function readCookie(name) {{
+    var parts = (document.cookie || "").split("; ");
+    for (var i = 0; i < parts.length; i++) {{
+      var pair = parts[i].split("=");
+      if (pair[0] === name) return decodeURIComponent(pair.slice(1).join("=") || "");
+    }}
+    return "";
+  }}
+  function writeCookie(name, value, maxAge) {{
+    document.cookie = name + "=" + encodeURIComponent(value) + "; max-age=" + maxAge + "; path=/; SameSite=Lax";
+  }}
+  function uuid4() {{
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    var bytes = new Uint8Array(16);
+    if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    var hex = [];
+    for (var i = 0; i < 16; i++) hex.push(bytes[i].toString(16).padStart(2, "0"));
+    return hex.slice(0, 4).join("") + "-" + hex.slice(4, 6).join("") + "-" + hex.slice(6, 8).join("") + "-" + hex.slice(8, 10).join("") + "-" + hex.slice(10).join("");
+  }}
+  var uid = "";
+  try {{ uid = localStorage.getItem(uidKey) || ""; }} catch (e) {{}}
+  if (!uid) uid = readCookie(uidKey);
+  if (!/^[0-9a-f]{{8}}-[0-9a-f]{{4}}-4[0-9a-f]{{3}}-[89ab][0-9a-f]{{3}}-[0-9a-f]{{12}}$/i.test(uid)) uid = uuid4();
+  try {{ localStorage.setItem(uidKey, uid); }} catch (e) {{}}
+  writeCookie(uidKey, uid, 31536000);
+  if (wipe) {{
+    try {{ localStorage.removeItem(shiftKey); }} catch (e) {{}}
+    writeCookie(shiftKey, "", 0);
+    if (!sessionStorage.getItem("khafar_wiped")) {{
+      sessionStorage.setItem("khafar_wiped", "1");
+      window.location.replace(window.location.pathname + window.location.search + window.location.hash);
+      return;
+    }}
+    sessionStorage.removeItem("khafar_wiped");
+  }} else if (officialShift) {{
+    var packed = JSON.stringify(officialShift);
+    try {{ localStorage.setItem(shiftKey, packed); }} catch (e) {{}}
+    writeCookie(shiftKey, packed, 31536000);
+  }} else {{
+    var localShift = "";
+    try {{ localShift = localStorage.getItem(shiftKey) || ""; }} catch (e) {{}}
+    if (localShift && !readCookie(shiftKey) && !sessionStorage.getItem("khafar_shift_sync")) {{
+      sessionStorage.setItem("khafar_shift_sync", "1");
+      writeCookie(shiftKey, localShift, 31536000);
+      window.location.replace(window.location.pathname + window.location.search + window.location.hash);
+      return;
+    }}
+    sessionStorage.removeItem("khafar_shift_sync");
+  }}
+  if (!serverHasUid && !sessionStorage.getItem("khafar_uid_boot")) {{
+    sessionStorage.setItem("khafar_uid_boot", "1");
+    window.location.replace(window.location.pathname + window.location.search + window.location.hash);
+  }}
+}})();
+</script>
+""",
+        unsafe_allow_javascript=True,
+    )
 
 
 # =====================================================================
@@ -2665,8 +2875,19 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 # 6. إدارة حالة الجلسة والتنقل
 # =====================================================================
 init_db()
-consume_live_gps_query()
-shift = get_shift_settings()
+_device_uid = read_device_uid()
+DEVICE_HASH = device_hash_for(_device_uid) if _device_uid else ""
+_wipe_shift = bool(st.session_state.get("wipe_device_shift"))
+if DEVICE_HASH and not _wipe_shift and not device_shift_exists(DEVICE_HASH):
+    _cookie_shift = shift_from_cookie()
+    if _cookie_shift:
+        save_device_shift(DEVICE_HASH, _cookie_shift)
+consume_live_gps_query(DEVICE_HASH)
+shift = get_device_shift(DEVICE_HASH)
+_mirror_shift = shift if (DEVICE_HASH and device_shift_exists(DEVICE_HASH) and not _wipe_shift) else None
+render_device_bootstrap(bool(_device_uid), _mirror_shift, _wipe_shift)
+if _wipe_shift:
+    st.session_state.pop("wipe_device_shift", None)
 logo_b64_global = get_traffic_logo_b64()
 now_ksa = datetime.now(KSA_TZ)
 
@@ -2762,7 +2983,7 @@ def reset_doc_state():
     st.session_state.att_upload_nonce = int(st.session_state.get("att_upload_nonce") or 0) + 1
 
 
-all_archived = search_records_db("")
+all_archived = search_records_db("", DEVICE_HASH)
 archive_count = len(all_archived)
 
 header_logo_widget = (
@@ -3394,9 +3615,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             st.write("")
             act1, act2 = st.columns(2)
             with act1:
-                if st.button("💾 حفظ الوثيقة نهائياً في الأرشيف المحلي", type="primary", use_container_width=True):
-                    save_record_to_db(ready_record)
-                    st.success(f"تم حفظ الوثيقة ({ready_record['doc_no']}) في الأرشيف المحلي بنجاح.")
+                if not DEVICE_HASH:
+                    st.warning("يُجهَّز تعريف هذا الجهاز داخل المتصفح قبل حفظ الأرشيف. أعد المحاولة بعد لحظة.")
+                elif st.button("💾 حفظ الوثيقة نهائياً في الأرشيف المحلي", type="primary", use_container_width=True):
+                    save_record_to_db(ready_record, DEVICE_HASH)
+                    st.success(f"تم حفظ الوثيقة ({ready_record['doc_no']}) في أرشيف هذا الجهاز فقط.")
             with act2:
                 st.download_button(
                     "⬇️ تنزيل الوثيقة الرسمية للطباعة والمشاركة",
@@ -3428,10 +3651,10 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
     """, unsafe_allow_html=True)
 
     search_q = st.text_input("🔍 ابحث برقم الهوية، رقم اللوحة، اسم الطرف، أو الرقم المرجعي:")
-    records = search_records_db(search_q)
+    records = search_records_db(search_q, DEVICE_HASH)
 
     if not records:
-        st.info("لا توجد سجلات محفوظة حالياً في قاعدة البيانات المحلية.")
+        st.info("لا توجد سجلات محفوظة على هذا الجهاز.")
     else:
         for r in records:
             with st.expander(f"📌 {r['form_title']}  —  {r['party_name']}  |  اللوحة: {r['plate_no']}  |  ({r['doc_no']})"):
@@ -3452,7 +3675,7 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
                     )
                 with c_del:
                     if st.button("🗑️ حذف السجل", key=f"del_{r['id']}", use_container_width=True):
-                        delete_record_db(r["id"])
+                        delete_record_db(r["id"], DEVICE_HASH)
                         safe_rerun()
 
                 if st.checkbox("عرض ومعاينة ورقة الـ A4 الرسمية للطباعة", key=f"chk_prev_{r['id']}"):
@@ -3472,6 +3695,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
     sett_tab, otg_tab = st.tabs(["👮 مناوبة الخفر", "🧬 بصمة الشحن OTG"])
 
     with sett_tab:
+        st.caption("إعدادات المناوبة والموقع تُحفظ على هذا الجوال فقط، ولا يراها من يفتح الرابط من جهاز آخر.")
         with st.form("shift_update_form"):
             s_dept = st.text_input("القسم", value=shift["dept_name"], disabled=True)
             r1, r2 = st.columns([1, 2])
@@ -3497,10 +3721,30 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                     f"[🗺️ فتح الإحداثي في خرائط Google]({maps_for_field})",
                 )
 
-            if st.form_submit_button("💾 حفظ الإعدادات", type="primary", use_container_width=True):
-                update_shift_settings("قسم مرور العارضة", s_orank, s_oname, s_drank, s_dname, s_gps)
-                st.success("تم حفظ الإعدادات بنجاح.")
+            save_col, clear_col = st.columns(2)
+            with save_col:
+                save_shift = st.form_submit_button("💾 حفظ الإعدادات", type="primary", use_container_width=True)
+            with clear_col:
+                clear_shift = st.form_submit_button("🗑️ مسح بياناتي من هذا الجهاز", use_container_width=True)
+            if clear_shift:
+                clear_device_shift(DEVICE_HASH)
+                st.session_state["wipe_device_shift"] = True
+                st.success("تم مسح اسم المناوبة وبيانات هذا الجهاز من المتصفح.")
                 safe_rerun()
+            if save_shift:
+                if not DEVICE_HASH:
+                    st.warning("يُجهَّز تعريف هذا الجهاز داخل المتصفح. أعد الحفظ بعد لحظة.")
+                else:
+                    save_device_shift(DEVICE_HASH, {
+                        "dept_name": "قسم مرور العارضة",
+                        "officer_rank": s_orank,
+                        "officer_name": s_oname,
+                        "duty_rank": s_drank,
+                        "duty_name": s_dname,
+                        "default_gps": s_gps,
+                    })
+                    st.success("تم حفظ الإعدادات على هذا الجهاز فقط.")
+                    safe_rerun()
 
     with otg_tab:
         st.caption("وضع المحاكاة الصوري معزول حتى توصيل القارئ الفعلي عبر Type-C.")
