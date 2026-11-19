@@ -2394,7 +2394,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     else:
         legal_box_title = f"الصيغة النظامية المعتمدة ({rec['category']}):"
     banner_title = (form_def or {}).get("official_title") or rec["form_title"]
-    sheet_cls = "a4-sheet a4-paper dense-fit" + (" parties-fit" if multi_sig else "")
+    sheet_cls = "a4-sheet a4-paper dense-fit"
     gps_line_html = gps_header_line(str(rec.get("gps_coords") or ""))
 
     return f"""
@@ -2464,14 +2464,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .sig-person {{ font-size: 10.5px; font-weight: 800; margin-bottom: 2px; }}
     .sig-role {{ font-size: 9.5px; font-weight: 700; color: #0f3d2e; margin-bottom: 3px; }}
     .sig-grid {{
-        display: grid; margin-top: 4px; border: 1px solid #94a3b8;
+        display: grid; margin-top: 10px; border: 1px solid #94a3b8;
         page-break-inside: avoid; break-inside: avoid;
     }}
     .sig-cell {{
-        border: 1px solid #94a3b8; text-align: center; padding: 2px 3px; min-height: 54px;
+        border: 1px solid #94a3b8; text-align: center; padding: 12px 10px !important; min-height: 95px; line-height: 1.65 !important;
     }}
     .sig-head {{
-        background: #f1f5f3; color: #0f3d2e !important; font-size: 9.5px; font-weight: 800; padding: 2px 3px;
+        background: #f1f5f3; color: #0f3d2e !important; font-size: 12px; font-weight: 800; padding: 9px !important; line-height: 1.65 !important;
     }}
     .sig-grid .sig-slot-img {{ height: 34px !important; max-width: 96%; }}
     .sig-grid .sig-person {{ font-size: 9px; }}
@@ -2494,17 +2494,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             direction: rtl !important;
             width: 794px !important;
             height: auto !important;
-            min-height: 0 !important;
+            min-height: 296mm !important;
             max-height: none !important;
             box-sizing: border-box !important;
             margin: 0 auto;
             background: #ffffff !important;
             color: #0f172a !important;
-            padding: 8mm 10mm;
+            padding: 12mm 13mm !important;
             border: 2px solid #0f3d2e;
             overflow: visible !important;
-            display: flex;
-            flex-direction: column;
+            display: flex !important;
+            flex-direction: column !important;
             justify-content: flex-start !important;
             box-shadow: 0 12px 32px rgba(0,0,0,0.45);
             transform: none;
@@ -2513,7 +2513,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             justify-content: flex-start !important;
             min-height: 0 !important;
             height: auto !important;
-            flex: 0 0 auto;
+            flex: 1 1 auto;
         }}
         .a4-sheet, .a4-sheet p, .a4-sheet td, .a4-sheet th, .a4-sheet div, .a4-sheet span {{
             color: #0f172a;
@@ -2536,44 +2536,53 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             transform-origin: top right !important;
         }}
     }}
-    .a4-fit {{ display: flex; flex-direction: column; justify-content: flex-start; min-height: 0; height: auto; }}
+    .a4-fit {{ display: flex; flex-direction: column; justify-content: flex-start; flex: 1 1 auto; min-height: 100%; }}
     .hdr {{
         display: grid; grid-template-columns: 1.35fr 0.8fr 1.15fr;
-        align-items: center; border-bottom: 2px solid #0f3d2e; padding-bottom: 3px;
+        align-items: center; border-bottom: 2px solid #0f3d2e;
+        padding-bottom: 12px; margin-bottom: 16px;
     }}
-    .hdr-right {{ text-align: center; line-height: 1.28; }}
-    .hdr-right p {{ margin: 0; font-size: 11px; font-weight: 800; color: #0f172a !important; }}
+    .hdr-right {{ text-align: center; line-height: 1.7 !important; }}
+    .hdr-right p {{ margin: 0; font-size: 13px !important; font-weight: 800; line-height: 1.7 !important; color: #0f172a !important; }}
     .hdr-center {{ text-align: center; display: flex; justify-content: center; align-items: center; }}
     .hdr-center img {{ height: 58px !important; width: auto; object-fit: contain; }}
-    .hdr-left {{ text-align: right; padding-right: 8px; line-height: 1.35; }}
-    .hdr-left p {{ margin: 0; font-size: 10.5px; font-weight: 700; color: #0f172a !important; }}
+    .hdr-left {{ text-align: right; padding-right: 8px; line-height: 1.7 !important; }}
+    .hdr-left p {{ margin: 0; font-size: 13px !important; font-weight: 700; line-height: 1.7 !important; color: #0f172a !important; }}
     .doc-banner {{
         background: #0f3d2e; color: #ffffff !important; text-align: center;
-        padding: 3px 6px; border-radius: 6px; font-size: 13px; font-weight: 800; margin: 4px 0;
+        padding: 10px 16px !important; border-radius: 6px; font-size: 16px !important; font-weight: 800;
+        margin: 0 0 18px 0 !important;
         -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }}
     table.data-tbl td.lbl, table.sig-tbl th, .sig-head {{
         -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }}
-    table.data-tbl {{ width: 100%; border-collapse: collapse; margin-bottom: 5px; }}
-    table.data-tbl td {{ border: 1px solid #cbd5e1; padding: 4px 7px; font-size: 11.5px; vertical-align: top; direction: rtl; text-align: right; color: #0f172a !important; }}
-    table.data-tbl td.lbl {{ width: 17%; background: #f4f7f6; font-weight: 700; color: #0f3d2e !important; }}
-    table.data-tbl td.val {{ width: 33%; color: #0f172a !important; font-weight: 600; white-space: pre-line; font-size: 12px; }}
-    table.data-tbl.cols-4 td.lbl.half {{ width: 17%; }}
-    table.data-tbl.cols-4 td.val.half {{ width: 33%; }}
-    table.data-tbl.cols-4 td.lbl {{ width: 17%; }}
+    table.data-tbl {{ width: 100%; border-collapse: collapse; margin-bottom: 20px !important; }}
+    table.data-tbl td {{ border: 1px solid #cbd5e1; padding: 10px 12px !important; font-size: 13px !important; line-height: 1.75 !important; vertical-align: top; direction: rtl; text-align: right; color: #0f172a !important; }}
+    table.data-tbl td.lbl {{ width: 21%; background: #f4f7f6; font-weight: 700; color: #0f3d2e !important; }}
+    table.data-tbl td.val {{ width: 29%; color: #0f172a !important; font-weight: 600; white-space: pre-line; font-size: 13px !important; }}
+    table.data-tbl.cols-4 td.lbl.half {{ width: 21%; }}
+    table.data-tbl.cols-4 td.val.half {{ width: 29%; }}
+    table.data-tbl.cols-4 td.lbl {{ width: 21%; }}
     table.data-tbl.cols-4 td.val.span3 {{ width: auto; }}
     .legal-box {{
         background: #f8fafc; border: 1px solid #0f3d2e; border-right: 5px solid #0f3d2e;
-        border-radius: 6px; padding: 6px 8px; font-size: 11.5px; line-height: 1.5; text-align: justify; color: #0f172a !important;
+        border-radius: 6px; padding: 16px 20px !important; margin-bottom: 22px !important;
+        font-size: 13.5px !important; line-height: 2.05 !important; text-align: justify; color: #0f172a !important;
     }}
-    table.sig-tbl {{ width: 100%; border-collapse: collapse; margin-top: 4px; text-align: center; page-break-inside: avoid; break-inside: avoid; }}
-    table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #94a3b8; padding: 3px; font-size: 10.5px; color: #0f3d2e !important; }}
-    table.sig-tbl td {{ border: 1px solid #94a3b8; padding: 3px; width: {col_width}; vertical-align: middle; height: 62px; color: #0f172a !important; }}
-    .sig-footer {{ page-break-inside: avoid; break-inside: avoid; }}
+    .legal-box > div:first-child {{ margin-bottom: 10px !important; }}
+    .legal-box div {{ font-size: 13.5px !important; line-height: 2.05 !important; }}
+    table.sig-tbl {{ width: 100%; border-collapse: collapse; margin-top: 10px; text-align: center; page-break-inside: avoid; break-inside: avoid; }}
+    table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #94a3b8; padding: 9px !important; font-size: 12px; line-height: 1.65 !important; color: #0f3d2e !important; }}
+    table.sig-tbl td {{ border: 1px solid #94a3b8; padding: 12px 10px !important; width: {col_width}; vertical-align: middle; height: auto; min-height: 95px; line-height: 1.65 !important; color: #0f172a !important; }}
+    .sig-footer {{
+        display: flex; flex-direction: column; flex: 1 1 auto;
+        page-break-inside: avoid; break-inside: avoid;
+    }}
     .footer-qr {{
-        margin-top: 7px; background: #f4f7f6; border: 1px solid #cbd5e1; border-radius: 6px;
-        padding: 5px 10px; display: flex; flex-direction: row; justify-content: space-between; align-items: center;
+        margin-top: auto !important; padding-top: 12px !important;
+        background: #f4f7f6; border: 1px solid #cbd5e1; border-radius: 6px;
+        padding: 12px 10px; display: flex; flex-direction: row; justify-content: space-between; align-items: center;
         direction: rtl !important;
         page-break-inside: avoid; break-inside: avoid;
     }}
@@ -2604,8 +2613,22 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-sheet table a, .a4-sheet .legal-box a, a[href^="tel"] {{
         color: #0f172a !important; text-decoration: none !important; pointer-events: none !important;
     }}
+    .a4-compact {{ padding: 7mm 8mm !important; }}
+    .a4-compact .hdr {{ padding-bottom: 4px !important; margin-bottom: 6px !important; }}
+    .a4-compact .hdr-center img {{ height: 44px !important; }}
+    .a4-compact .hdr-right p, .a4-compact .hdr-left p {{ font-size: 11px !important; line-height: 1.35 !important; }}
+    .a4-compact .doc-banner {{ font-size: 13px !important; padding: 4px 8px !important; margin-bottom: 6px !important; }}
+    .a4-compact table.data-tbl {{ margin-bottom: 6px !important; }}
+    .a4-compact table.data-tbl td, .a4-compact table.data-tbl td.val {{ padding: 3px 6px !important; font-size: 11px !important; line-height: 1.35 !important; }}
+    .a4-compact .legal-box {{ font-size: 11px !important; line-height: 1.45 !important; padding: 6px 8px !important; margin-bottom: 6px !important; }}
+    .a4-compact .legal-box div {{ font-size: 11px !important; line-height: 1.45 !important; }}
+    .a4-compact table.sig-tbl td {{ min-height: 58px !important; padding: 4px 6px !important; }}
+    .a4-compact .sig-cell {{ min-height: 52px !important; padding: 4px !important; }}
+    .a4-compact .sig-head {{ font-size: 10px !important; padding: 3px !important; }}
+    .a4-compact .footer-qr {{ padding: 4px 8px !important; }}
+    .a4-compact .footer-qr img {{ width: 32px !important; height: 32px !important; }}
     @media print {{
-        @page {{ size: A4 portrait; margin: 6mm !important; }}
+        @page {{ size: A4 portrait; margin: 0 !important; }}
         html, body, .a4-preview-viewport, .a4-preview-wrapper {{
             direction: rtl !important;
             text-align: right !important;
@@ -2629,17 +2652,21 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         .a4-sheet, .a4-paper {{
             direction: rtl !important;
             transform: none !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 !important;
-            height: auto !important;
-            min-height: 0 !important;
-            max-height: none !important;
+            width: 210mm !important;
+            max-width: 210mm !important;
+            margin: 0 auto !important;
+            height: 296mm !important;
+            min-height: 296mm !important;
+            max-height: 296mm !important;
+            padding: 12mm 13mm !important;
+            display: flex !important;
+            flex-direction: column !important;
+            box-sizing: border-box !important;
             page-break-inside: avoid !important;
             page-break-after: avoid !important;
             break-inside: avoid !important;
             box-shadow: none !important;
-            overflow: visible !important;
+            overflow: hidden !important;
         }}
         .a4-fit {{
             justify-content: flex-start !important;
@@ -2651,20 +2678,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         .sig-footer, table.sig-tbl, .sig-grid, .footer-qr, .attachment-section {{
             page-break-inside: avoid !important; break-inside: avoid !important;
         }}
-        .parties-fit {{ padding: 0 !important; }}
-        .parties-fit .hdr {{ padding-bottom: 1px !important; }}
-        .parties-fit .hdr-center img {{ height: 36px !important; }}
-        .parties-fit .hdr-right p, .parties-fit .hdr-left p {{ font-size: 9px !important; line-height: 1.15 !important; }}
-        .parties-fit .doc-banner {{ font-size: 11px !important; padding: 1px 4px !important; margin: 2px 0 !important; }}
-        .parties-fit table.data-tbl {{ margin-bottom: 3px !important; }}
-        .parties-fit table.data-tbl td {{ padding: 1px 3px !important; font-size: 9.5px !important; line-height: 1.25 !important; }}
-        .parties-fit table.data-tbl td.val {{ font-size: 9.5px !important; }}
-        .parties-fit .legal-box {{ font-size: 9.5px !important; line-height: 1.28 !important; padding: 2px 4px !important; }}
-        .parties-fit .sig-cell {{ min-height: 0 !important; padding: 1px 2px !important; }}
-        .parties-fit .sig-head {{ font-size: 8.5px !important; padding: 1px 2px !important; }}
-        .parties-fit .sig-grid .sig-slot-img {{ height: 22px !important; }}
-        .parties-fit .footer-qr {{ margin-top: 2px !important; padding: 2px 6px !important; }}
-        .parties-fit .footer-qr img {{ width: 30px !important; height: 30px !important; }}
         .att-card img,
         .attachment-grid.atts-single .att-card img,
         .attachment-grid.atts-multi .att-card img {{
@@ -2708,8 +2721,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             <table class="{data_tbl_cls}">{rows_html}</table>
 
             <div class="legal-box" dir="rtl" style="direction:rtl; text-align:justify; text-align-last:right;">
-                <div dir="rtl" style="font-weight:800; color:#0f3d2e; margin-bottom:4px; direction:rtl; text-align:right;">{legal_box_title}</div>
-                <div dir="rtl" style="direction:rtl; unicode-bidi:embed; text-align:justify; text-align-last:right; text-justify:inter-word; line-height:1.8;">&#8207;{rec['legal_text']}</div>
+                <div dir="rtl" style="font-weight:800; color:#0f3d2e; margin-bottom:10px; direction:rtl; text-align:right;">{legal_box_title}</div>
+                <div dir="rtl" style="direction:rtl; unicode-bidi:embed; text-align:justify; text-align-last:right; text-justify:inter-word;">&#8207;{rec['legal_text']}</div>
             </div>
             {attachment_block}
         </div>
@@ -2807,6 +2820,18 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     LIVE_PADS.forEach(wireLivePad);
 
+    function a4PagePx() {{
+        return Math.round(296 * 96 / 25.4);
+    }}
+
+    function fitA4Density() {{
+        const paper = document.getElementById("a4Sheet");
+        if (!paper || (window.matchMedia && window.matchMedia("print").matches)) return;
+        if (!paper.classList.contains("a4-compact") && paper.scrollHeight > a4PagePx() + 4) {{
+            paper.classList.add("a4-compact");
+        }}
+    }}
+
     function fitA4Preview() {{
         if (window.matchMedia && window.matchMedia("print").matches) return;
         const viewport = document.getElementById("a4PreviewViewport");
@@ -2848,13 +2873,30 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             viewport.style.height = "auto";
             viewport.style.overflow = "visible";
         }}
-        if (paper) {{
-            paper.style.transform = "none";
-            paper.style.transformOrigin = "";
-            paper.style.margin = "0";
-            paper.style.width = "100%";
-            paper.style.height = "auto";
-            paper.style.maxHeight = "none";
+        if (!paper) return;
+        paper.style.zoom = "1";
+        paper.style.setProperty("transform", "none", "important");
+        paper.style.transformOrigin = "top center";
+        paper.style.margin = "0 auto";
+        paper.style.width = "210mm";
+        paper.style.setProperty("height", "auto", "important");
+        paper.style.setProperty("max-height", "none", "important");
+        paper.style.overflow = "visible";
+        paper.classList.remove("a4-compact");
+        const limit = a4PagePx();
+        let scale = 1;
+        if (paper.scrollHeight > limit + 4) {{
+            paper.classList.add("a4-compact");
+            const natural = paper.scrollHeight;
+            if (natural > limit + 4) {{
+                scale = Math.max(0.72, Math.round((limit / natural) * 1000) / 1000);
+                paper.style.zoom = String(scale);
+            }}
+        }}
+        if (scale === 1) {{
+            paper.style.setProperty("height", "296mm", "important");
+            paper.style.setProperty("max-height", "296mm", "important");
+            paper.style.overflow = "hidden";
         }}
     }}
 
@@ -2866,29 +2908,35 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             viewport.style.overflow = "";
         }}
         if (paper) {{
-            paper.style.transform = "";
+            paper.style.zoom = "";
+            paper.style.removeProperty("transform");
             paper.style.margin = "";
             paper.style.width = "";
-            paper.style.height = "";
-            paper.style.maxHeight = "";
+            paper.style.removeProperty("height");
+            paper.style.removeProperty("max-height");
+            paper.style.overflow = "";
         }}
-        fitA4Preview();
+        scheduleA4Fit();
     }}
 
     window.onbeforeprint = prepareA4Print;
     window.addEventListener("beforeprint", prepareA4Print);
     window.addEventListener("afterprint", restoreA4Preview);
-    window.addEventListener("load", fitA4Preview);
-    window.addEventListener("resize", fitA4Preview);
+    function scheduleA4Fit() {{
+        fitA4Density();
+        fitA4Preview();
+    }}
+    window.addEventListener("load", scheduleA4Fit);
+    window.addEventListener("resize", scheduleA4Fit);
     if (window.ResizeObserver) {{
         const previewBox = document.getElementById("a4PreviewViewport");
-        if (previewBox) new ResizeObserver(fitA4Preview).observe(previewBox);
+        if (previewBox) new ResizeObserver(scheduleA4Fit).observe(previewBox);
     }}
     if (document.fonts && document.fonts.ready) {{
-        document.fonts.ready.then(fitA4Preview);
+        document.fonts.ready.then(scheduleA4Fit);
     }}
-    setTimeout(fitA4Preview, 150);
-    setTimeout(fitA4Preview, 600);
+    setTimeout(scheduleA4Fit, 150);
+    setTimeout(scheduleA4Fit, 600);
 </script>
 </body>
 </html>
