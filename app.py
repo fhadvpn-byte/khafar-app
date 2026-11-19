@@ -159,12 +159,30 @@ html, body, [class*="css"] {
     color: var(--text-light);
 }
 
-header[data-testid="stHeader"] { background: transparent !important; }
+/* إخفاء شريط Streamlit العلوي وأيقونات Share/GitHub لمنع التداخل مع العربية */
+header[data-testid="stHeader"],
+[data-testid="stToolbar"],
+[data-testid="stDecoration"],
+[data-testid="stStatusWidget"],
+.stDeployButton,
+#MainMenu,
+footer,
+footer[data-testid="stFooter"],
+.stAppDeployButton {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
 [data-testid="collapsedControl"] { display: none !important; }
 section[data-testid="stSidebar"] { display: none !important; }
 .block-container {
-    padding-top: 1.2rem !important;
-    padding-bottom: 3rem !important;
+    padding-top: 0.35rem !important;
+    padding-bottom: 1.4rem !important;
+    padding-left: 0.7rem !important;
+    padding-right: 0.7rem !important;
     max-width: 1140px !important;
 }
 
@@ -176,79 +194,97 @@ section[data-testid="stSidebar"] { display: none !important; }
 .khafar-top-header {
     background: linear-gradient(135deg, #0d4432 0%, #08291e 100%);
     border: 1px solid #1e6b50;
-    border-radius: 18px 18px 0 0;
-    padding: 18px 24px 16px 24px;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+    border-radius: 14px 14px 0 0;
+    padding: 10px 12px 8px 12px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
 }
 .header-brand-row {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 16px;
+    gap: 10px;
 }
-.official-5lines {
-    line-height: 1.55;
+.header-brand-inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+.official-5lines,
+.official-5lines-compact {
+    line-height: 1.35;
     font-weight: 800;
     color: #ffffff;
-    font-size: 14px;
-    text-align: center;
+    font-size: 12px;
+    text-align: right;
+    flex: 1;
+}
+.official-5lines-compact .dept-line {
+    color: #f3cc7a;
+    font-size: 12.5px;
+    margin-top: 1px;
 }
 .logo-frame {
-    width: 82px;
-    height: 82px;
-    border-radius: 16px;
+    width: 54px;
+    height: 54px;
+    min-width: 54px;
+    border-radius: 12px;
     background: #ffffff;
     border: 2px solid var(--gold-main);
-    padding: 6px;
+    padding: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
 }
 .logo-frame img {
     max-width: 100%;
     max-height: 100%;
     object-fit: contain;
 }
-.status-pills-col {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-end;
-}
-.pill-offline {
-    background: rgba(6, 34, 24, 0.85);
-    border: 1px solid #1d6f52;
-    color: #a7f3d0;
-    padding: 5px 14px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 700;
-}
-.pill-usb {
-    background: rgba(36, 33, 22, 0.85);
-    border: 1px solid rgba(212, 168, 83, 0.5);
-    color: var(--gold-soft);
-    padding: 5px 14px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 700;
-}
 
-.gps-time-bar {
+.compact-status-bar {
     background: #0b1015;
     border-left: 1px solid #1e293b;
     border-right: 1px solid #1e293b;
     border-bottom: 2px solid #9a7432;
-    border-radius: 0 0 14px 14px;
-    padding: 9px 18px;
+    border-radius: 0 0 12px 12px;
+    padding: 7px 10px;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
     flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 18px;
+    align-items: center;
+    gap: 6px 8px;
+    margin-bottom: 10px;
+}
+.compact-status-bar .status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #12201c;
+    border: 1px solid #1f5c46;
+    color: #a7f3d0;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.35;
+}
+.compact-status-bar .status-chip.gold {
+    background: #1a1810;
+    border-color: rgba(212, 168, 83, 0.45);
+    color: var(--gold-soft);
+}
+.compact-status-bar .status-chip.gps {
+    font-family: 'JetBrains Mono', monospace !important;
+    direction: ltr;
+    unicode-bidi: isolate;
+    color: #4ade80;
+    background: #102422;
+}
+.compact-status-bar .status-chip.time {
+    background: #161d24;
+    border-color: #2d3846;
+    color: #cbd5e1;
 }
 .gps-mono-box {
     font-family: 'JetBrains Mono', monospace !important;
@@ -363,13 +399,31 @@ section[data-testid="stSidebar"] { display: none !important; }
 .form-item-card {
     background: linear-gradient(180deg, #162024 0%, #12191c 100%);
     border: 1px solid #24353b;
-    border-radius: 14px;
-    padding: 16px 18px 10px 18px;
-    margin-bottom: 6px;
+    border-radius: 12px;
+    padding: 8px 12px;
+    margin-bottom: 4px;
     transition: all 0.2s ease;
 }
 .form-item-card:hover {
     border-color: #2b8a68;
+}
+.form-open-hint {
+    font-size: 11px;
+    color: #94a3b8;
+    margin: 0 0 2px 0;
+}
+/* أزرار النماذج والتنقل أكثر إحكاماً على الجوال */
+div[data-testid="stHorizontalBlock"] div.stButton > button {
+    padding: 0.48rem 0.55rem !important;
+    font-size: 13px !important;
+    min-height: 2.55rem !important;
+    white-space: normal !important;
+    line-height: 1.35 !important;
+}
+div[data-testid="stTabs"] button[role="tab"] {
+    font-weight: 800 !important;
+    font-size: 13px !important;
+    padding: 0.35rem 0.7rem !important;
 }
 
 .legal-dark-box {
@@ -462,7 +516,8 @@ div[role="radiogroup"] {
 
 /* RTL_JUSTIFY_FIX */
 [data-testid="stAppViewContainer"], [data-testid="stMarkdownContainer"], .stMarkdown { direction: rtl !important; text-align: right !important; }
-.official-5lines, .official-5lines div { text-align: center !important; }
+.official-5lines, .official-5lines div,
+.official-5lines-compact, .official-5lines-compact div { text-align: right !important; }
 .auth-panel:empty { display: none !important; }
 .legal-dark-box { direction: rtl !important; text-align: justify !important; text-align-last: right !important; unicode-bidi: embed !important; }
 .legal-dark-box .legal-title { direction: rtl !important; text-align: right !important; color: #d4a853 !important; font-weight: 800 !important; margin-bottom: 8px !important; }
@@ -1574,19 +1629,29 @@ now_ksa = datetime.now(KSA_TZ)
 unit_display = format_entity(shift["officer_rank"], shift["officer_name"])
 duty_display = format_entity(shift["duty_rank"], shift["duty_name"])
 
-VALID_FILTERS = [
-    "جميع النماذج (11)",
-    "قائمة الإقرارات (4)",
-    "قائمة المحاضر (4)",
-    "النماذج الطبية والجنائية (3)",
-]
+VALID_NAV_TABS = ["النماذج الميدانية", "الأرشيف المحلي", "الإعدادات والبصمة"]
+NAV_ALIASES = {
+    "مناوبة الخفر": "الإعدادات والبصمة",
+    "بصمة الشحن OTG": "الإعدادات والبصمة",
+}
+CATEGORY_TAB_MAP = {
+    "الإقرارات (4)": "إقرار",
+    "المحاضر (4)": "محضر",
+    "الطبية والجنائية (3)": "إحالة طبية",
+}
 
 if "nav_tab" not in st.session_state:
     st.session_state.nav_tab = "النماذج الميدانية"
+# ترحيل التبويبات القديمة إلى الشريط الأفقي المدمج
+if st.session_state.nav_tab in NAV_ALIASES:
+    st.session_state.nav_tab = NAV_ALIASES[st.session_state.nav_tab]
+if st.session_state.nav_tab not in VALID_NAV_TABS:
+    st.session_state.nav_tab = "النماذج الميدانية"
 if "opened_form_id" not in st.session_state:
     st.session_state.opened_form_id = None
-if st.session_state.get("catalog_filter") not in VALID_FILTERS:
-    st.session_state.catalog_filter = "جميع النماذج (11)"
+# إزالة فلتر «جميع النماذج» القديم إن وُجد في الجلسة
+if "catalog_filter" in st.session_state:
+    del st.session_state["catalog_filter"]
 if "doc_no" not in st.session_state:
     st.session_state.doc_no = f"KH-{now_ksa.strftime('%y%m%d-%H%M%S')}"
 if "doc_time" not in st.session_state:
@@ -1659,50 +1724,74 @@ archive_count = len(all_archived)
 header_logo_widget = (
     f"<div class='logo-frame'><img src='data:image/png;base64,{logo_b64_global}' alt='شعار المرور' /></div>"
     if logo_b64_global
-    else "<div class='logo-frame' style='font-size:32px;'>🛡️</div>"
+    else "<div class='logo-frame' style='font-size:22px;'>🛡️</div>"
 )
 
+scanner_short = (st.session_state.scanner_model or "محاكاة").replace("وضع المحاكاة متصل (معزول العتاد)", "محاكاة")
+if len(scanner_short) > 28:
+    scanner_short = scanner_short[:26] + "…"
+
+
+def form_short_hint(subtitle: str, max_words: int = 3) -> str:
+    words = [w for w in (subtitle or "").split() if w]
+    return " ".join(words[:max_words]) if words else ""
+
+
+def open_form_from_catalog(fid: str):
+    st.session_state.opened_form_id = fid
+    reset_doc_state()
+    safe_rerun()
+
+
+def render_compact_form_buttons(category: str, primary: bool = False):
+    """بطاقات نماذج مدمجة: أيقونة + اسم + وصف مختصر + سهم — تفتح بضغطة واحدة."""
+    keys = [k for k, v in TRAFFIC_FORMS.items() if v["category"] == category]
+    for fid in keys:
+        f_item = TRAFFIC_FORMS[fid]
+        hint = form_short_hint(f_item.get("subtitle", ""), 3)
+        label = f"{f_item['icon']}  {f_item['title']}"
+        if hint:
+            label = f"{label}  ·  {hint}  ←"
+        else:
+            label = f"{label}  ←"
+        if st.button(
+            label,
+            key=f"open_{fid}",
+            type="primary" if primary else "secondary",
+            use_container_width=True,
+        ):
+            open_form_from_catalog(fid)
+
+
 # =====================================================================
-# 7. الترويسة الرسمية الخماسية مع شعار المرور
+# 7. الترويسة المدمجة + شريط الحالة الأفقي
 # =====================================================================
 st.markdown(f"""
 <div class="khafar-top-header">
     <div class="header-brand-row">
-        <div class="official-5lines">
-            <div>المملكة العربية السعودية</div>
-            <div>وزارة الداخلية</div>
-            <div>الأمن العام - الإدارة العامة للمرور</div>
-            <div>إدارة مرور منطقة جازان</div>
-            <div style="color:#f3cc7a; font-size:15px;">قسم مرور العارضة</div>
-        </div>
-        <div>
+        <div class="header-brand-inline">
             {header_logo_widget}
-        </div>
-        <div class="status-pills-col">
-            <span class="pill-offline">🟢 وضع العمل المحلي - جاهز</span>
-            <span class="pill-usb">🧬 قارئ البصمة Type-C: {st.session_state.scanner_model}</span>
+            <div class="official-5lines-compact">
+                <div>المملكة العربية السعودية · وزارة الداخلية</div>
+                <div>الأمن العام - الإدارة العامة للمرور</div>
+                <div class="dept-line">إدارة مرور جازان · قسم مرور العارضة</div>
+            </div>
         </div>
     </div>
 </div>
-
-<div class="gps-time-bar">
-    <div>
-        <span style="color:#d4a853; font-weight:800; font-size:13px;">🔒 إحداثيات الموقع المثبتة (GPS): </span>
-        <span class="gps-mono-box">{shift['default_gps']}</span>
-    </div>
-    <div>
-        <span style="color:#94a3b8; font-size:12.5px;">التاريخ والوقت: </span>
-        <span class="time-auto-box">{now_ksa.strftime('%Y/%m/%d  |  %I:%M %p')} (مثبت آلياً)</span>
-    </div>
+<div class="compact-status-bar">
+    <span class="status-chip">🟢 محلي جاهز</span>
+    <span class="status-chip gold">🧬 {html.escape(scanner_short)}</span>
+    <span class="status-chip gps">GPS {html.escape(str(shift['default_gps']))}</span>
+    <span class="status-chip time">{now_ksa.strftime('%Y/%m/%d %H:%M')}</span>
 </div>
 """, unsafe_allow_html=True)
 
-nav_cols = st.columns(4)
+nav_cols = st.columns(3)
 nav_items = [
-    ("النماذج الميدانية", "📋 النماذج الميدانية (11)"),
-    ("الأرشيف المحلي", f"🗂️ الأرشيف المحلي ({archive_count})"),
-    ("مناوبة الخفر", "👮 البيانات الثابتة"),
-    ("بصمة الشحن OTG", "🧬 بصمة الشحن OTG"),
+    ("النماذج الميدانية", "📋 النماذج"),
+    ("الأرشيف المحلي", f"📁 الأرشيف ({archive_count})"),
+    ("الإعدادات والبصمة", "⚙️ الإعدادات والبصمة"),
 ]
 for idx, (tab_key, tab_label) in enumerate(nav_items):
     with nav_cols[idx]:
@@ -1718,126 +1807,19 @@ for idx, (tab_key, tab_label) in enumerate(nav_items):
                 st.session_state.opened_form_id = None
             safe_rerun()
 
-st.write("")
-
 # =====================================================================
 # القسم الأول: النماذج الميدانية (11 نموذجاً)
 # =====================================================================
 if st.session_state.nav_tab == "النماذج الميدانية":
 
     if st.session_state.opened_form_id is None:
-        st.markdown(f"""
-        <div class="hero-shift-card">
-            <div class="hero-eyebrow">إدارة مرور منطقة جازان • قسم مرور العارضة</div>
-            <h2 class="hero-title">منصة تحرير وتوثيق الإقرارات والمحاضر والإحالات الطبية</h2>
-            <div class="hero-desc">
-                اختر النموذج المطلوب لتعبئة الحقول وتوثيق البصمة عبر منفذ الشحن (USB Type-C) لقفل الحقول نهائياً وتصدير وثيقة A4 PDF رسمية بالترويسة المعتمدة وشعار المرور.
-            </div>
-            <div class="shift-summary-inner">
-                <div style="display:flex; gap:24px; flex-wrap:wrap;">
-                    <div style="font-size:13px; color:#cbd5e1;">القسم: <strong style="color:#ffffff;">قسم مرور العارضة</strong></div>
-                    <div style="font-size:13px; color:#cbd5e1;">الوحدة: <strong style="color:#34d399;">{unit_display}</strong></div>
-                    <div style="font-size:13px; color:#cbd5e1;">الاعتماد: <strong style="color:#d4a853;">{duty_display}</strong></div>
-                </div>
-                <div style="font-size:12px; color:#34d399; font-weight:700;">
-                    الترويسة الرسمية وشعار المرور مفعلان ✓
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        flt_cols = st.columns(4)
-        for col_obj, flt_label in zip(flt_cols, VALID_FILTERS):
-            with col_obj:
-                if st.button(
-                    flt_label,
-                    key=f"flt_{flt_label}",
-                    type="primary" if st.session_state.catalog_filter == flt_label else "secondary",
-                    use_container_width=True,
-                ):
-                    st.session_state.catalog_filter = flt_label
-                    safe_rerun()
-
-        if st.session_state.catalog_filter in ["جميع النماذج (11)", "قائمة الإقرارات (4)"]:
-            st.markdown("""
-            <div class="sec-heading-green">
-                <span style="font-size:19px; font-weight:800; color:#ffffff;">أولاً: قائمة الإقرارات الميدانية</span>
-                <span class="badge-green">4 نماذج معتمدة</span>
-            </div>
-            """, unsafe_allow_html=True)
-
-            decl_keys = [k for k, v in TRAFFIC_FORMS.items() if v["category"] == "إقرار"]
-            d_cols = st.columns(2)
-            for i, fid in enumerate(decl_keys):
-                f_item = TRAFFIC_FORMS[fid]
-                with d_cols[i % 2]:
-                    st.markdown(f"""
-                    <div class="form-item-card">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                            <span style="font-size:16.5px; font-weight:800; color:#ffffff;">{f_item['icon']} {f_item['title']}</span>
-                            <span class="badge-green">إقرار ميداني</span>
-                        </div>
-                        <div style="font-size:12.5px; color:#94a3b8; line-height:1.6; margin-bottom:8px;">{f_item['subtitle']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    if st.button(f"فتح وتحرير {f_item['title']} ←", key=f"open_{fid}", type="primary", use_container_width=True):
-                        st.session_state.opened_form_id = fid
-                        reset_doc_state()
-                        safe_rerun()
-
-        if st.session_state.catalog_filter in ["جميع النماذج (11)", "قائمة المحاضر (4)"]:
-            st.markdown("""
-            <div class="sec-heading-gold">
-                <span style="font-size:19px; font-weight:800; color:#ffffff;">ثانياً: قائمة المحاضر الرسمية</span>
-                <span class="badge-gold">4 محاضر نظامية</span>
-            </div>
-            """, unsafe_allow_html=True)
-
-            min_keys = [k for k, v in TRAFFIC_FORMS.items() if v["category"] == "محضر"]
-            m_cols = st.columns(2)
-            for i, fid in enumerate(min_keys):
-                f_item = TRAFFIC_FORMS[fid]
-                with m_cols[i % 2]:
-                    st.markdown(f"""
-                    <div class="form-item-card">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                            <span style="font-size:16.5px; font-weight:800; color:#ffffff;">{f_item['icon']} {f_item['title']}</span>
-                            <span class="badge-gold">محضر رسمي</span>
-                        </div>
-                        <div style="font-size:12.5px; color:#94a3b8; line-height:1.6; margin-bottom:8px;">{f_item['subtitle']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    if st.button(f"فتح وتحرير {f_item['title']} ←", key=f"open_{fid}", use_container_width=True):
-                        st.session_state.opened_form_id = fid
-                        reset_doc_state()
-                        safe_rerun()
-
-        if st.session_state.catalog_filter in ["جميع النماذج (11)", "النماذج الطبية والجنائية (3)"]:
-            st.markdown("""
-            <div class="sec-heading-med">
-                <span style="font-size:19px; font-weight:800; color:#ffffff;">ثالثاً: النماذج الطبية والجنائية</span>
-                <span class="badge-med">3 نماذج طبية وجنائية</span>
-            </div>
-            """, unsafe_allow_html=True)
-
-            med_keys = [k for k, v in TRAFFIC_FORMS.items() if v["category"] == "إحالة طبية"]
-            md_cols = st.columns(2)
-            for i, fid in enumerate(med_keys):
-                f_item = TRAFFIC_FORMS[fid]
-                with md_cols[i % 2]:
-                    st.markdown(f"""
-                    <div class="form-item-card">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                            <span style="font-size:16.5px; font-weight:800; color:#ffffff;">{f_item['icon']} {f_item['title']}</span>
-                            <span class="badge-med">نموذج طبي / جنائي</span>
-                        </div>
-                        <div style="font-size:12.5px; color:#94a3b8; line-height:1.6; margin-bottom:8px;">{f_item['subtitle']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    if st.button(f"فتح وتحرير {f_item['title']} ←", key=f"open_{fid}", use_container_width=True):
-                        st.session_state.opened_form_id = fid
-                        reset_doc_state()
-                        safe_rerun()
+        tab_decl, tab_min, tab_med = st.tabs(list(CATEGORY_TAB_MAP.keys()))
+        with tab_decl:
+            render_compact_form_buttons("إقرار", primary=True)
+        with tab_min:
+            render_compact_form_buttons("محضر", primary=False)
+        with tab_med:
+            render_compact_form_buttons("إحالة طبية", primary=False)
 
     else:
         fid = st.session_state.opened_form_id
@@ -1846,7 +1828,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
 
         top_bar1, top_bar2, top_bar3 = st.columns([1.3, 1.3, 1.4])
         with top_bar1:
-            if st.button("↩️ العودة لقائمة النماذج الـ 11", use_container_width=True):
+            if st.button("↩️ العودة للنماذج", use_container_width=True):
                 st.session_state.opened_form_id = None
                 safe_rerun()
         with top_bar2:
@@ -2259,57 +2241,41 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
 
 
 # =====================================================================
-# القسم الثالث: البيانات الثابتة
+# القسم الثالث: الإعدادات والبصمة (مناوبة الخفر + OTG مدمجان)
 # =====================================================================
-elif st.session_state.nav_tab == "مناوبة الخفر":
+elif st.session_state.nav_tab == "الإعدادات والبصمة":
     st.markdown("""
-    <div class="hero-shift-card">
-        <div class="hero-eyebrow">إدارة مرور منطقة جازان • قسم مرور العارضة</div>
-        <h3 style="margin:4px 0 8px 0; color:#ffffff;">👮 إعدادات التوقيعات والإحداثيات</h3>
-        <div style="font-size:13px; color:#cbd5e1;">
-            الترويسة الرسمية الخماسية وشعار المرور مثبتان تلقائياً في رأس جميع الوثائق، ويمكن من هنا تحديث الإحداثيات أو إضافة اسم المناوب اختيارياً.
-        </div>
+    <div class="sec-heading-green" style="margin-top:8px;">
+        <span style="font-size:16px; font-weight:800; color:#ffffff;">⚙️ الإعدادات والبصمة</span>
     </div>
     """, unsafe_allow_html=True)
 
-    with st.form("shift_update_form"):
-        s_dept = st.text_input("القسم", value=shift["dept_name"], disabled=True)
-        r1, r2 = st.columns([1, 2])
-        with r1:
-            s_orank = st.text_input("خانة التوثيق الأولى", value=shift["officer_rank"])
-        with r2:
-            s_oname = st.text_input("اسم ضابط الخفر (اختياري)", value=shift["officer_name"])
+    sett_tab, otg_tab = st.tabs(["👮 مناوبة الخفر", "🧬 بصمة الشحن OTG"])
 
-        r3, r4 = st.columns([1, 2])
-        with r3:
-            s_drank = st.text_input("خانة المصادقة الثانية", value=shift["duty_rank"])
-        with r4:
-            s_dname = st.text_input("اسم المناوب (اختياري)", value=shift["duty_name"])
+    with sett_tab:
+        with st.form("shift_update_form"):
+            s_dept = st.text_input("القسم", value=shift["dept_name"], disabled=True)
+            r1, r2 = st.columns([1, 2])
+            with r1:
+                s_orank = st.text_input("خانة التوثيق الأولى", value=shift["officer_rank"])
+            with r2:
+                s_oname = st.text_input("اسم ضابط الخفر (اختياري)", value=shift["officer_name"])
 
-        s_gps = st.text_input("إحداثيات الموقع (GPS)", value=shift["default_gps"])
+            r3, r4 = st.columns([1, 2])
+            with r3:
+                s_drank = st.text_input("خانة المصادقة الثانية", value=shift["duty_rank"])
+            with r4:
+                s_dname = st.text_input("اسم المناوب (اختياري)", value=shift["duty_name"])
 
-        if st.form_submit_button("💾 حفظ الإعدادات", type="primary", use_container_width=True):
-            update_shift_settings("قسم مرور العارضة", s_orank, s_oname, s_drank, s_dname, s_gps)
-            st.success("تم حفظ الإعدادات بنجاح.")
-            safe_rerun()
+            s_gps = st.text_input("إحداثيات الموقع (GPS)", value=shift["default_gps"])
 
+            if st.form_submit_button("💾 حفظ الإعدادات", type="primary", use_container_width=True):
+                update_shift_settings("قسم مرور العارضة", s_orank, s_oname, s_drank, s_dname, s_gps)
+                st.success("تم حفظ الإعدادات بنجاح.")
+                safe_rerun()
 
-# =====================================================================
-# القسم الرابع: فحص ومحاكاة بصمة منفذ الشحن (USB Type-C OTG)
-# =====================================================================
-elif st.session_state.nav_tab == "بصمة الشحن OTG":
-    st.markdown("""
-    <div class="hero-shift-card">
-        <div class="hero-eyebrow">طبقة عزل العتاد الحيوي (Hardware Abstraction Layer)</div>
-        <h3 style="margin:4px 0 8px 0; color:#ffffff;">🧬 إدارة وفحص قارئ البصمة عبر منفذ الشحن (USB Type-C)</h3>
-        <div style="font-size:13px; color:#cbd5e1;">
-            يعمل النظام حالياً بوضع المحاكاة الصوري المعزول لحين توصيل القارئ الفعلي، مع تحويل البصمة إلى ختم حبر إلكتروني وحذف الأثر الحيوي من الذاكرة المؤقتة فوراً.
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    c_usb1, c_usb2 = st.columns(2)
-    with c_usb1:
+    with otg_tab:
+        st.caption("وضع المحاكاة الصوري معزول حتى توصيل القارئ الفعلي عبر Type-C.")
         selected_hw = st.selectbox(
             "بروتوكول القارئ المعتمد:",
             [
@@ -2318,13 +2284,29 @@ elif st.session_state.nav_tab == "بصمة الشحن OTG":
                 "Mantra MFS110 (RD Local Service 11100)",
                 "ZKTeco Live20R (USB Host)",
             ],
+            index=(
+                [
+                    "وضع المحاكاة متصل (معزول العتاد)",
+                    "SecuGen Hamster Pro 20 (Type-C OTG)",
+                    "Mantra MFS110 (RD Local Service 11100)",
+                    "ZKTeco Live20R (USB Host)",
+                ].index(st.session_state.scanner_model)
+                if st.session_state.scanner_model in [
+                    "وضع المحاكاة متصل (معزول العتاد)",
+                    "SecuGen Hamster Pro 20 (Type-C OTG)",
+                    "Mantra MFS110 (RD Local Service 11100)",
+                    "ZKTeco Live20R (USB Host)",
+                ]
+                else 0
+            ),
         )
-        if st.button("🔄 تحديث ربط منفذ الشحن", type="primary", use_container_width=True):
-            st.session_state.scanner_model = selected_hw
-            st.success(f"تم ضبط البروتوكول النشط على: {selected_hw}")
-            safe_rerun()
-
-    with c_usb2:
-        if st.button("🧬 اختبار التقاط بصمة تجريبية الآن", use_container_width=True):
-            test_b64 = generate_fingerprint_png_b64(f"TEST_{datetime.now().isoformat()}")
-            st.image(base64.b64decode(test_b64), caption="اختبار ختم الحبر الأزرق الشفاف — جاهز للدمج في A4 PDF", width=130)
+        c_usb1, c_usb2 = st.columns(2)
+        with c_usb1:
+            if st.button("🔄 تحديث ربط منفذ الشحن", type="primary", use_container_width=True):
+                st.session_state.scanner_model = selected_hw
+                st.success(f"تم ضبط البروتوكول النشط على: {selected_hw}")
+                safe_rerun()
+        with c_usb2:
+            if st.button("🧬 اختبار بصمة تجريبية", use_container_width=True):
+                test_b64 = generate_fingerprint_png_b64(f"TEST_{datetime.now().isoformat()}")
+                st.image(base64.b64decode(test_b64), caption="ختم الحبر التجريبي", width=130)
