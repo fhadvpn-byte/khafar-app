@@ -735,6 +735,34 @@ def _val(values: dict, key: str) -> str:
     return ("\u200f" + v + "\u200f") if v else "...................."
 
 
+def _is_agent_role(value: str) -> bool:
+    text = str(value or "")
+    return ("وكيل" in text) or ("وكالة" in text)
+
+
+def _handover_capacity(values: dict) -> str:
+    role = str(values.get("receiver_role") or "").strip()
+    if _is_agent_role(role):
+        return (
+            f"وكيل شرعي بموجب الوكالة السارية رقم: {_val(values, 'wakala_no')} "
+            f"وتاريخ: {_val(values, 'wakala_date')}"
+        )
+    return _val(values, "receiver_role")
+
+
+def _include_field_on_a4(field: dict, fields_map: dict) -> bool:
+    if field.get("a4_hidden"):
+        return False
+    rule = field.get("visible_if") or {}
+    if not rule:
+        return True
+    source = str(fields_map.get(rule.get("key"), "") or "")
+    tokens = rule.get("contains_any") or []
+    if not any(token in source for token in tokens):
+        return False
+    return field.get("key") in fields_map
+
+
 def _minutes_form_from_template(src: dict) -> dict:
     """يحوّل قالب abu_arish_impound إلى نموذج محضر بنفس محرك الحقول والخطاب."""
     fields = []
@@ -788,6 +816,12 @@ TRAFFIC_FORMS = {
                 "مفوض رسمي بقيادة المركبة",
                 "وكيل شرعي بموجب وكالة سارية"
             ], "sample": "مالك المركبة بموجب رخصة السير"},
+            {"key": "wakala_no", "label": "رقم الوكالة الشرعية / الإلكترونية", "type": "text", "sample": "461829405", "prefill_sample": True,
+             "visible_if": {"key": "receiver_role", "contains_any": ["وكيل", "وكالة"]},
+             "a4_with": "wakala_date", "a4_label": "رقم الوكالة وتاريخها"},
+            {"key": "wakala_date", "label": "تاريخ إصدار الوكالة", "type": "text", "sample": "1448/04/15 هـ", "prefill_sample": True,
+             "visible_if": {"key": "receiver_role", "contains_any": ["وكيل", "وكالة"]},
+             "a4_hidden": True},
             {"key": "vehicle_desc", "label": "نوع المركبة وموديلها ولونها", "type": "text", "sample": "تويوتا كامري 2024 - أبيض"},
             {"key": "plate_no", "label": "رقم اللوحة", "type": "text", "sample": "ح ط ر 4512"},
             {"key": "vehicle_state", "label": "حالة المركبة عند التسليم بالموقع", "type": "select", "options": [
@@ -798,7 +832,7 @@ TRAFFIC_FORMS = {
         ],
         "legal_fn": lambda m: (
             f"أقر أنا الموقع والمبصم أدناه ({_val(m, 'party_name')})، حامل الهوية رقم ({_val(m, 'party_id')})، "
-            f"بصفتي ({_val(m, 'receiver_role')})، بأنني استلمت المركبة ({_val(m, 'vehicle_desc')}) التي تحمل اللوحة رقم ({_val(m, 'plate_no')}) "
+            f"بصفتي ({_handover_capacity(m)})، بأنني استلمت المركبة ({_val(m, 'vehicle_desc')}) التي تحمل اللوحة رقم ({_val(m, 'plate_no')}) "
             f"في موقع الحادث رقم ({_val(m, 'incident_no')}) مباشرةً بحالتها الراهنة ({_val(m, 'vehicle_state')}) وبكامل مقتنياتها الشخصية دون نقص، "
             f"وبموجبه أخلي مسؤولية قسم مرور العارضة والفرقة المباشرة من سحب المركبة أو حجزها، وأتعهد بعدم قيادتها في حال وجود أي خلل يؤثر على السلامة العامة."
         ),
@@ -1407,7 +1441,16 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool) -> st
     rows = []
     pending = None
     for field in form_def["fields"]:
+        if not _include_field_on_a4(field, fields_map):
+            continue
         shown = str(fields_map.get(field["key"], "-") or "-")
+        label = str(field.get("a4_label") or field["label"])
+        sibling_key = field.get("a4_with")
+        if sibling_key:
+            sibling = str(fields_map.get(sibling_key, "") or "").strip()
+            if sibling:
+                shown = f"{shown} — {sibling}"
+        field = {**field, "label": label}
         wide = dense and _field_is_wide(field, shown)
         if not dense or wide:
             if pending:
@@ -2243,21 +2286,44 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     st.session_state.duty_stamp_b64 = ""
                     safe_rerun()
 
-        current_values = {}
-        f_cols = st.columns(2)
-        for idx, fld in enumerate(form_def["fields"]):
+        def render_field(fld):
             wkey = f"inp_{fid}_{fld['key']}"
-            target_col = f_cols[idx % 2] if fld["type"] != "textarea" else st.container()
-            with target_col:
-                if fld["type"] == "select":
-                    opts = fld["options"]
-                    default_idx = opts.index(st.session_state[wkey]) if (wkey in st.session_state and st.session_state[wkey] in opts) else 0
-                    val = st.selectbox(fld["label"], options=opts, index=default_idx, key=wkey, disabled=st.session_state.citizen_locked)
-                elif fld["type"] == "textarea":
-                    val = st.text_area(fld["label"], key=wkey, height=88, disabled=st.session_state.citizen_locked)
-                else:
-                    val = st.text_input(fld["label"], key=wkey, disabled=st.session_state.citizen_locked)
-                current_values[fld["key"]] = val
+            locked = st.session_state.citizen_locked
+            if fld.get("prefill_sample") and wkey not in st.session_state:
+                st.session_state[wkey] = fld.get("sample", "")
+            if fld["type"] == "select":
+                opts = fld["options"]
+                default_idx = opts.index(st.session_state[wkey]) if (wkey in st.session_state and st.session_state[wkey] in opts) else 0
+                return st.selectbox(fld["label"], options=opts, index=default_idx, key=wkey, disabled=locked)
+            if fld["type"] == "textarea":
+                return st.text_area(fld["label"], key=wkey, height=88, disabled=locked)
+            return st.text_input(fld["label"], key=wkey, disabled=locked)
+
+        def render_field_grid(fields):
+            if not fields:
+                return
+            columns = st.columns(2)
+            for idx, fld in enumerate(fields):
+                target = st.container() if fld["type"] == "textarea" else columns[idx % 2]
+                with target:
+                    current_values[fld["key"]] = render_field(fld)
+
+        current_values = {}
+        if fid == "decl_handover":
+            by_key = {fld["key"]: fld for fld in form_def["fields"]}
+            leading = [fld for fld in form_def["fields"] if fld["key"] in {"incident_no", "party_name", "party_id", "party_phone"}]
+            trailing = [fld for fld in form_def["fields"] if fld["key"] in {"vehicle_desc", "plate_no", "vehicle_state"}]
+            render_field_grid(leading)
+            role_field = by_key["receiver_role"]
+            current_values["receiver_role"] = render_field(role_field)
+            if _is_agent_role(current_values.get("receiver_role")):
+                wakala_cols = st.columns(2)
+                for col, key in zip(wakala_cols, ("wakala_no", "wakala_date")):
+                    with col:
+                        current_values[key] = render_field(by_key[key])
+            render_field_grid(trailing)
+        else:
+            render_field_grid([fld for fld in form_def["fields"] if not fld.get("visible_if")])
 
         att_label = (
             "📸 إرفاق صورة إشعار المخالفة (مطلوب لحوكمة الإلغاء بالهيئة المرورية)"
