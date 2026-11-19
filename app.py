@@ -867,9 +867,24 @@ def init_db():
             officer_full TEXT,
             duty_full TEXT,
             dept_name TEXT,
-            verify_hash TEXT
+            verify_hash TEXT,
+            officer_auth_mode TEXT,
+            duty_auth_mode TEXT,
+            preparer_full TEXT,
+            preparer_stamp_b64 TEXT,
+            duty_stamp_b64 TEXT
         )
     """)
+    existing_cols = {row[1] for row in c.execute("PRAGMA table_info(records)").fetchall()}
+    for col_name, col_type in (
+        ("officer_auth_mode", "TEXT"),
+        ("duty_auth_mode", "TEXT"),
+        ("preparer_full", "TEXT"),
+        ("preparer_stamp_b64", "TEXT"),
+        ("duty_stamp_b64", "TEXT"),
+    ):
+        if col_name not in existing_cols:
+            c.execute(f"ALTER TABLE records ADD COLUMN {col_name} {col_type}")
     conn.commit()
     conn.close()
 
@@ -900,15 +915,19 @@ def save_record_to_db(rec: dict):
             doc_no, form_id, form_title, category, party_name, party_id, plate_no,
             gps_coords, created_at, fields_json, legal_text, citizen_stamp_b64,
             citizen_auth_mode, officer_stamp_b64, attachment_b64, officer_full,
-            duty_full, dept_name, verify_hash
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            duty_full, dept_name, verify_hash, officer_auth_mode, duty_auth_mode,
+            preparer_full, preparer_stamp_b64, duty_stamp_b64
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         rec["doc_no"], rec["form_id"], rec["form_title"], rec["category"],
         rec["party_name"], rec["party_id"], rec["plate_no"], rec["gps_coords"],
         rec["created_at"], json.dumps(rec["fields"], ensure_ascii=False),
         rec["legal_text"], rec["citizen_stamp_b64"], rec["citizen_auth_mode"],
         rec["officer_stamp_b64"], rec["attachment_b64"], rec["officer_full"],
-        rec["duty_full"], rec["dept_name"], rec["verify_hash"]
+        rec["duty_full"], rec["dept_name"], rec["verify_hash"],
+        rec.get("officer_auth_mode", ""), rec.get("duty_auth_mode", ""),
+        rec.get("preparer_full", ""), rec.get("preparer_stamp_b64", ""),
+        rec.get("duty_stamp_b64", ""),
     ))
     conn.commit()
     conn.close()
@@ -941,6 +960,33 @@ def delete_record_db(rec_id: int):
 # =====================================================================
 # 5. قالب الطباعة الرسمي مقاس A4 بالترويسة الخماسية المعتمدة وشعار المرور
 # =====================================================================
+def _sig_slot_img(b64: str, slot_id: str) -> str:
+    if b64:
+        return (
+            f"<img id='{slot_id}' class='sig-slot-img' "
+            f"src='data:image/png;base64,{b64}' "
+            f"style='height:62px; max-width:96%; object-fit:contain;' />"
+        )
+    return (
+        f"<img id='{slot_id}' class='sig-slot-img' src='' alt='' "
+        f"style='height:62px; max-width:96%; object-fit:contain; display:none;' />"
+    )
+
+
+def _live_pad_card(pad_id: str, title: str, subtitle: str) -> str:
+    return f"""
+    <div class="live-pad-card" data-pad="{pad_id}">
+        <div class="live-pad-title">{title}</div>
+        <div class="live-pad-sub">{subtitle}</div>
+        <canvas id="pad_{pad_id}" class="live-pad-canvas" width="340" height="160"
+            style="touch-action:none; cursor:crosshair;"></canvas>
+        <div class="live-pad-actions no-print">
+            <button type="button" class="clear-sig-btn" onclick="clearLivePad('{pad_id}')">مسح التوقيع</button>
+        </div>
+    </div>
+    """
+
+
 def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, interactive_sig: bool = False) -> str:
     fields_map = rec["fields"] if isinstance(rec.get("fields"), dict) else json.loads(rec["fields_json"])
     rows_html = ""
@@ -965,31 +1011,119 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     col1_header = "ختم وتوقيع جهة الاستلام (المستشفى / المختبر)" if is_medical else "بصمة / توقيع الطرف المعني"
     col1_top_name = "المختص المناوب بالاستلام" if (is_medical and "ختم وتوقيع" in rec.get("citizen_auth_mode", "")) else rec["party_name"]
 
+    citizen_mode = rec.get("citizen_auth_mode", "") or ""
+    officer_mode = rec.get("officer_auth_mode", "") or ""
+    duty_mode = rec.get("duty_auth_mode", "") or ""
+    preparer_full = (rec.get("preparer_full") or "").strip()
+    has_preparer = bool(preparer_full)
+
+    needs_citizen_pad = interactive_sig and ("توقيع حي" in citizen_mode) and not rec.get("citizen_stamp_b64")
+    needs_preparer_pad = interactive_sig and has_preparer and not rec.get("preparer_stamp_b64")
+    needs_officer_pad = interactive_sig and ("توقيع حي" in officer_mode) and not rec.get("officer_stamp_b64")
+    needs_duty_pad = interactive_sig and ("توقيع حي" in duty_mode) and not rec.get("duty_stamp_b64")
+
+    # --- Citizen cell ---
     if rec.get("citizen_stamp_b64"):
-        citizen_box_inner = f"<img src='data:image/png;base64,{rec['citizen_stamp_b64']}' style='height:62px; object-fit:contain;' />"
-    elif interactive_sig and "توقيع حي" in rec.get("citizen_auth_mode", ""):
+        citizen_box_inner = _sig_slot_img(rec["citizen_stamp_b64"], "slot_citizen")
+    elif needs_citizen_pad:
+        citizen_box_inner = (
+            "<div class='sig-guide'>"
+            + _sig_slot_img("", "slot_citizen")
+            + "<div class='sig-guide-hint no-print'>ارسم التوقيع في اللوحة أعلاه</div></div>"
+        )
+    elif is_medical and "ختم وتوقيع" in citizen_mode:
         citizen_box_inner = """
-        <div>
-            <canvas id="liveSigCanvas" width="210" height="74" style="border:1px dashed #0d47a1; border-radius:6px; background:#f8fafc; touch-action:none; cursor:crosshair;"></canvas>
-            <div class="no-print" style="margin-top:2px;">
-                <button onclick="clearSig()" style="font-size:10px; padding:1px 6px; cursor:pointer;">مسح التوقيع</button>
-            </div>
-        </div>
-        """
-    elif is_medical and "ختم وتوقيع" in rec.get("citizen_auth_mode", ""):
-        citizen_box_inner = """
-        <div style='border:1px dashed #64748b; border-radius:6px; padding:8px 6px; margin:3px 4px; font-size:10px; color:#334155; line-height:1.6;'>
+        <div class='sig-guide' style='border:1px dashed #64748b; border-radius:6px; padding:8px 6px; margin:3px 4px; font-size:10px; color:#334155; line-height:1.6;'>
             الاسم: .........................................<br>
             التوقيع والختم الرسمي لجهة الاستلام
         </div>
         """
-    else:
+    elif "غياب" in citizen_mode or "امتناع" in citizen_mode:
         citizen_box_inner = "<div style='padding:16px 0; font-weight:700; color:#7f1d1d; font-size:11px;'>غياب الطرف / امتناع مثبت بالمحضر</div>"
+    else:
+        citizen_box_inner = _sig_slot_img(rec.get("citizen_stamp_b64", ""), "slot_citizen")
 
-    officer_img = (
-        f"<img src='data:image/png;base64,{rec['officer_stamp_b64']}' style='height:62px; object-fit:contain;' />"
-        if rec.get("officer_stamp_b64") else ""
-    )
+    # --- Preparer cell ---
+    preparer_box_inner = ""
+    if has_preparer:
+        if rec.get("preparer_stamp_b64"):
+            preparer_box_inner = _sig_slot_img(rec["preparer_stamp_b64"], "slot_preparer")
+        elif needs_preparer_pad:
+            preparer_box_inner = (
+                "<div class='sig-guide'>"
+                + _sig_slot_img("", "slot_preparer")
+                + "<div class='sig-guide-hint no-print'>ارسم التوقيع في اللوحة أعلاه</div></div>"
+            )
+        else:
+            preparer_box_inner = _sig_slot_img("", "slot_preparer")
+
+    # --- Officer cell ---
+    if rec.get("officer_stamp_b64"):
+        officer_box_inner = _sig_slot_img(rec["officer_stamp_b64"], "slot_officer")
+    elif needs_officer_pad:
+        officer_box_inner = (
+            "<div class='sig-guide'>"
+            + _sig_slot_img("", "slot_officer")
+            + "<div class='sig-guide-hint no-print'>ارسم التوقيع في اللوحة أعلاه</div></div>"
+        )
+    else:
+        officer_box_inner = _sig_slot_img("", "slot_officer")
+
+    # --- Duty cell ---
+    if rec.get("duty_stamp_b64"):
+        duty_box_inner = _sig_slot_img(rec["duty_stamp_b64"], "slot_duty")
+    elif needs_duty_pad:
+        duty_box_inner = (
+            "<div class='sig-guide'>"
+            + _sig_slot_img("", "slot_duty")
+            + "<div class='sig-guide-hint no-print'>ارسم التوقيع في اللوحة أعلاه</div></div>"
+        )
+    elif "ختم" in duty_mode or not duty_mode:
+        duty_box_inner = """
+            <div style="display:inline-block; border:1.5px solid #0f3d2e; color:#0f3d2e; padding:3px 10px; border-radius:5px; font-size:10.5px; font-weight:800;">
+                مُصادق ومُعتمد نظاماً
+            </div>
+        """
+    else:
+        duty_box_inner = _sig_slot_img("", "slot_duty")
+
+    col_count = 4 if has_preparer else 3
+    col_width = "25%" if has_preparer else "33.3%"
+
+    preparer_th = "<th>معد المحضر / المحرر</th>" if has_preparer else ""
+    preparer_td = ""
+    if has_preparer:
+        preparer_td = f"""
+                        <td style="width:{col_width};">
+                            <div style="font-size:10.5px; font-weight:800; margin-bottom:2px;">{preparer_full}</div>
+                            {preparer_box_inner}
+                            <div style="font-size:9px; color:#475569; margin-top:2px;">توقيع حي للمعد</div>
+                        </td>
+        """
+
+    # Live signature dock ABOVE A4
+    dock_cards = []
+    if needs_citizen_pad:
+        dock_cards.append(_live_pad_card("citizen", col1_header, col1_top_name or "الطرف المعني"))
+    if needs_preparer_pad:
+        dock_cards.append(_live_pad_card("preparer", "توقيع معد المحضر", preparer_full))
+    if needs_officer_pad:
+        dock_cards.append(_live_pad_card("officer", "توقيع ضابط الخفر", rec.get("officer_full", "")))
+    if needs_duty_pad:
+        dock_cards.append(_live_pad_card("duty", "توقيع وحدة الحوادث", rec.get("duty_full", "")))
+
+    live_dock_html = ""
+    if dock_cards:
+        live_dock_html = (
+            '<div class="live-sig-dock no-print">'
+            '<div class="live-sig-dock-head">✍️ لوحات التوقيع الحي بالإصبع (ارسم هنا — يُنسخ فوراً إلى خانات A4)</div>'
+            '<div class="live-sig-dock-grid">'
+            + "".join(dock_cards)
+            + "</div></div>"
+        )
+
+    officer_mode_label = officer_mode or "توثيق الإعداد الميداني"
+    duty_mode_label = duty_mode or "قسم مرور العارضة"
 
     attachment_block = ""
     if rec.get("attachment_b64"):
@@ -1020,6 +1154,33 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         background: linear-gradient(135deg, #d4a853 0%, #a37a2c 100%); color: #fff; border: none; padding: 8px 24px;
         font-size: 14px; font-weight: 800; border-radius: 8px; cursor: pointer;
     }}
+    .live-sig-dock {{
+        max-width: 794px; margin: 0 auto 14px auto; background: #101820; border: 1px solid #1e6b50;
+        border-radius: 12px; padding: 12px 14px 16px 14px;
+    }}
+    .live-sig-dock-head {{
+        color: #f3cc7a; font-weight: 800; font-size: 13px; margin-bottom: 10px; text-align: center;
+    }}
+    .live-sig-dock-grid {{
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;
+    }}
+    .live-pad-card {{
+        background: #0b1218; border: 1px solid #243041; border-radius: 10px; padding: 10px;
+    }}
+    .live-pad-title {{ color: #e2e8f0; font-weight: 800; font-size: 12.5px; margin-bottom: 2px; }}
+    .live-pad-sub {{ color: #94a3b8; font-size: 11px; margin-bottom: 8px; }}
+    .live-pad-canvas {{
+        width: 100%; height: 160px; border: 1.5px dashed #0d47a1; border-radius: 8px;
+        background: #f8fafc; display: block; touch-action: none;
+    }}
+    .live-pad-actions {{ margin-top: 6px; text-align: center; }}
+    .clear-sig-btn {{
+        font-size: 11px; padding: 4px 12px; cursor: pointer; border-radius: 6px;
+        border: 1px solid #475569; background: #1e293b; color: #e2e8f0;
+    }}
+    .sig-guide {{ border: 1px dashed #94a3b8; border-radius: 6px; padding: 4px; min-height: 68px; }}
+    .sig-guide-hint {{ font-size: 9px; color: #64748b; margin-top: 2px; }}
+    .sig-slot-img {{ background: transparent; }}
     @media screen {{
         body {{ padding: 8px !important; overflow-x: hidden; }}
         .toolbar {{ width: 100%; max-width: 794px; padding: 8px; }}
@@ -1056,7 +1217,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     table.sig-tbl {{ width: 100%; border-collapse: collapse; margin-top: 8px; text-align: center; }}
     table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #94a3b8; padding: 4px; font-size: 10.5px; color: #0f3d2e; }}
-    table.sig-tbl td {{ border: 1px solid #94a3b8; padding: 5px; width: 33.3%; vertical-align: middle; height: 98px; color: #0f172a; }}
+    table.sig-tbl td {{ border: 1px solid #94a3b8; padding: 5px; width: {col_width}; vertical-align: middle; height: 98px; color: #0f172a; }}
     .footer-qr {{
         margin-top: 7px; background: #f4f7f6; border: 1px solid #cbd5e1; border-radius: 6px;
         padding: 5px 10px; display: flex; justify-content: space-between; align-items: center;
@@ -1064,7 +1225,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     @media print {{
         @page {{ size: A4 portrait; margin: 6mm; }}
         html, body {{ background: #fff !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }}
-        .toolbar, .no-print {{ display: none !important; }}
+        .toolbar, .no-print, .live-sig-dock, .clear-sig-btn, .sig-guide-hint {{ display: none !important; }}
+        .sig-guide {{ border: none !important; padding: 0 !important; }}
         .sheet-stage {{ width: 100% !important; max-width: none !important; height: auto !important; overflow: visible !important; margin: 0 !important; }}
         .a4-sheet {{
             width: 100% !important; min-height: 274mm !important; margin: 0 !important;
@@ -1072,6 +1234,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             display: flex; flex-direction: column; justify-content: space-between;
             box-shadow: none !important; transform: none !important; page-break-inside: avoid;
         }}
+        .live-pad-canvas {{ display: none !important; }}
     }}
 </style>
 </head>
@@ -1079,6 +1242,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     <div class="toolbar no-print">
         <button class="print-btn" onclick="window.print()">🖨️ طباعة الوثيقة الرسمية / حفظ كملف A4 PDF</button>
     </div>
+
+    {live_dock_html}
 
     <div class="sheet-stage" id="sheetStage"><div class="a4-sheet" id="a4Sheet">
         <div>
@@ -1115,28 +1280,28 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 <thead>
                     <tr>
                         <th>{col1_header}</th>
+                        {preparer_th}
                         <th>ضابط الخفر</th>
                         <th>وحدة الحوادث</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td>
+                        <td style="width:{col_width};">
                             <div style="font-size:10px; font-weight:700; margin-bottom:2px;">{col1_top_name}</div>
                             {citizen_box_inner}
-                            <div style="font-size:9px; color:#475569; margin-top:2px;">{rec['citizen_auth_mode']}</div>
+                            <div style="font-size:9px; color:#475569; margin-top:2px;">{citizen_mode}</div>
                         </td>
-                        <td>
+                        {preparer_td}
+                        <td style="width:{col_width};">
                             <div style="font-size:10.5px; font-weight:800; margin-bottom:2px;">{rec['officer_full']}</div>
-                            {officer_img}
-                            <div style="font-size:9px; color:#475569; margin-top:2px;">توثيق الإعداد الميداني</div>
+                            {officer_box_inner}
+                            <div style="font-size:9px; color:#475569; margin-top:2px;">{officer_mode_label}</div>
                         </td>
-                        <td>
+                        <td style="width:{col_width};">
                             <div style="font-size:11px; font-weight:800; margin-bottom:8px;">{rec['duty_full']}</div>
-                            <div style="display:inline-block; border:1.5px solid #0f3d2e; color:#0f3d2e; padding:3px 10px; border-radius:5px; font-size:10.5px; font-weight:800;">
-                                مُصادق ومُعتمد نظاماً
-                            </div>
-                            <div style="font-size:9px; color:#475569; margin-top:8px;">قسم مرور العارضة</div>
+                            {duty_box_inner}
+                            <div style="font-size:9px; color:#475569; margin-top:8px;">{duty_mode_label}</div>
                         </td>
                     </tr>
                 </tbody>
@@ -1155,11 +1320,39 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     </div>
 </div>
 <script>
-    const canvas = document.getElementById('liveSigCanvas');
-    if (canvas) {{
+    const PEN_COLOR = '#0d47a1';
+    const LIVE_PADS = {json.dumps([
+        pid for pid, flag in (
+            ("citizen", needs_citizen_pad),
+            ("preparer", needs_preparer_pad),
+            ("officer", needs_officer_pad),
+            ("duty", needs_duty_pad),
+        ) if flag
+    ], ensure_ascii=False)};
+
+    function syncPadToSlot(padId) {{
+        const canvas = document.getElementById('pad_' + padId);
+        const slot = document.getElementById('slot_' + padId);
+        if (!canvas || !slot) return;
+        const blank = document.createElement('canvas');
+        blank.width = canvas.width; blank.height = canvas.height;
+        const empty = canvas.toDataURL() === blank.toDataURL();
+        if (empty) {{
+            slot.removeAttribute('src');
+            slot.style.display = 'none';
+            return;
+        }}
+        // transparent PNG sync into A4 slot
+        slot.src = canvas.toDataURL('image/png');
+        slot.style.display = 'inline-block';
+    }}
+
+    function wireLivePad(padId) {{
+        const canvas = document.getElementById('pad_' + padId);
+        if (!canvas) return;
         const ctx = canvas.getContext('2d');
-        ctx.strokeStyle = '#0d47a1';
-        ctx.lineWidth = 2.6;
+        ctx.strokeStyle = PEN_COLOR;
+        ctx.lineWidth = 2.8;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         let drawing = false;
@@ -1180,6 +1373,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(p.x + 0.1, p.y + 0.1);
             ctx.stroke();
+            syncPadToSlot(padId);
         }};
         const moveDraw = (e) => {{
             if (!drawing) return;
@@ -1188,8 +1382,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             const p = getPt(e);
             ctx.lineTo(p.x, p.y);
             ctx.stroke();
+            syncPadToSlot(padId);
         }};
-        const endDraw = (e) => {{ drawing = false; }};
+        const endDraw = () => {{ drawing = false; syncPadToSlot(padId); }};
         canvas.addEventListener('mousedown', startDraw);
         canvas.addEventListener('mousemove', moveDraw);
         window.addEventListener('mouseup', endDraw);
@@ -1198,9 +1393,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         window.addEventListener('touchend', endDraw, {{ passive: false }});
         window.addEventListener('touchcancel', endDraw, {{ passive: false }});
     }}
-    function clearSig() {{
-        if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+
+    function clearLivePad(padId) {{
+        const canvas = document.getElementById('pad_' + padId);
+        if (!canvas) return;
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+        syncPadToSlot(padId);
     }}
+
+    LIVE_PADS.forEach(wireLivePad);
+
     function fitA4Sheet() {{
         const stage = document.getElementById("sheetStage");
         const sheet = document.getElementById("a4Sheet");
@@ -1213,7 +1415,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         stage.style.setProperty("--stage-h", scale < 1 ? (scaledH + 6) + "px" : "auto");
         try {{
             if (window.frameElement) {{
-                const totalH = (scale < 1 ? scaledH : sheet.offsetHeight) + 85;
+                const dock = document.querySelector('.live-sig-dock');
+                const dockH = dock ? dock.offsetHeight + 18 : 0;
+                const totalH = (scale < 1 ? scaledH : sheet.offsetHeight) + 85 + dockH;
                 window.frameElement.style.height = totalH + "px";
             }}
         }} catch (e) {{}}
@@ -1267,6 +1471,16 @@ if "officer_approved" not in st.session_state:
     st.session_state.officer_approved = False
 if "officer_stamp_b64" not in st.session_state:
     st.session_state.officer_stamp_b64 = ""
+if "officer_auth_mode" not in st.session_state:
+    st.session_state.officer_auth_mode = "توقيع حي بالإصبع على الشاشة"
+if "duty_auth_mode" not in st.session_state:
+    st.session_state.duty_auth_mode = "ختم رسمي معتمد"
+if "duty_stamp_b64" not in st.session_state:
+    st.session_state.duty_stamp_b64 = ""
+if "preparer_full" not in st.session_state:
+    st.session_state.preparer_full = ""
+if "preparer_stamp_b64" not in st.session_state:
+    st.session_state.preparer_stamp_b64 = ""
 if "attachment_b64" not in st.session_state:
     st.session_state.attachment_b64 = ""
 if "scanner_model" not in st.session_state:
@@ -1282,6 +1496,11 @@ def reset_doc_state():
     st.session_state.citizen_auth_mode = ""
     st.session_state.officer_approved = False
     st.session_state.officer_stamp_b64 = ""
+    st.session_state.officer_auth_mode = "توقيع حي بالإصبع على الشاشة"
+    st.session_state.duty_auth_mode = "ختم رسمي معتمد"
+    st.session_state.duty_stamp_b64 = ""
+    st.session_state.preparer_full = ""
+    st.session_state.preparer_stamp_b64 = ""
     st.session_state.attachment_b64 = ""
 
 
@@ -1523,6 +1742,10 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     st.session_state.citizen_stamp_b64 = ""
                     st.session_state.officer_approved = False
                     st.session_state.officer_stamp_b64 = ""
+                    st.session_state.officer_auth_mode = "توقيع حي بالإصبع على الشاشة"
+                    st.session_state.duty_auth_mode = "ختم رسمي معتمد"
+                    st.session_state.duty_stamp_b64 = ""
+                    st.session_state.preparer_stamp_b64 = ""
                     safe_rerun()
 
         current_values = {}
@@ -1608,15 +1831,70 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             st.markdown("#### 2️⃣ توثيق ضابط الخفر ومصادقة وحدة الحوادث")
             st.caption(f"{unit_display}  •  {duty_display}")
 
+            preparer_input = st.text_input(
+                "اسم معد المحضر / المحرر (اختياري — يفتح عمود توقيع مستقل في A4)",
+                value=st.session_state.preparer_full,
+                key=f"preparer_name_{st.session_state.doc_no}",
+                disabled=st.session_state.officer_approved,
+            )
+            if not st.session_state.officer_approved:
+                st.session_state.preparer_full = (preparer_input or "").strip()
+
+            officer_auth_opts = [
+                "توقيع حي بالإصبع على الشاشة",
+                "بصمة رقمية (محاكاة منفذ الشحن Type-C)",
+            ]
+            officer_default_idx = 0
+            if "بصمة" in (st.session_state.officer_auth_mode or ""):
+                officer_default_idx = 1
+            chosen_officer_auth = st.radio(
+                "وسيلة توثيق ضابط الخفر:",
+                officer_auth_opts,
+                index=officer_default_idx,
+                key=f"officer_auth_radio_{st.session_state.doc_no}",
+                disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
+            )
+
+            duty_auth_opts = [
+                "ختم رسمي معتمد لوحدة الحوادث",
+                "توقيع حي بالإصبع على الشاشة",
+            ]
+            duty_default_idx = 0
+            if "توقيع حي" in (st.session_state.duty_auth_mode or ""):
+                duty_default_idx = 1
+            chosen_duty_auth = st.radio(
+                "وسيلة مصادقة وحدة الحوادث:",
+                duty_auth_opts,
+                index=duty_default_idx,
+                key=f"duty_auth_radio_{st.session_state.doc_no}",
+                disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
+            )
+
             if not st.session_state.officer_approved:
                 if st.button("🛡️ اعتماد الوثيقة وإصدار رمز التحقق QR", type="primary", use_container_width=True, disabled=not st.session_state.citizen_locked):
-                    seed_off = f"{st.session_state.doc_no}_{unit_display}_OFFICER"
-                    st.session_state.officer_stamp_b64 = generate_fingerprint_png_b64(seed_off, ink_rgb=(15, 61, 46))
+                    st.session_state.officer_auth_mode = chosen_officer_auth
+                    st.session_state.duty_auth_mode = (
+                        "توقيع حي على الشاشة" if "توقيع حي" in chosen_duty_auth else "ختم رسمي معتمد"
+                    )
+                    if "بصمة" in chosen_officer_auth:
+                        seed_off = f"{st.session_state.doc_no}_{unit_display}_OFFICER"
+                        st.session_state.officer_stamp_b64 = generate_fingerprint_png_b64(seed_off, ink_rgb=(15, 61, 46))
+                    else:
+                        st.session_state.officer_stamp_b64 = ""
+                        st.session_state.officer_auth_mode = "توقيع حي بالإصبع على الشاشة"
+                    st.session_state.duty_stamp_b64 = ""
+                    st.session_state.preparer_stamp_b64 = ""
                     st.session_state.officer_approved = True
                     safe_rerun()
             else:
-                st.success("تم التوثيق ومصادقة وحدة الحوادث.")
-                st.image(base64.b64decode(st.session_state.officer_stamp_b64), caption="ختم التوثيق المعتمد", width=105)
+                st.success(
+                    f"تم التوثيق: ضابط الخفر ({st.session_state.officer_auth_mode}) • "
+                    f"وحدة الحوادث ({st.session_state.duty_auth_mode})"
+                )
+                if st.session_state.officer_stamp_b64:
+                    st.image(base64.b64decode(st.session_state.officer_stamp_b64), caption="ختم التوثيق المعتمد", width=105)
+                if st.session_state.preparer_full:
+                    st.info(f"عمود توقيع المعد مفعّل: {st.session_state.preparer_full}")
             st.markdown("</div>", unsafe_allow_html=True)
 
         if st.session_state.officer_approved:
@@ -1643,6 +1921,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 "duty_full": duty_display,
                 "dept_name": shift["dept_name"],
                 "verify_hash": verify_hash,
+                "officer_auth_mode": st.session_state.officer_auth_mode,
+                "duty_auth_mode": st.session_state.duty_auth_mode,
+                "preparer_full": st.session_state.preparer_full,
+                "preparer_stamp_b64": st.session_state.preparer_stamp_b64,
+                "duty_stamp_b64": st.session_state.duty_stamp_b64,
             }
 
             a4_html = build_official_a4_html(ready_record, form_def, logo_b64_global, interactive_sig=True)
@@ -1662,7 +1945,13 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 )
 
             st.markdown("#### 📄 المعاينة الرسمية مقاس A4 (جاهزة للطباعة أو الحفظ كـ PDF)")
-            components.html(a4_html, height=1160, scrolling=True)
+            preview_h = 1480 if (
+                ("توقيع حي" in ready_record.get("citizen_auth_mode", ""))
+                or ("توقيع حي" in ready_record.get("officer_auth_mode", ""))
+                or ("توقيع حي" in ready_record.get("duty_auth_mode", ""))
+                or bool(ready_record.get("preparer_full"))
+            ) else 1160
+            components.html(a4_html, height=preview_h, scrolling=True)
 
 
 # =====================================================================
