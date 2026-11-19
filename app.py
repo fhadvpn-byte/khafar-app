@@ -978,7 +978,7 @@ def _live_pad_card(pad_id: str, title: str, subtitle: str) -> str:
     <div class="live-pad-card" data-pad="{pad_id}">
         <div class="live-pad-title">{title}</div>
         <div class="live-pad-sub">{subtitle}</div>
-        <canvas id="pad_{pad_id}" class="live-pad-canvas" width="340" height="160"
+        <canvas id="pad_{pad_id}" class="live-pad-canvas" width="900" height="220"
             style="touch-action:none; cursor:crosshair;"></canvas>
         <div class="live-pad-actions no-print">
             <button type="button" class="clear-sig-btn" onclick="clearLivePad('{pad_id}')">مسح التوقيع</button>
@@ -1106,11 +1106,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     if needs_citizen_pad:
         dock_cards.append(_live_pad_card("citizen", col1_header, col1_top_name or "الطرف المعني"))
     if needs_preparer_pad:
-        dock_cards.append(_live_pad_card("preparer", "توقيع معد المحضر", preparer_full))
+        dock_cards.append(_live_pad_card("preparer", "لوحة توقيع: الفرد المُعد / المباشر", preparer_full))
     if needs_officer_pad:
-        dock_cards.append(_live_pad_card("officer", "توقيع ضابط الخفر", rec.get("officer_full", "")))
+        dock_cards.append(_live_pad_card("officer", "لوحة توقيع: ضابط الخفر المناوب", rec.get("officer_full", "")))
     if needs_duty_pad:
-        dock_cards.append(_live_pad_card("duty", "توقيع وحدة الحوادث", rec.get("duty_full", "")))
+        dock_cards.append(_live_pad_card("duty", "لوحة توقيع: مصادقة وحدة الحوادث", rec.get("duty_full", "")))
 
     live_dock_html = ""
     if dock_cards:
@@ -1162,7 +1162,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         color: #f3cc7a; font-weight: 800; font-size: 13px; margin-bottom: 10px; text-align: center;
     }}
     .live-sig-dock-grid {{
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;
+        display:flex; flex-direction:column; gap:12px;
     }}
     .live-pad-card {{
         background: #0b1218; border: 1px solid #243041; border-radius: 10px; padding: 10px;
@@ -1170,7 +1170,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .live-pad-title {{ color: #e2e8f0; font-weight: 800; font-size: 12.5px; margin-bottom: 2px; }}
     .live-pad-sub {{ color: #94a3b8; font-size: 11px; margin-bottom: 8px; }}
     .live-pad-canvas {{
-        width: 100%; height: 160px; border: 1.5px dashed #0d47a1; border-radius: 8px;
+        width: 100%; height: 220px; border: 1.5px dashed #0d47a1; border-radius: 8px;
         background: #f8fafc; display: block; touch-action: none;
     }}
     .live-pad-actions {{ margin-top: 6px; text-align: center; }}
@@ -1472,9 +1472,9 @@ if "officer_approved" not in st.session_state:
 if "officer_stamp_b64" not in st.session_state:
     st.session_state.officer_stamp_b64 = ""
 if "officer_auth_mode" not in st.session_state:
-    st.session_state.officer_auth_mode = "توقيع حي بالإصبع على الشاشة"
+    st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لضابط الخفر / الفرد المُعد)"
 if "duty_auth_mode" not in st.session_state:
-    st.session_state.duty_auth_mode = "ختم رسمي معتمد"
+    st.session_state.duty_auth_mode = "ختم المصادقة النظامي لوحدة الحوادث"
 if "duty_stamp_b64" not in st.session_state:
     st.session_state.duty_stamp_b64 = ""
 if "preparer_full" not in st.session_state:
@@ -1496,8 +1496,8 @@ def reset_doc_state():
     st.session_state.citizen_auth_mode = ""
     st.session_state.officer_approved = False
     st.session_state.officer_stamp_b64 = ""
-    st.session_state.officer_auth_mode = "توقيع حي بالإصبع على الشاشة"
-    st.session_state.duty_auth_mode = "ختم رسمي معتمد"
+    st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لضابط الخفر / الفرد المُعد)"
+    st.session_state.duty_auth_mode = "ختم المصادقة النظامي لوحدة الحوادث"
     st.session_state.duty_stamp_b64 = ""
     st.session_state.preparer_full = ""
     st.session_state.preparer_stamp_b64 = ""
@@ -1742,8 +1742,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     st.session_state.citizen_stamp_b64 = ""
                     st.session_state.officer_approved = False
                     st.session_state.officer_stamp_b64 = ""
-                    st.session_state.officer_auth_mode = "توقيع حي بالإصبع على الشاشة"
-                    st.session_state.duty_auth_mode = "ختم رسمي معتمد"
+                    st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لضابط الخفر / الفرد المُعد)"
+                    st.session_state.duty_auth_mode = "ختم المصادقة النظامي لوحدة الحوادث"
                     st.session_state.duty_stamp_b64 = ""
                     st.session_state.preparer_stamp_b64 = ""
                     safe_rerun()
@@ -1841,8 +1841,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 st.session_state.preparer_full = (preparer_input or "").strip()
 
             officer_auth_opts = [
-                "توقيع حي بالإصبع على الشاشة",
-                "بصمة رقمية (محاكاة منفذ الشحن Type-C)",
+                "توقيع حي على الشاشة بالإصبع (لضابط الخفر / الفرد المُعد)",
+                "بصمة رقمية (منفذ الشحن Type-C) لضابط الخفر / الفرد المُعد",
             ]
             officer_default_idx = 0
             if "بصمة" in (st.session_state.officer_auth_mode or ""):
@@ -1856,8 +1856,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             )
 
             duty_auth_opts = [
-                "ختم رسمي معتمد لوحدة الحوادث",
-                "توقيع حي بالإصبع على الشاشة",
+                "ختم المصادقة النظامي لوحدة الحوادث",
+                "توقيع حي على الشاشة لمصادقة وحدة الحوادث",
             ]
             duty_default_idx = 0
             if "توقيع حي" in (st.session_state.duty_auth_mode or ""):
@@ -1873,17 +1873,19 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             if not st.session_state.officer_approved:
                 if st.button("🛡️ اعتماد الوثيقة وإصدار رمز التحقق QR", type="primary", use_container_width=True, disabled=not st.session_state.citizen_locked):
                     st.session_state.officer_auth_mode = chosen_officer_auth
-                    st.session_state.duty_auth_mode = (
-                        "توقيع حي على الشاشة" if "توقيع حي" in chosen_duty_auth else "ختم رسمي معتمد"
-                    )
+                    st.session_state.duty_auth_mode = chosen_duty_auth
                     if "بصمة" in chosen_officer_auth:
                         seed_off = f"{st.session_state.doc_no}_{unit_display}_OFFICER"
                         st.session_state.officer_stamp_b64 = generate_fingerprint_png_b64(seed_off, ink_rgb=(15, 61, 46))
+                        if st.session_state.preparer_full:
+                            seed_prep = f"{st.session_state.doc_no}_{st.session_state.preparer_full}_PREPARER"
+                            st.session_state.preparer_stamp_b64 = generate_fingerprint_png_b64(seed_prep, ink_rgb=(13, 71, 161))
+                        else:
+                            st.session_state.preparer_stamp_b64 = ""
                     else:
                         st.session_state.officer_stamp_b64 = ""
-                        st.session_state.officer_auth_mode = "توقيع حي بالإصبع على الشاشة"
+                        st.session_state.preparer_stamp_b64 = ""
                     st.session_state.duty_stamp_b64 = ""
-                    st.session_state.preparer_stamp_b64 = ""
                     st.session_state.officer_approved = True
                     safe_rerun()
             else:
