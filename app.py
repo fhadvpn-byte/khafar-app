@@ -152,11 +152,21 @@ st.markdown("""
     --text-muted: #94a3b8;
 }
 
-html, body, [class*="css"] {
+html, body, .stApp {
     font-family: 'Cairo', sans-serif !important;
     direction: rtl;
     text-align: right;
-    color: var(--text-light);
+    color-scheme: dark !important;
+}
+/* فرض الثيم الداكن ومنع قلب ألوان المتصفح في الوضع الفاتح — دون المساس بـ iframe ورقة A4 */
+.stApp {
+    color: #ffffff !important;
+    background-color: #0b1512 !important;
+}
+.stApp [data-testid="stMarkdownContainer"] p,
+.stApp [data-testid="stMarkdownContainer"] span,
+.stApp [data-testid="stMarkdownContainer"] li {
+    color: inherit;
 }
 
 /* إخفاء شريط Streamlit العلوي وأيقونات Share/GitHub لمنع التداخل مع العربية */
@@ -186,9 +196,9 @@ section[data-testid="stSidebar"] { display: none !important; }
     max-width: 1140px !important;
 }
 
-.stApp {
-    background-color: var(--bg-main) !important;
-    color: var(--text-light) !important;
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"] {
+    background-color: #0b1512 !important;
+    color: #ffffff !important;
 }
 
 .khafar-top-header {
@@ -454,34 +464,64 @@ div[data-testid="stTabs"] button[role="tab"] {
     height: 100%;
 }
 
+/* حقول الإدخال والقوائم — خلفية داكنة ونص أبيض ناصع (مقاومة للوضع الفاتح) */
+div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
+div[data-testid="stTextArea"] div[data-baseweb="textarea"] > div,
+div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
 div[data-baseweb="input"] > div,
 div[data-baseweb="textarea"] > div,
 div[data-baseweb="select"] > div {
-    background-color: #152024 !important;
-    border: 1px solid #2b4246 !important;
+    background-color: #152620 !important;
+    background: #152620 !important;
+    border: 1px solid rgba(255, 255, 255, 0.22) !important;
     border-radius: 10px !important;
-    color: #f8fafc !important;
+    color: #ffffff !important;
 }
 div[data-baseweb="input"] input,
-div[data-baseweb="textarea"] textarea {
-    color: #f8fafc !important;
-    -webkit-text-fill-color: #f8fafc !important;
+div[data-baseweb="textarea"] textarea,
+div[data-baseweb="select"] span,
+div[data-baseweb="select"] div,
+div[data-testid="stTextInput"] input,
+div[data-testid="stTextArea"] textarea,
+div[data-testid="stSelectbox"] div {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    caret-color: #ffffff !important;
     font-family: 'Cairo', sans-serif !important;
+    opacity: 1 !important;
+}
+div[data-baseweb="input"] input::placeholder,
+div[data-baseweb="textarea"] textarea::placeholder {
+    color: #94a3b8 !important;
+    -webkit-text-fill-color: #94a3b8 !important;
+    opacity: 1 !important;
+}
+/* عناوين الحقول والنصوص الفرعية */
+[data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] span,
+[data-testid="stWidgetLabel"] label,
+.stCaption, [data-testid="stCaptionContainer"],
+[data-testid="stCaptionContainer"] p,
+small, .stMarkdown small {
+    color: #e2e8f0 !important;
+    -webkit-text-fill-color: #e2e8f0 !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
 }
 label[data-testid="stWidgetLabel"] p {
-    color: #cbd5e1 !important;
-    font-weight: 700 !important;
     font-size: 13.5px !important;
 }
 
 div.stButton > button {
     background: #172628 !important;
-    color: #e2e8f0 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
     border: 1px solid #2c4a47 !important;
     border-radius: 10px !important;
     font-weight: 700 !important;
     padding: 0.5rem 1rem !important;
     transition: 0.2s all !important;
+    opacity: 1 !important;
 }
 div.stButton > button:hover {
     background: #134e3a !important;
@@ -506,22 +546,70 @@ div.stDownloadButton > button {
     font-weight: 800 !important;
 }
 
-div[role="radiogroup"] {
-    background: #131a1e;
-    padding: 6px;
-    border-radius: 12px;
-    border: 1px solid #25353b;
-    gap: 8px;
+/* خيارات st.radio — نص أبيض واضح وخلفية داكنة مع إبراز الخيار المحدد */
+div[data-testid="stRadio"],
+div[data-testid="stRadio"] label,
+div[data-testid="stRadio"] label p,
+div[data-testid="stRadio"] label span,
+div[data-testid="stRadio"] p,
+div[data-testid="stRadio"] span,
+div[role="radiogroup"],
+div[role="radiogroup"] *,
+div[role="radiogroup"] label,
+div[role="radiogroup"] label p,
+div[role="radiogroup"] label span,
+div[role="radiogroup"] p,
+div[role="radiogroup"] span,
+div[role="radiogroup"] div {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
 }
+div[role="radiogroup"] {
+    background: #101a17 !important;
+    padding: 8px !important;
+    border-radius: 12px !important;
+    border: 1px solid #25353b !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+}
+div[role="radiogroup"] > label,
+div[data-testid="stRadio"] label {
+    background: #172a24 !important;
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    margin: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+div[role="radiogroup"] > label:has(input:checked),
+div[data-testid="stRadio"] label:has(input:checked) {
+    border: 2px solid #10b981 !important;
+    background: #1a3a30 !important;
+    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.35) !important;
+}
+/* حماية ورقة التقرير الرسمي A4 داخل iframe من قواعد النص الأبيض في الواجهة */
+iframe[title="components.a4"],
+iframe[data-testid="stIFrame"],
+[data-testid="stCustomComponentV1"],
+[data-testid="element-container"] iframe,
+.stElementContainer iframe {
+    color-scheme: normal !important;
+    background: transparent !important;
+}
+/* لا تُطبَّق قواعد اللون الأبيض على محتوى معاينة A4 (مستند iframe منفصل أصلاً) */
 
 /* RTL_JUSTIFY_FIX */
 [data-testid="stAppViewContainer"], [data-testid="stMarkdownContainer"], .stMarkdown { direction: rtl !important; text-align: right !important; }
 .official-5lines, .official-5lines div,
 .official-5lines-compact, .official-5lines-compact div { text-align: right !important; }
 .auth-panel:empty { display: none !important; }
-.legal-dark-box { direction: rtl !important; text-align: justify !important; text-align-last: right !important; unicode-bidi: embed !important; }
+.legal-dark-box { direction: rtl !important; text-align: justify !important; text-align-last: right !important; unicode-bidi: embed !important; color: #e2e8f0 !important; }
 .legal-dark-box .legal-title { direction: rtl !important; text-align: right !important; color: #d4a853 !important; font-weight: 800 !important; margin-bottom: 8px !important; }
-.legal-dark-box .legal-body { direction: rtl !important; unicode-bidi: embed !important; text-align: justify !important; text-align-last: right !important; text-justify: inter-word !important; line-height: 2.0 !important; }
+.legal-dark-box .legal-body { direction: rtl !important; unicode-bidi: embed !important; text-align: justify !important; text-align-last: right !important; text-justify: inter-word !important; line-height: 2.0 !important; color: #e2e8f0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1302,7 +1390,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
     * {{ box-sizing: border-box; font-family: 'Cairo', sans-serif; }}
-    body {{ margin: 0; padding: 14px; background: #0d1316; direction: rtl; }}
+    /* ورقة A4 معزولة داخل iframe: نص داكن فوق خلفية بيضاء بغض النظر عن ثيم الجهاز */
+    html, body {{ color-scheme: light; }}
+    body {{ margin: 0; padding: 14px; background: #0d1316; direction: rtl; color: #e2e8f0; }}
     .toolbar {{
         max-width: 210mm; margin: 0 auto 12px auto; display: flex; gap: 10px;
         justify-content: center; background: #0f3d2e; border: 1px solid #d4a853; padding: 10px; border-radius: 10px;
@@ -1345,36 +1435,40 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         .sheet-stage {{ width: 100%; max-width: 794px; margin: 0 auto; height: var(--stage-h, auto); overflow: hidden; position: relative; }}
         .a4-sheet {{
             width: 794px !important; min-height: 1100px; margin: 0;
-            background: #ffffff; color: #0f172a; padding: 9mm 12mm; border: 2px solid #0f3d2e;
+            background: #ffffff !important; color: #0f172a !important; padding: 9mm 12mm; border: 2px solid #0f3d2e;
             display: flex; flex-direction: column; justify-content: space-between;
             box-shadow: 0 12px 32px rgba(0,0,0,0.45);
             transform-origin: top right; transform: scale(var(--a4-scale, 1));
         }}
+        .a4-sheet, .a4-sheet p, .a4-sheet td, .a4-sheet th, .a4-sheet div, .a4-sheet span {{
+            color: #0f172a;
+        }}
+        .a4-sheet .doc-banner {{ color: #ffffff !important; }}
     }}
     .hdr {{
         display: grid; grid-template-columns: 1.35fr 0.9fr 1.15fr;
         align-items: center; border-bottom: 2px solid #0f3d2e; padding-bottom: 8px;
     }}
     .hdr-right {{ text-align: center; line-height: 1.48; }}
-    .hdr-right p {{ margin: 0; font-size: 11.5px; font-weight: 800; color: #0f172a; }}
+    .hdr-right p {{ margin: 0; font-size: 11.5px; font-weight: 800; color: #0f172a !important; }}
     .hdr-center {{ text-align: center; display: flex; justify-content: center; align-items: center; }}
     .hdr-left {{ text-align: right; padding-right: 12px; line-height: 1.65; }}
-    .hdr-left p {{ margin: 0; font-size: 10.5px; font-weight: 700; color: #0f172a; }}
+    .hdr-left p {{ margin: 0; font-size: 10.5px; font-weight: 700; color: #0f172a !important; }}
     .doc-banner {{
-        background: #0f3d2e; color: #ffffff; text-align: center;
+        background: #0f3d2e; color: #ffffff !important; text-align: center;
         padding: 5px; border-radius: 6px; font-size: 14.5px; font-weight: 800; margin: 8px 0;
     }}
     table.data-tbl {{ width: 100%; border-collapse: collapse; margin-bottom: 8px; }}
-    table.data-tbl td {{ border: 1px solid #cbd5e1; padding: 4px 8px; font-size: 11px; vertical-align: top; direction: rtl; text-align: right; }}
-    table.data-tbl td.lbl {{ width: 32%; background: #f4f7f6; font-weight: 700; color: #0f3d2e; }}
-    table.data-tbl td.val {{ width: 68%; color: #0f172a; font-weight: 600; white-space: pre-line; }}
+    table.data-tbl td {{ border: 1px solid #cbd5e1; padding: 4px 8px; font-size: 11px; vertical-align: top; direction: rtl; text-align: right; color: #0f172a !important; }}
+    table.data-tbl td.lbl {{ width: 32%; background: #f4f7f6; font-weight: 700; color: #0f3d2e !important; }}
+    table.data-tbl td.val {{ width: 68%; color: #0f172a !important; font-weight: 600; white-space: pre-line; }}
     .legal-box {{
         background: #f8fafc; border: 1px solid #0f3d2e; border-right: 5px solid #0f3d2e;
-        border-radius: 6px; padding: 9px 12px; font-size: 11.5px; line-height: 1.72; text-align: justify; color: #0f172a;
+        border-radius: 6px; padding: 9px 12px; font-size: 11.5px; line-height: 1.72; text-align: justify; color: #0f172a !important;
     }}
     table.sig-tbl {{ width: 100%; border-collapse: collapse; margin-top: 8px; text-align: center; }}
-    table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #94a3b8; padding: 4px; font-size: 10.5px; color: #0f3d2e; }}
-    table.sig-tbl td {{ border: 1px solid #94a3b8; padding: 5px; width: {col_width}; vertical-align: middle; height: 98px; color: #0f172a; }}
+    table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #94a3b8; padding: 4px; font-size: 10.5px; color: #0f3d2e !important; }}
+    table.sig-tbl td {{ border: 1px solid #94a3b8; padding: 5px; width: {col_width}; vertical-align: middle; height: 98px; color: #0f172a !important; }}
     .footer-qr {{
         margin-top: 7px; background: #f4f7f6; border: 1px solid #cbd5e1; border-radius: 6px;
         padding: 5px 10px; display: flex; justify-content: space-between; align-items: center;
