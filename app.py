@@ -740,25 +740,47 @@ def _is_agent_role(value: str) -> bool:
     return ("وكيل" in text) or ("وكالة" in text)
 
 
-def _handover_capacity(values: dict) -> str:
-    role = str(values.get("receiver_role") or "").strip()
-    if _is_agent_role(role):
+def _field_rule_matches(rule: dict, fields_map: dict) -> bool:
+    if not rule:
+        return False
+    source = str(fields_map.get(rule.get("key"), "") or "")
+    tokens = rule.get("contains_any") or []
+    return any(token in source for token in tokens)
+
+
+def _handover_legal(values: dict) -> str:
+    closing = (
+        " وبكامل مقتنياتها الشخصية دون نقص، "
+        "وبموجبه أخلي مسؤولية قسم مرور العارضة والفرقة المباشرة من سحب المركبة أو حجزها، "
+        "وأتعهد بعدم قيادتها في حال وجود أي خلل يؤثر على السلامة العامة."
+    )
+    if _is_agent_role(values.get("receiver_role")):
         return (
+            f"أقر أنا الموقع أدناه ({_val(values, 'agent_name')})، هوية رقم ({_val(values, 'agent_id')})، "
+            f"جوال رقم ({_val(values, 'party_phone')})، "
             f"بصفتي وكيلاً شرعياً عن مالك المركبة ({_val(values, 'principal_name')} - هوية رقم: {_val(values, 'principal_id')}) "
-            f"بموجب الوكالة السارية رقم ({_val(values, 'wakala_no')}) وتاريخ ({_val(values, 'wakala_date')})"
+            f"بموجب الوكالة الشرعية السارية رقم ({_val(values, 'wakala_no')}) وتاريخ ({_val(values, 'wakala_date')})، "
+            f"بأنني استلمت المركبة ({_val(values, 'vehicle_desc')}) التي تحمل اللوحة رقم ({_val(values, 'plate_no')}) "
+            f"في موقع الحادث بحالتها الراهنة ({_val(values, 'vehicle_state')})"
+            + closing
         )
-    return f"بصفتي ({_val(values, 'receiver_role')})"
+    return (
+        f"أقر أنا الموقع والمبصم أدناه ({_val(values, 'party_name')})، حامل الهوية رقم ({_val(values, 'party_id')})، "
+        f"بصفتي ({_val(values, 'receiver_role')})، بأنني استلمت المركبة ({_val(values, 'vehicle_desc')}) التي تحمل اللوحة رقم ({_val(values, 'plate_no')}) "
+        f"في موقع الحادث رقم ({_val(values, 'incident_no')}) مباشرةً بحالتها الراهنة ({_val(values, 'vehicle_state')})"
+        + closing
+    )
 
 
 def _include_field_on_a4(field: dict, fields_map: dict) -> bool:
     if field.get("a4_hidden"):
         return False
+    if _field_rule_matches(field.get("hide_if") or {}, fields_map):
+        return False
     rule = field.get("visible_if") or {}
     if not rule:
         return True
-    source = str(fields_map.get(rule.get("key"), "") or "")
-    tokens = rule.get("contains_any") or []
-    if not any(token in source for token in tokens):
+    if not _field_rule_matches(rule, fields_map):
         return False
     return field.get("key") in fields_map
 
@@ -808,26 +830,37 @@ TRAFFIC_FORMS = {
         "require_image": False,
         "fields": [
             {"key": "incident_no", "label": "رقم الحادث المرجعي", "type": "text", "sample": "460982341"},
-            {"key": "party_name", "label": "اسم المستلم الرباعي", "type": "text", "sample": "عبدالرحمن بن محمد بن علي السبيعي"},
-            {"key": "party_id", "label": "رقم الهوية / الإقامة", "type": "text", "sample": "1087654321"},
-            {"key": "party_phone", "label": "رقم الجوال", "type": "text", "sample": "0551234567"},
             {"key": "receiver_role", "label": "صفة المستلم", "type": "select", "options": [
                 "مالك المركبة بموجب رخصة السير",
                 "مفوض رسمي بقيادة المركبة",
                 "وكيل شرعي بموجب وكالة سارية"
             ], "sample": "مالك المركبة بموجب رخصة السير"},
+            {"key": "party_name", "label": "اسم المستلم الرباعي", "type": "text", "sample": "عبدالرحمن بن محمد بن علي السبيعي",
+             "hide_if": {"key": "receiver_role", "contains_any": ["وكيل", "وكالة"]}},
+            {"key": "party_id", "label": "رقم الهوية / الإقامة", "type": "text", "sample": "1087654321",
+             "hide_if": {"key": "receiver_role", "contains_any": ["وكيل", "وكالة"]}},
+            {"key": "agent_name", "label": "اسم الوكيل الشرعي (المستلم)", "type": "text", "sample": "عبدالرحمن بن محمد بن علي السبيعي", "prefill_sample": True,
+             "visible_if": {"key": "receiver_role", "contains_any": ["وكيل", "وكالة"]},
+             "a4_label": "الوكيل الشرعي (المستلم)",
+             "a4_compose": {"keys": ["agent_id"], "fmt": "{value} — هوية: {agent_id}"}},
+            {"key": "agent_id", "label": "رقم هوية الوكيل", "type": "text", "sample": "1087654321", "prefill_sample": True,
+             "visible_if": {"key": "receiver_role", "contains_any": ["وكيل", "وكالة"]},
+             "a4_hidden": True},
             {"key": "principal_name", "label": "اسم الموكّل (مالك المركبة الأصلي)", "type": "text", "sample": "محمد بن علي بن سعد السبيعي", "prefill_sample": True,
              "visible_if": {"key": "receiver_role", "contains_any": ["وكيل", "وكالة"]},
-             "a4_label": "الموكّل والوكالة الشرعية", "a4_compose": ["principal_id", "wakala_no", "wakala_date"]},
+             "a4_label": "الموكّل (مالك المركبة)",
+             "a4_compose": {"keys": ["principal_id"], "fmt": "{value} — هوية: {principal_id}"}},
             {"key": "principal_id", "label": "رقم هوية / إقامة الموكّل", "type": "text", "sample": "1023456789", "prefill_sample": True,
              "visible_if": {"key": "receiver_role", "contains_any": ["وكيل", "وكالة"]},
              "a4_hidden": True},
             {"key": "wakala_no", "label": "رقم الوكالة الشرعية / الإلكترونية", "type": "text", "sample": "461829405", "prefill_sample": True,
              "visible_if": {"key": "receiver_role", "contains_any": ["وكيل", "وكالة"]},
-             "a4_hidden": True},
+             "a4_label": "الوكالة الشرعية",
+             "a4_compose": {"keys": ["wakala_date"], "fmt": "رقم {value} بتاريخ {wakala_date}"}},
             {"key": "wakala_date", "label": "تاريخ إصدار الوكالة", "type": "text", "sample": "1448/04/15 هـ", "prefill_sample": True,
              "visible_if": {"key": "receiver_role", "contains_any": ["وكيل", "وكالة"]},
              "a4_hidden": True},
+            {"key": "party_phone", "label": "رقم الجوال", "type": "text", "sample": "0551234567"},
             {"key": "vehicle_desc", "label": "نوع المركبة وموديلها ولونها", "type": "text", "sample": "تويوتا كامري 2024 - أبيض"},
             {"key": "plate_no", "label": "رقم اللوحة", "type": "text", "sample": "ح ط ر 4512"},
             {"key": "vehicle_state", "label": "حالة المركبة عند التسليم بالموقع", "type": "select", "options": [
@@ -836,12 +869,7 @@ TRAFFIC_FORMS = {
                 "غير صالحة للسير وتُنقل بسطحة خاصة بمعرفة المستلم"
             ], "sample": "أضرار سطحية لا تمنع السير الآمن"},
         ],
-        "legal_fn": lambda m: (
-            f"أقر أنا الموقع والمبصم أدناه ({_val(m, 'party_name')})، حامل الهوية رقم ({_val(m, 'party_id')})، "
-            f"{_handover_capacity(m)}، بأنني استلمت المركبة ({_val(m, 'vehicle_desc')}) التي تحمل اللوحة رقم ({_val(m, 'plate_no')}) "
-            f"في موقع الحادث رقم ({_val(m, 'incident_no')}) مباشرةً بحالتها الراهنة ({_val(m, 'vehicle_state')}) وبكامل مقتنياتها الشخصية دون نقص، "
-            f"وبموجبه أخلي مسؤولية قسم مرور العارضة والفرقة المباشرة من سحب المركبة أو حجزها، وأتعهد بعدم قيادتها في حال وجود أي خلل يؤثر على السلامة العامة."
-        ),
+        "legal_fn": _handover_legal,
     },
 
     "decl_fault": {
@@ -1456,12 +1484,12 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool) -> st
             sibling = str(fields_map.get(sibling_key, "") or "").strip()
             if sibling:
                 shown = f"{shown} — {sibling}"
-        compose_keys = field.get("a4_compose") or []
-        if compose_keys:
-            principal_id = str(fields_map.get("principal_id", "") or "").strip()
-            wakala_no = str(fields_map.get("wakala_no", "") or "").strip()
-            wakala_date = str(fields_map.get("wakala_date", "") or "").strip()
-            shown = f"{shown} — هوية: {principal_id or '-'} | وكالة رقم {wakala_no or '-'} بتاريخ {wakala_date or '-'}"
+        compose = field.get("a4_compose") or {}
+        if isinstance(compose, dict) and compose.get("fmt"):
+            mapping = {"value": shown}
+            for key in compose.get("keys") or []:
+                mapping[key] = str(fields_map.get(key, "") or "").strip() or "-"
+            shown = compose["fmt"].format_map(mapping)
         field = {**field, "label": label}
         wide = dense and _field_is_wide(field, shown)
         if not dense or wide:
@@ -1542,13 +1570,22 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         citizen_pad_title = "لوحة توقيع: المختص المناوب المستلم"
         citizen_pad_sub = " — ".join([x for x in (receiver_name, receiver_role) if x]) or "جهة الاستلام"
     else:
-        col1_header = "الطرف المعني"
-        col1_top_name = (rec.get("party_name") or "").strip()
-        if col1_top_name in {"", "غير محدد", "-"}:
-            col1_top_name = ""
-        col1_role_line = ""
-        citizen_pad_title = "لوحة توقيع: المواطن / المقر / الطرف المعني"
-        citizen_pad_sub = col1_top_name or "الطرف المعني"
+        handover_agent = rec.get("form_id") == "decl_handover" and _is_agent_role(fields_map.get("receiver_role"))
+        if handover_agent:
+            col1_header = "توقيع المستلم (الوكيل الشرعي)"
+            col1_top_name = str(fields_map.get("agent_name") or "").strip()
+            agent_id = str(fields_map.get("agent_id") or "").strip()
+            col1_role_line = f"هوية رقم: {agent_id}" if agent_id else ""
+            citizen_pad_title = "لوحة توقيع: الوكيل الشرعي"
+            citizen_pad_sub = " — ".join(part for part in (col1_top_name, col1_role_line) if part) or "الوكيل الشرعي"
+        else:
+            col1_header = "الطرف المعني"
+            col1_top_name = (rec.get("party_name") or "").strip()
+            if col1_top_name in {"", "غير محدد", "-"}:
+                col1_top_name = ""
+            col1_role_line = ""
+            citizen_pad_title = "لوحة توقيع: المواطن / المقر / الطرف المعني"
+            citizen_pad_sub = col1_top_name or "الطرف المعني"
 
     col1_name_html = (
         f'<div class="sig-person">{html.escape(col1_top_name)}</div>'
@@ -2326,18 +2363,24 @@ if st.session_state.nav_tab == "النماذج الميدانية":
         current_values = {}
         if fid == "decl_handover":
             by_key = {fld["key"]: fld for fld in form_def["fields"]}
-            leading = [fld for fld in form_def["fields"] if fld["key"] in {"incident_no", "party_name", "party_id", "party_phone"}]
-            trailing = [fld for fld in form_def["fields"] if fld["key"] in {"vehicle_desc", "plate_no", "vehicle_state"}]
-            render_field_grid(leading)
-            role_field = by_key["receiver_role"]
-            current_values["receiver_role"] = render_field(role_field)
+            head = st.columns(2)
+            with head[0]:
+                current_values["incident_no"] = render_field(by_key["incident_no"])
+            with head[1]:
+                current_values["receiver_role"] = render_field(by_key["receiver_role"])
             if _is_agent_role(current_values.get("receiver_role")):
-                for pair in (("principal_name", "principal_id"), ("wakala_no", "wakala_date")):
+                for pair in (
+                    ("agent_name", "agent_id"),
+                    ("principal_name", "principal_id"),
+                    ("wakala_no", "wakala_date"),
+                ):
                     pair_cols = st.columns(2)
                     for col, key in zip(pair_cols, pair):
                         with col:
                             current_values[key] = render_field(by_key[key])
-            render_field_grid(trailing)
+            else:
+                render_field_grid([by_key["party_name"], by_key["party_id"]])
+            render_field_grid([by_key[key] for key in ("party_phone", "vehicle_desc", "plate_no", "vehicle_state")])
         else:
             render_field_grid([fld for fld in form_def["fields"] if not fld.get("visible_if")])
 
@@ -2526,7 +2569,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                             st.session_state.receiver_name = ""
                             st.session_state.receiver_role = ""
                         if "بصمة منفذ الشحن" in chosen_auth:
-                            seed = f"{st.session_state.doc_no}_{current_values.get('party_id', '')}_CITIZEN"
+                            signer_id = current_values.get("agent_id") or current_values.get("party_id", "")
+                            seed = f"{st.session_state.doc_no}_{signer_id}_CITIZEN"
                             st.session_state.citizen_stamp_b64 = generate_fingerprint_png_b64(seed, ink_rgb=(13, 71, 161))
                             st.session_state.citizen_auth_mode = "بصمة منفذ الشحن (Type-C)"
                         elif "توقيع حي" in chosen_auth:
@@ -2621,8 +2665,12 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             st.markdown("</div>", unsafe_allow_html=True)
 
         if st.session_state.officer_approved:
-            party_name_final = current_values.get("party_name") or current_values.get("driver_name") or "غير محدد"
-            party_id_final = current_values.get("party_id") or current_values.get("driver_id_nat") or "-"
+            if fid == "decl_handover" and _is_agent_role(current_values.get("receiver_role")):
+                party_name_final = current_values.get("agent_name") or "غير محدد"
+                party_id_final = current_values.get("agent_id") or "-"
+            else:
+                party_name_final = current_values.get("party_name") or current_values.get("driver_name") or "غير محدد"
+                party_id_final = current_values.get("party_id") or current_values.get("driver_id_nat") or "-"
             plate_final = current_values.get("plate_no") or current_values.get("vehicle_plate_type") or "-"
             raw_seal = f"{st.session_state.doc_no}|{party_id_final}|{st.session_state.doc_time}"
             verify_hash = "KHF-" + hashlib.sha256(raw_seal.encode("utf-8")).hexdigest()[:16].upper()
