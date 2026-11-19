@@ -771,9 +771,212 @@ def _is_agent_role(value: str) -> bool:
 def _field_rule_matches(rule: dict, fields_map: dict) -> bool:
     if not rule:
         return False
+    nested = rule.get("all")
+    if isinstance(nested, list):
+        return bool(nested) and all(_field_rule_matches(part, fields_map) for part in nested)
     source = str(fields_map.get(rule.get("key"), "") or "")
     tokens = rule.get("contains_any") or []
     return any(token in source for token in tokens)
+
+
+def _field_is_visible(field: dict, fields_map: dict) -> bool:
+    if _field_rule_matches(field.get("hide_if") or {}, fields_map):
+        return False
+    rule = field.get("visible_if") or {}
+    if rule and not _field_rule_matches(rule, fields_map):
+        return False
+    return True
+
+
+_PARTY_ORDINALS = ["", "الأول", "الثاني", "الثالث", "الرابع", "الخامس"]
+_COUNT_TOKEN = {1: "(2)", 2: "(2)", 3: "(3)", 4: "(4)", 5: "(5)"}
+
+
+def _count_parties(values: dict) -> int:
+    label = str((values or {}).get("party_count") or "")
+    for count in (5, 4, 3, 2):
+        if _COUNT_TOKEN[count] in label:
+            return count
+    return 2
+
+
+def _count_visible_tokens(index: int) -> list[str]:
+    return [_COUNT_TOKEN[n] for n in range(index, 6)]
+
+
+def _settlement_legal(values: dict) -> str:
+    count = _count_parties(values)
+    clauses = []
+    for index in range(1, count + 1):
+        ordinal = _PARTY_ORDINALS[index]
+        clause = (
+            f"الطرف {ordinal}: ({_val(values, f'p{index}_name')})، هوية رقم ({_val(values, f'p{index}_id')})، "
+            f"جوال ({_val(values, f'p{index}_phone')})، مركبة ({_val(values, f'p{index}_vehicle')})، "
+            f"صفته ({_val(values, f'p{index}_role')})، وتوقيعه ({_val(values, f'p{index}_capacity')})"
+        )
+        if "وكيل" in str(values.get(f"p{index}_capacity") or ""):
+            clause += (
+                f"، بموجب الوكالة الشرعية المخولة بالصلح والتنازل رقم ({_val(values, f'p{index}_wakala_no')}) "
+                f"وتاريخ ({_val(values, f'p{index}_wakala_date')})، والوكيل الحاضر ({_val(values, f'p{index}_agent')})"
+            )
+        clauses.append(clause)
+    compensation = ""
+    if "عوض" in str(values.get("settlement_basis") or ""):
+        compensation = f" وتفاصيل العوض أو الإصلاح: ({_val(values, 'compensation')})."
+    return (
+        f"نقر نحن الأطراف الموقعة أدناه في الحادث المروري رقم ({_val(values, 'incident_no')}) "
+        f"الواقع في ({_val(values, 'incident_loc')})، وعدد الأطراف المشمولين بهذا الصلح ({count})، وهم: "
+        + "؛ ".join(clauses)
+        + f". وأساس الصلح والتنازل: ({_val(values, 'settlement_basis')}).{compensation} "
+        f"ونقر بأن ({_val(values, 'injury_statement')}). "
+        "وبموجب هذا الإقرار نُسقط مطالبتنا بالحق الخاص إسقاطاً نهائياً لا رجعة فيه أمام قسم مرور العارضة "
+        "وأمام الجهات القضائية، ونُبرئ ذمة بعضنا فيما شمله هذا الصلح من التلفيات المادية."
+    )
+
+
+def _flee_is_present(values: dict) -> bool:
+    return "حضور" in str((values or {}).get("waiver_status") or "")
+
+
+def _flee_waiver_legal(values: dict) -> str:
+    capacity = str(values.get("signer_capacity") or "")
+    if "وكيل" in capacity:
+        capacity_text = (
+            f"بصفتي وكيلاً شرعياً مخولاً بالتنازل بموجب الوكالة رقم ({_val(values, 'wakala_no')}) "
+            f"وتاريخ ({_val(values, 'wakala_date')})، والوكيل الحاضر ({_val(values, 'agent_present')})،"
+        )
+    else:
+        capacity_text = "بصفتي أصالة عن نفسي،"
+    if _flee_is_present(values):
+        branch = (
+            f"وذلك بعد معرفة/حضور الطرف المتسبب ({_val(values, 'cause_name')})، هوية رقم ({_val(values, 'cause_id')})، "
+            f"جوال ({_val(values, 'cause_phone')})، ومركبته ({_val(values, 'cause_vehicle')})، "
+            f"وتفاصيل التسوية أو العوض المستلم: ({_val(values, 'settlement_detail')}). "
+        )
+    else:
+        branch = f"وأطلب حفظ وإقفال البلاغ بسبب ({_val(values, 'close_reason')}). "
+    return (
+        f"أقر أنا المُبلّغ المتضرر ({_val(values, 'party_name')})، هوية رقم ({_val(values, 'party_id')})، "
+        f"جوال ({_val(values, 'party_phone')})، والمركبة المتضررة ({_val(values, 'plate_no')})، {capacity_text} "
+        f"بشأن بلاغ الصدم والهروب رقم ({_val(values, 'incident_no')}) الواقع في ({_val(values, 'incident_loc')})، "
+        f"وحالة التنازل: ({_val(values, 'waiver_status')}). {branch}"
+        "وبموجب هذا الإقرار أتنازل تنازلاً نهائياً لا رجعة فيه عن حقي الخاص في واقعة الصدم والهروب المشار إليها، "
+        "وأُبرئ ذمة الطرف الآخر من التلفيات المادية محل هذا التنازل. "
+        "(علماً بأن هذا التنازل يقتصر على الحق الخاص فقط ولا يخل بتطبيق الإجراءات النظامية المقررة بالحق العام "
+        "حيال مخالفة الهروب من موقع الحادث وفق نظام المرور ولائحته التنفيذية)."
+    )
+
+
+def _waiver_signers(form_id: str, fields_map: dict) -> list[dict]:
+    if form_id == "decl_settlement":
+        signers = []
+        for index in range(1, _count_parties(fields_map) + 1):
+            ordinal = _PARTY_ORDINALS[index]
+            name = str(fields_map.get(f"p{index}_name") or "").strip()
+            capacity = str(fields_map.get(f"p{index}_capacity") or "").strip()
+            agent = str(fields_map.get(f"p{index}_agent") or "").strip()
+            role = f"{capacity} — {agent}" if ("وكيل" in capacity and agent) else capacity
+            signers.append({
+                "pad": f"p{index}",
+                "header": f"توقيع الطرف {ordinal}",
+                "name": name,
+                "role": role,
+                "pad_title": f"لوحة توقيع: الطرف {ordinal}",
+                "sub": " — ".join(part for part in (name, role) if part) or f"الطرف {ordinal}",
+            })
+        return signers
+    if form_id == "decl_flee_waiver":
+        name = str(fields_map.get("party_name") or "").strip()
+        capacity = str(fields_map.get("signer_capacity") or "").strip()
+        agent = str(fields_map.get("agent_present") or "").strip()
+        role = f"{capacity} — {agent}" if ("وكيل" in capacity and agent) else capacity
+        signers = [{
+            "pad": "p1",
+            "header": "توقيع المُبلّغ المتنازل",
+            "name": name,
+            "role": role,
+            "pad_title": "لوحة توقيع: المُبلّغ المتنازل",
+            "sub": " — ".join(part for part in (name, role) if part) or "المُبلّغ المتنازل",
+        }]
+        if _flee_is_present(fields_map):
+            cause_name = str(fields_map.get("cause_name") or "").strip()
+            signers.append({
+                "pad": "p2",
+                "header": "توقيع الطرف المتسبب",
+                "name": cause_name,
+                "role": "الطرف المتسبب الحاضر",
+                "pad_title": "لوحة توقيع: الطرف المتسبب",
+                "sub": cause_name or "الطرف المتسبب",
+            })
+        return signers
+    return []
+
+
+def _party_block(index: int, sample: dict) -> list[dict]:
+    ordinal = _PARTY_ORDINALS[index]
+    count_rule = {"key": "party_count", "contains_any": _count_visible_tokens(index)}
+    agent_rule = {"all": [count_rule, {"key": f"p{index}_capacity", "contains_any": ["وكيل"]}]}
+    prefix = f"p{index}_"
+    return [
+        {"key": f"{prefix}name", "label": f"الاسم الرباعي للطرف {ordinal}", "type": "text", "sample": sample["name"],
+         "visible_if": count_rule, "a4_label": f"الطرف {ordinal}", "a4_keep_pair": True,
+         "a4_compose": {"keys": [f"{prefix}id"], "fmt": "{value} — هوية: {" + prefix + "id}"}},
+        {"key": f"{prefix}id", "label": f"رقم الهوية أو الإقامة للطرف {ordinal}", "type": "text", "sample": sample["nid"],
+         "visible_if": count_rule, "a4_hidden": True},
+        {"key": f"{prefix}phone", "label": f"رقم جوال الطرف {ordinal}", "type": "text", "sample": sample["phone"],
+         "visible_if": count_rule, "a4_label": f"جوال الطرف {ordinal}", "a4_keep_pair": True},
+        {"key": f"{prefix}vehicle", "label": f"نوع المركبة ورقم لوحتها — الطرف {ordinal}", "type": "text", "sample": sample["vehicle"],
+         "visible_if": count_rule, "a4_label": f"مركبة الطرف {ordinal}", "a4_keep_pair": True},
+        {"key": f"{prefix}role", "label": f"صفته في الإقرار — الطرف {ordinal}", "type": "select",
+         "options": ["متنازل ومبرئ للذمة", "متنازل له", "صلح وتنازل متبادل"], "sample": sample["role"],
+         "visible_if": count_rule, "a4_label": f"صفة الطرف {ordinal}", "a4_keep_pair": True,
+         "a4_compose": {"keys": [f"{prefix}capacity"], "fmt": "{value} — التوقيع: {" + prefix + "capacity}"}},
+        {"key": f"{prefix}capacity", "label": f"صفة التوقيع — الطرف {ordinal}", "type": "select",
+         "options": ["أصالة عن نفسه", "وكيل شرعي مخول بالتنازل"], "sample": sample["cap"],
+         "visible_if": count_rule, "a4_hidden": True},
+        {"key": f"{prefix}wakala_no", "label": f"رقم الوكالة الشرعية المخولة بالصلح والتنازل — الطرف {ordinal}", "type": "text",
+         "sample": sample.get("wakala", "461829405"), "visible_if": agent_rule, "a4_label": f"وكالة الطرف {ordinal}", "a4_keep_pair": True,
+         "a4_compose": {"keys": [f"{prefix}wakala_date", f"{prefix}agent"], "fmt": "رقم {value} بتاريخ {" + prefix + "wakala_date} — الوكيل: {" + prefix + "agent}"}},
+        {"key": f"{prefix}wakala_date", "label": f"تاريخ الوكالة — الطرف {ordinal}", "type": "text",
+         "sample": sample.get("wakala_date", "1448/04/15 هـ"), "visible_if": agent_rule, "a4_hidden": True},
+        {"key": f"{prefix}agent", "label": f"اسم وهوية الوكيل الحاضر — الطرف {ordinal}", "type": "text",
+         "sample": sample.get("agent", "فهد بن سعيد القحطاني — هوية 1099887766"), "visible_if": agent_rule, "a4_hidden": True},
+    ]
+
+
+_SETTLEMENT_PARTY_SAMPLES = [
+    {},
+    {"name": "محمد بن علي بن سعد السبيعي", "nid": "1023456789", "phone": "0551112233", "vehicle": "تويوتا كامري أبيض - ح ط ر 4512", "role": "صلح وتنازل متبادل", "cap": "أصالة عن نفسه"},
+    {"name": "عبدالرحمن بن محمد بن علي السبيعي", "nid": "1087654321", "phone": "0551234567", "vehicle": "هيونداي سوناتا رمادي - ب د ع 8821", "role": "صلح وتنازل متبادل", "cap": "وكيل شرعي مخول بالتنازل", "wakala": "461829405", "wakala_date": "1448/04/15 هـ", "agent": "فهد بن سعيد القحطاني — هوية 1099887766"},
+    {"name": "خالد بن سعيد بن أحمد الزهراني", "nid": "1065432189", "phone": "0509876543", "vehicle": "كيا سيراتو أبيض - ع م ن 2039", "role": "متنازل ومبرئ للذمة", "cap": "أصالة عن نفسه"},
+    {"name": "سلطان بن فهد بن ناصر الحربي", "nid": "1092233445", "phone": "0543322110", "vehicle": "فورد تورس أسود - د ص ق 7740", "role": "متنازل له", "cap": "أصالة عن نفسه"},
+    {"name": "ياسر بن إبراهيم بن حمد الشهري", "nid": "1078899001", "phone": "0567788990", "vehicle": "نيسان باترول بيج - أ ك س 1190", "role": "صلح وتنازل متبادل", "cap": "أصالة عن نفسه"},
+]
+
+
+def _settlement_fields() -> list[dict]:
+    fields = [
+        {"key": "incident_no", "label": "رقم الحادث المرجعي وتاريخه", "type": "text", "sample": "460990101 - 1448/06/12 هـ", "a4_keep_pair": True},
+        {"key": "incident_loc", "label": "موقع الحادث", "type": "text", "sample": "تقاطع طريق الملك فهد مع شارع السوق بالعارضة", "a4_keep_pair": True},
+        {"key": "party_count", "label": "عدد أطراف الحادث المشمولين بالتنازل", "type": "select",
+         "options": ["طرفان (2)", "ثلاثة أطراف (3)", "أربعة أطراف (4)", "خمسة أطراف (5)"],
+         "sample": "طرفان (2)", "a4_keep_pair": True},
+    ]
+    for index in range(1, 6):
+        fields.extend(_party_block(index, _SETTLEMENT_PARTY_SAMPLES[index]))
+    fields.extend([
+        {"key": "settlement_basis", "label": "أساس الصلح والتنازل", "type": "select", "options": [
+            "صلح وتنازل متبادل بين الأطراف وإصلاح كل طرف لمركبته على حسابه الخاص",
+            "تنازل تام بدون مقابل إبراءً للذمة",
+            "تنازل بعد استلام عوض مالي / اتفاق إصلاح التلفيات",
+        ], "sample": "صلح وتنازل متبادل بين الأطراف وإصلاح كل طرف لمركبته على حسابه الخاص"},
+        {"key": "compensation", "label": "مقدار العوض المالي المستلم أو تفاصيل اتفاق الإصلاح", "type": "textarea",
+         "sample": "استلم الطرف الأول مبلغ (1500) ريال مقابل إصلاح الصدام، وأصلح الطرف الثاني مركبته على حسابه.",
+         "visible_if": {"key": "settlement_basis", "contains_any": ["عوض"]}},
+        {"key": "injury_statement", "label": "الإقرار المروري", "type": "textarea", "prefill_sample": True,
+         "sample": "الحادث تلفيات مادية فقط ولا توجد أي إصابات بشرية أو وفيات أو تلفيات في الممتلكات العامة"},
+    ])
+    return fields
 
 
 def _handover_legal(values: dict) -> str:
@@ -848,7 +1051,7 @@ def _minutes_form_from_template(src: dict) -> dict:
 
 
 TRAFFIC_FORMS = {
-    # ==================== أولاً: قائمة الإقرارات الميدانية (4) ====================
+    # ==================== أولاً: قائمة الإقرارات الميدانية (6) ====================
     "decl_handover": {
         "title": "إقرار تسليم مركبة في الموقع",
         "icon": "🚗",
@@ -986,6 +1189,69 @@ TRAFFIC_FORMS = {
             f"في الحادث رقم ({_val(m, 'incident_no')})، بأنني كنت أسير في ({_val(m, 'lane_speed')})، وتتلخص إفادتي الفورية بالموقع في الآتي: "
             f"\"{_val(m, 'statement_text')}\". وقد أدليت بهذه الأقوال طواعية وبكامل أهليتي فور مباشرة الحادث ودون إكراه لاعتمادها ضمن محاضر الاستدلال المروري."
         ),
+    },
+
+    "decl_settlement": {
+        "title": "إقرار صلح وتنازل بين طرفين أو أكثر",
+        "icon": "🤝",
+        "subtitle": "صلح ميداني متعدد الأطراف وإسقاط الحق الخاص أمام قسم مرور العارضة",
+        "category": "إقرار",
+        "allow_absence": False,
+        "require_image": False,
+        "fields": _settlement_fields(),
+        "legal_fn": _settlement_legal,
+    },
+
+    "decl_flee_waiver": {
+        "title": "إقرار تنازل في واقعة صدم وهروب",
+        "icon": "🔄",
+        "subtitle": "تنازل المبلّغ عن الحق الخاص دون الإخلال بإجراءات الحق العام في الهروب",
+        "category": "إقرار",
+        "allow_absence": False,
+        "require_image": False,
+        "fields": [
+            {"key": "incident_no", "label": "رقم بلاغ الصدم والهروب الأصلي وتاريخه", "type": "text", "sample": "460983104 - 1448/06/10 هـ", "a4_keep_pair": True},
+            {"key": "incident_loc", "label": "موقع الواقعة", "type": "text", "sample": "الطريق العام جنوب العارضة باتجاه أحد المسارحة", "a4_keep_pair": True},
+            {"key": "waiver_status", "label": "حالة التنازل في البلاغ", "type": "select", "options": [
+                "تنازل عن الحق الخاص بعد معرفة/حضور الطرف المتسبب والتصالح معه",
+                "تنازل المُبلّغ وطلب حفظ وإقفال بلاغ الصدم والهروب",
+            ], "sample": "تنازل عن الحق الخاص بعد معرفة/حضور الطرف المتسبب والتصالح معه"},
+            {"key": "party_name", "label": "الاسم الرباعي للمُبلّغ المتضرر", "type": "text", "sample": "سلطان بن فهد بن ناصر الحربي", "a4_keep_pair": True,
+             "a4_label": "المُبلّغ المتنازل",
+             "a4_compose": {"keys": ["party_id"], "fmt": "{value} — هوية: {party_id}"}},
+            {"key": "party_id", "label": "رقم الهوية / الإقامة", "type": "text", "sample": "1092233445", "a4_hidden": True},
+            {"key": "party_phone", "label": "رقم الجوال", "type": "text", "sample": "0543322110", "a4_keep_pair": True},
+            {"key": "plate_no", "label": "نوع المركبة المتضررة ورقم لوحتها", "type": "text", "sample": "فورد تورس (د ص ق 7740) - صدم بالرفرف الخلفي الأيسر", "a4_keep_pair": True},
+            {"key": "signer_capacity", "label": "صفة المتنازل", "type": "select", "options": [
+                "أصالة عن نفسه",
+                "وكيل شرعي مخول بالتنازل",
+            ], "sample": "أصالة عن نفسه", "a4_keep_pair": True},
+            {"key": "wakala_no", "label": "رقم الوكالة الشرعية المخولة بالتنازل", "type": "text", "sample": "461829405", "a4_keep_pair": True,
+             "visible_if": {"key": "signer_capacity", "contains_any": ["وكيل"]},
+             "a4_label": "الوكالة الشرعية",
+             "a4_compose": {"keys": ["wakala_date"], "fmt": "رقم {value} بتاريخ {wakala_date}"}},
+            {"key": "wakala_date", "label": "تاريخ الوكالة", "type": "text", "sample": "1448/04/15 هـ", "a4_hidden": True,
+             "visible_if": {"key": "signer_capacity", "contains_any": ["وكيل"]}},
+            {"key": "agent_present", "label": "اسم وهوية الوكيل الحاضر", "type": "text", "sample": "فهد بن سعيد القحطاني — هوية 1099887766", "a4_keep_pair": True,
+             "visible_if": {"key": "signer_capacity", "contains_any": ["وكيل"]}},
+            {"key": "cause_name", "label": "الاسم الرباعي للطرف المتسبب", "type": "text", "sample": "ماجد بن حسن العتيبي", "a4_keep_pair": True,
+             "visible_if": {"key": "waiver_status", "contains_any": ["حضور"]},
+             "a4_label": "الطرف المتسبب",
+             "a4_compose": {"keys": ["cause_id"], "fmt": "{value} — هوية: {cause_id}"}},
+            {"key": "cause_id", "label": "رقم هوية / إقامة الطرف المتسبب", "type": "text", "sample": "1109876543", "a4_hidden": True,
+             "visible_if": {"key": "waiver_status", "contains_any": ["حضور"]}},
+            {"key": "cause_phone", "label": "رقم جوال الطرف المتسبب", "type": "text", "sample": "0501122334", "a4_keep_pair": True,
+             "visible_if": {"key": "waiver_status", "contains_any": ["حضور"]}},
+            {"key": "cause_vehicle", "label": "نوع المركبة المتسببة ورقم لوحتها", "type": "text", "sample": "هايلوكس غمارتين أبيض - ر س ل 5500", "a4_keep_pair": True,
+             "visible_if": {"key": "waiver_status", "contains_any": ["حضور"]}},
+            {"key": "settlement_detail", "label": "تفاصيل التسوية أو العوض المستلم", "type": "textarea",
+             "sample": "تصالح الطرفان على إصلاح التلفيات ودفع مبلغ (800) ريال، وتم التنازل عن الحق الخاص.",
+             "visible_if": {"key": "waiver_status", "contains_any": ["حضور"]}},
+            {"key": "close_reason", "label": "سبب طلب إقفال البلاغ والتنازل", "type": "textarea",
+             "sample": "أضرار سطحية لا يرغب بمتابعتها",
+             "visible_if": {"key": "waiver_status", "contains_any": ["إقفال"]}},
+        ],
+        "legal_fn": _flee_waiver_legal,
     },
 
     # ==================== ثانياً: قائمة المحاضر الرسمية (5 محاضر نظامية) ====================
@@ -1556,6 +1822,8 @@ _WIDE_FIELD_KEYS = {
 
 
 def _field_is_wide(field: dict, value: str) -> bool:
+    if field.get("a4_keep_pair"):
+        return False
     if field.get("type") == "textarea":
         return True
     if field.get("key") in _WIDE_FIELD_KEYS:
@@ -1765,16 +2033,85 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     else:
         duty_box_inner = _sig_slot_img("", "slot_duty")
 
-    # جدول التوقيعات ثابت بـ 3 أعمدة متساوية: جهة الاستلام | ضابط الخفر | وحدة الحوادث
+    # جدول التوقيعات ثابت بـ 3 أعمدة للنماذج العادية، وشبكة مضغوطة لنماذج التنازل متعددة الأطراف
     col_width = "33.3%"
+    form_id_now = str(rec.get("form_id") or "")
+    party_signers = _waiver_signers(form_id_now, fields_map)
+    multi_sig = bool(party_signers)
+    needs_party_live = multi_sig and interactive_sig and ("توقيع حي" in citizen_mode) and not rec.get("citizen_stamp_b64")
 
-    # Live signature dock ABOVE A4 (المناوب/المواطن + ضابط الخفر فقط، مع وحدة الحوادث عند الحاجة)
+    def _sig_cell(header: str, name: str, role: str, inner: str) -> str:
+        name_html = f'<div class="sig-person">{html.escape(name)}</div>' if name else ""
+        role_html = f'<div class="sig-role">{html.escape(role)}</div>' if role else ""
+        return (
+            '<div class="sig-cell">'
+            f'<div class="sig-head">{html.escape(header)}</div>'
+            f"{name_html}{role_html}{inner}"
+            "</div>"
+        )
+
+    if multi_sig:
+        grid_cells = []
+        for signer in party_signers:
+            if needs_party_live:
+                inner = "<div class='sig-guide'>" + _sig_slot_img("", f"slot_{signer['pad']}") + "</div>"
+            elif rec.get("citizen_stamp_b64"):
+                inner = _sig_slot_img(rec["citizen_stamp_b64"], f"slot_{signer['pad']}")
+            else:
+                inner = _sig_slot_img("", f"slot_{signer['pad']}")
+            grid_cells.append(_sig_cell(signer["header"], signer["name"], signer["role"], inner))
+        grid_cells.append(_sig_cell("ضابط الخفر", str(rec.get("officer_full") or ""), "", officer_box_inner))
+        grid_cells.append(_sig_cell("وحدة الحوادث", str(rec.get("duty_full") or ""), "", duty_box_inner))
+        grid_cols = 3 if len(grid_cells) <= 3 else 4
+        sig_table_html = (
+            f'<div class="sig-grid" style="grid-template-columns: repeat({grid_cols}, minmax(0, 1fr));">'
+            + "".join(grid_cells)
+            + "</div>"
+        )
+    else:
+        sig_table_html = f"""
+            <table class="sig-tbl">
+                <thead>
+                    <tr>
+                        <th>{html.escape(col1_header)}</th>
+                        <th>ضابط الخفر</th>
+                        <th>وحدة الحوادث</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="width:{col_width};">
+                            {col1_name_html}
+                            {col1_role_html}
+                            {citizen_box_inner}
+                        </td>
+                        <td style="width:{col_width};">
+                            <div class="sig-person">{html.escape(str(rec['officer_full']))}</div>
+                            {officer_box_inner}
+                        </td>
+                        <td style="width:{col_width};">
+                            <div class="sig-person">{html.escape(str(rec['duty_full']))}</div>
+                            {duty_box_inner}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        """
+
+    live_pad_ids = []
     dock_cards = []
-    if needs_citizen_pad:
+    if needs_party_live:
+        for signer in party_signers:
+            live_pad_ids.append(signer["pad"])
+            dock_cards.append(_live_pad_card(signer["pad"], signer["pad_title"], signer["sub"]))
+    elif needs_citizen_pad:
+        live_pad_ids.append("citizen")
         dock_cards.append(_live_pad_card("citizen", citizen_pad_title, citizen_pad_sub))
     if needs_officer_pad:
+        live_pad_ids.append("officer")
         dock_cards.append(_live_pad_card("officer", "لوحة توقيع: ضابط الخفر المناوب", rec.get("officer_full", "")))
     if needs_duty_pad:
+        live_pad_ids.append("duty")
         dock_cards.append(_live_pad_card("duty", "لوحة توقيع: مصادقة وحدة الحوادث", rec.get("duty_full", "")))
 
     live_dock_html = ""
@@ -1826,7 +2163,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     else:
         legal_box_title = f"الصيغة النظامية المعتمدة ({rec['category']}):"
     banner_title = (form_def or {}).get("official_title") or rec["form_title"]
-    sheet_cls = "a4-sheet a4-paper dense-fit"
+    sheet_cls = "a4-sheet a4-paper dense-fit" + (" parties-fit" if multi_sig else "")
     gps_line_html = gps_header_line(str(rec.get("gps_coords") or ""))
 
     return f"""
@@ -1878,6 +2215,19 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .sig-guide-hint, .sig-mode-note {{ display: none !important; }}
     .sig-person {{ font-size: 10.5px; font-weight: 800; margin-bottom: 2px; }}
     .sig-role {{ font-size: 9.5px; font-weight: 700; color: #0f3d2e; margin-bottom: 3px; }}
+    .sig-grid {{
+        display: grid; margin-top: 4px; border: 1px solid #94a3b8;
+        page-break-inside: avoid; break-inside: avoid;
+    }}
+    .sig-cell {{
+        border: 1px solid #94a3b8; text-align: center; padding: 2px 3px; min-height: 54px;
+    }}
+    .sig-head {{
+        background: #f1f5f3; color: #0f3d2e !important; font-size: 9.5px; font-weight: 800; padding: 2px 3px;
+    }}
+    .sig-grid .sig-slot-img {{ height: 34px !important; max-width: 96%; }}
+    .sig-grid .sig-person {{ font-size: 9px; }}
+    .sig-grid .sig-role {{ font-size: 8.5px; }}
     .sig-slot-img {{ background: transparent; }}
     @media screen {{
         body {{ padding: 8px !important; overflow-x: hidden; }}
@@ -2024,9 +2374,23 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             zoom: 1 !important;
             transform: none !important;
         }}
-        .sig-footer, table.sig-tbl, .footer-qr, .attachment-section {{
+        .sig-footer, table.sig-tbl, .sig-grid, .footer-qr, .attachment-section {{
             page-break-inside: avoid !important; break-inside: avoid !important;
         }}
+        .parties-fit {{ padding: 0 !important; }}
+        .parties-fit .hdr {{ padding-bottom: 1px !important; }}
+        .parties-fit .hdr-center img {{ height: 36px !important; }}
+        .parties-fit .hdr-right p, .parties-fit .hdr-left p {{ font-size: 9px !important; line-height: 1.15 !important; }}
+        .parties-fit .doc-banner {{ font-size: 11px !important; padding: 1px 4px !important; margin: 2px 0 !important; }}
+        .parties-fit table.data-tbl {{ margin-bottom: 3px !important; }}
+        .parties-fit table.data-tbl td {{ padding: 1px 3px !important; font-size: 9.5px !important; line-height: 1.25 !important; }}
+        .parties-fit table.data-tbl td.val {{ font-size: 9.5px !important; }}
+        .parties-fit .legal-box {{ font-size: 9.5px !important; line-height: 1.28 !important; padding: 2px 4px !important; }}
+        .parties-fit .sig-cell {{ min-height: 0 !important; padding: 1px 2px !important; }}
+        .parties-fit .sig-head {{ font-size: 8.5px !important; padding: 1px 2px !important; }}
+        .parties-fit .sig-grid .sig-slot-img {{ height: 22px !important; }}
+        .parties-fit .footer-qr {{ margin-top: 2px !important; padding: 2px 6px !important; }}
+        .parties-fit .footer-qr img {{ width: 30px !important; height: 30px !important; }}
         .att-card img,
         .attachment-grid.atts-single .att-card img,
         .attachment-grid.atts-multi .att-card img {{
@@ -2077,32 +2441,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         </div>
 
         <div class="sig-footer">
-            <table class="sig-tbl">
-                <thead>
-                    <tr>
-                        <th>{html.escape(col1_header)}</th>
-                        <th>ضابط الخفر</th>
-                        <th>وحدة الحوادث</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td style="width:{col_width};">
-                            {col1_name_html}
-                            {col1_role_html}
-                            {citizen_box_inner}
-                        </td>
-                        <td style="width:{col_width};">
-                            <div class="sig-person">{html.escape(str(rec['officer_full']))}</div>
-                            {officer_box_inner}
-                        </td>
-                        <td style="width:{col_width};">
-                            <div class="sig-person">{html.escape(str(rec['duty_full']))}</div>
-                            {duty_box_inner}
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+            {sig_table_html}
 
             <div class="footer-qr">
                 <div>
@@ -2119,13 +2458,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 </div>
 <script>
     const PEN_COLOR = '#0d47a1';
-    const LIVE_PADS = {json.dumps([
-        pid for pid, flag in (
-            ("citizen", needs_citizen_pad),
-            ("officer", needs_officer_pad),
-            ("duty", needs_duty_pad),
-        ) if flag
-    ], ensure_ascii=False)};
+    const LIVE_PADS = {json.dumps(live_pad_ids, ensure_ascii=False)};
 
     function syncPadToSlot(padId) {{
         const canvas = document.getElementById('pad_' + padId);
@@ -2298,7 +2631,7 @@ NAV_ALIASES = {
     "بصمة الشحن OTG": "الإعدادات والبصمة",
 }
 CATEGORY_TAB_MAP = {
-    "✍️ الإقرارات الميدانية (4)": "إقرار",
+    "✍️ الإقرارات الميدانية (6)": "إقرار",
     "🚓 المحاضر النظامية (5)": "محضر",
     "🚑 الطبية والجنائية (3)": "إحالة طبية",
 }
@@ -2517,7 +2850,7 @@ for idx, (tab_key, tab_label) in enumerate(nav_items):
             safe_rerun()
 
 # =====================================================================
-# القسم الأول: النماذج الميدانية (12 نموذجاً)
+# القسم الأول: النماذج الميدانية (14 نموذجاً)
 # =====================================================================
 if st.session_state.nav_tab == "النماذج الميدانية":
 
@@ -2533,6 +2866,15 @@ if st.session_state.nav_tab == "النماذج الميدانية":
     else:
         fid = st.session_state.opened_form_id
         form_def = TRAFFIC_FORMS[fid]
+        pending_prefill = st.session_state.pop("pending_form_prefill", None)
+        if pending_prefill and pending_prefill.get("form_id") == fid:
+            prefix = f"inp_{fid}_"
+            for state_key in list(st.session_state.keys()):
+                if str(state_key).startswith(prefix):
+                    del st.session_state[state_key]
+            for key, value in (pending_prefill.get("values") or {}).items():
+                if value:
+                    st.session_state[f"inp_{fid}_{key}"] = value
         cat_badge_cls = {"إقرار": "green", "محضر": "gold", "إحالة طبية": "med"}.get(form_def["category"], "green")
 
         top_bar1, top_bar2, top_bar3 = st.columns([1.3, 1.3, 1.4])
@@ -2631,8 +2973,43 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             else:
                 render_field_grid([by_key["party_name"], by_key["party_id"]])
             render_field_grid([by_key[key] for key in ("party_phone", "vehicle_desc", "plate_no", "vehicle_state")])
+        elif fid in {"decl_settlement", "decl_flee_waiver"}:
+            pair_slot = 0
+            pair_cols = None
+            for fld in form_def["fields"]:
+                if not _field_is_visible(fld, current_values):
+                    continue
+                party_match = fld["key"][:2] if fld["key"].startswith("p") else ""
+                if fid == "decl_settlement" and fld["key"].endswith("_name") and party_match[1:2].isdigit():
+                    ordinal = _PARTY_ORDINALS[int(fld["key"][1])]
+                    st.markdown(f"**الطرف {ordinal}**")
+                    pair_slot = 0
+                if fld["type"] == "textarea":
+                    current_values[fld["key"]] = render_field(fld)
+                    pair_slot = 0
+                    continue
+                if pair_slot % 2 == 0:
+                    pair_cols = st.columns(2)
+                with pair_cols[pair_slot % 2]:
+                    current_values[fld["key"]] = render_field(fld)
+                pair_slot += 1
+            if fid == "decl_settlement":
+                st.caption("بعد اعتماد الوثيقة تظهر لوحة توقيع حي مستقلة لكل طرف مشمول، مع ضابط الخفر ووحدة الحوادث، داخل صفحة A4 واحدة.")
+            else:
+                st.caption("بعد الاعتماد تُفتح لوحة توقيع المُبلّغ المتنازل، ولوحة الطرف المتسبب عند حضوره، بجانب ضابط الخفر ووحدة الحوادث.")
         else:
             render_field_grid([fld for fld in form_def["fields"] if not fld.get("visible_if")])
+
+        if fid == "decl_hit_run":
+            if st.button("🔄 الانتقال لإقرار تنازل عن بلاغ صدم وهروب", use_container_width=True):
+                st.session_state.pending_form_prefill = {
+                    "form_id": "decl_flee_waiver",
+                    "values": {
+                        key: current_values.get(key) or ""
+                        for key in ("incident_no", "party_name", "party_id", "party_phone", "plate_no")
+                    },
+                }
+                open_form_from_catalog("decl_flee_waiver")
 
         att_label = (
             "📸 إرفاق صورة إشعار المخالفة (مطلوب لحوكمة الإلغاء بالهيئة المرورية)"
@@ -2819,7 +3196,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                             st.session_state.receiver_name = ""
                             st.session_state.receiver_role = ""
                         if "بصمة منفذ الشحن" in chosen_auth:
-                            signer_id = current_values.get("agent_id") or current_values.get("party_id", "")
+                            signer_id = current_values.get("agent_id") or current_values.get("party_id") or current_values.get("p1_id", "")
                             seed = f"{st.session_state.doc_no}_{signer_id}_CITIZEN"
                             st.session_state.citizen_stamp_b64 = generate_fingerprint_png_b64(seed, ink_rgb=(13, 71, 161))
                             st.session_state.citizen_auth_mode = "بصمة منفذ الشحن (Type-C)"
@@ -2918,10 +3295,15 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             if fid == "decl_handover" and _is_agent_role(current_values.get("receiver_role")):
                 party_name_final = current_values.get("agent_name") or "غير محدد"
                 party_id_final = current_values.get("agent_id") or "-"
+                plate_final = current_values.get("plate_no") or "-"
+            elif fid == "decl_settlement":
+                party_name_final = current_values.get("p1_name") or "غير محدد"
+                party_id_final = current_values.get("p1_id") or "-"
+                plate_final = current_values.get("p1_vehicle") or "-"
             else:
                 party_name_final = current_values.get("party_name") or current_values.get("driver_name") or "غير محدد"
                 party_id_final = current_values.get("party_id") or current_values.get("driver_id_nat") or "-"
-            plate_final = current_values.get("plate_no") or current_values.get("vehicle_plate_type") or "-"
+                plate_final = current_values.get("plate_no") or current_values.get("vehicle_plate_type") or "-"
             raw_seal = f"{st.session_state.doc_no}|{party_id_final}|{st.session_state.doc_time}"
             verify_hash = "KHF-" + hashlib.sha256(raw_seal.encode("utf-8")).hexdigest()[:16].upper()
             officer_full_final = (st.session_state.officer_full_override or "").strip() or unit_display
