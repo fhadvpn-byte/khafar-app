@@ -553,25 +553,32 @@ def _zoom_script() -> str:
       style.textContent=[
         '@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap");',
         '#khafar-print-root{display:none!important;}',
-        '@page{size:A4 portrait;margin:6mm!important;}',
+        '@page{size:A4 portrait;margin:4mm!important;}',
         '@media print{',
         '  #root,[data-testid="stAppViewContainer"],[data-testid="stHeader"],header,footer,.stApp,.main,.block-container{display:none!important;visibility:hidden!important;}',
         '  body>*:not(#khafar-print-root){display:none!important;visibility:hidden!important;}',
-        '  #khafar-print-root{display:block!important;visibility:visible!important;width:100%!important;max-width:100%!important;padding:6mm 8mm!important;margin:0!important;background:#fff!important;color:#000!important;direction:rtl!important;text-align:right!important;font-family:"Cairo","Tajawal","Segoe UI",Tahoma,Arial,sans-serif!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
-        '  #khafar-print-root,#khafar-print-root *{visibility:visible!important;color:#000!important;font-family:"Cairo","Tajawal","Segoe UI",Tahoma,Arial,sans-serif!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}',
+        '  #khafar-print-root{display:block!important;visibility:visible!important;width:100%!important;max-width:100%!important;padding:2mm 3mm!important;margin:0!important;background:#fff!important;color:#000!important;direction:rtl!important;text-align:right!important;font-family:"Cairo","Tajawal","Segoe UI",Tahoma,Arial,sans-serif!important;overflow:visible!important;max-height:none!important;height:auto!important;}',
+        '  #khafar-print-root,#khafar-print-root *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-sizing:border-box!important;}',
+        '  #khafar-print-root,#khafar-print-root *{visibility:visible!important;font-family:"Cairo","Tajawal","Segoe UI",Tahoma,Arial,sans-serif!important;}',
         '  #khafar-print-root .a4{transform:none!important;zoom:1!important;width:100%!important;max-width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;padding:0!important;border:none!important;box-shadow:none!important;background:#fff!important;direction:rtl!important;}',
         '  #khafar-print-root .toolbar,#khafar-print-root .no-print,#khafar-print-root .zoom-bar{display:none!important;}',
-        '  #khafar-print-root table{width:100%!important;border-collapse:collapse!important;table-layout:fixed!important;}',
-        '  #khafar-print-root th,#khafar-print-root td{border:1.4px solid #000!important;padding:2px 4px!important;text-align:center!important;vertical-align:middle!important;font-size:11.5px!important;line-height:1.2!important;font-weight:700!important;}',
-        '  #khafar-print-root th{background:#d9ead3!important;font-weight:800!important;}',
-        '  #khafar-print-root .lbl{background:#f4f7f6!important;font-weight:800!important;text-align:right!important;}',
-        '  #khafar-print-root .bg-green{background:#d9ead3!important;}',
-        '  #khafar-print-root .bg-blue{background:#dce6f1!important;}',
-        '  #khafar-print-root .bg-peach{background:#fbe4d5!important;}',
-        '  #khafar-print-root .txt-red,#khafar-print-root .note-red{color:#c00000!important;}',
-        '  #khafar-print-root .hdr{display:grid!important;grid-template-columns:1fr 2.2fr 1fr!important;align-items:center!important;border-bottom:2px solid #000!important;margin-bottom:6px!important;padding-bottom:4px!important;}',
-        '  #khafar-print-root .hdr-title{text-align:center!important;font-size:13px!important;font-weight:800!important;}',
-        '  #khafar-print-root img,.logo-img{max-width:100%!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
+        '  #khafar-print-root table,#khafar-print-root table.waqoat-grid{width:100%!important;border-collapse:collapse!important;table-layout:fixed!important;direction:rtl!important;border:1.5px solid #000000!important;max-height:none!important;overflow:visible!important;page-break-inside:avoid!important;}',
+        '  #khafar-print-root th,#khafar-print-root td,#khafar-print-root table.waqoat-grid th,#khafar-print-root table.waqoat-grid td{border:1.2px solid #000000!important;color:#000000!important;font-weight:700!important;text-align:center!important;vertical-align:middle!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
+        '  #khafar-print-root th,#khafar-print-root .bg-green,#khafar-print-root table.waqoat-grid th,#khafar-print-root table.waqoat-grid .bg-green{background:#d9ead3!important;background-color:#d9ead3!important;font-weight:800!important;}',
+        '  #khafar-print-root .bg-blue,#khafar-print-root table.waqoat-grid .bg-blue{background:#dce6f1!important;background-color:#dce6f1!important;font-weight:800!important;}',
+        '  #khafar-print-root .bg-peach,#khafar-print-root table.waqoat-grid .bg-peach{background:#fbe4d5!important;background-color:#fbe4d5!important;font-weight:800!important;}',
+        '  #khafar-print-root .bg-white,#khafar-print-root table.waqoat-grid .bg-white{background:#ffffff!important;background-color:#ffffff!important;}',
+        '  #khafar-print-root .lbl{background:#f4f7f6!important;background-color:#f4f7f6!important;font-weight:800!important;text-align:right!important;}',
+        '  #khafar-print-root .txt-red,#khafar-print-root .note-red,#khafar-print-root .txt-red *,#khafar-print-root .waqoat-note{color:#c00000!important;}',
+        '  #khafar-print-root .hdr{display:grid!important;grid-template-columns:1fr 2.2fr 1fr!important;align-items:center!important;border-bottom:2px solid #000!important;margin-bottom:4px!important;padding-bottom:3px!important;}',
+        '  #khafar-print-root .hdr-title{text-align:center!important;font-size:12.5px!important;font-weight:800!important;color:#000!important;}',
+        '  #khafar-print-root .logo-img,#khafar-print-root img.logo-img{display:inline-block!important;visibility:visible!important;max-height:48px!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
+        '  #khafar-print-root .foot,#khafar-print-root .waqoat-foot{display:flex!important;justify-content:space-between!important;direction:rtl!important;font-weight:800!important;color:#000!important;}',
+        '  #khafar-print-root table.waqoat-grid th,#khafar-print-root table.waqoat-grid td{font-size:10.8px!important;line-height:1.15!important;padding:1px 2px!important;height:16px!important;font-weight:700!important;}',
+        '  #khafar-print-root table.waqoat-grid th{font-size:11px!important;font-weight:800!important;}',
+        '  #khafar-print-root .waqoat-note{font-size:10.5px!important;margin-top:2px!important;}',
+        '  #khafar-print-root .waqoat-foot{margin-top:2px!important;font-size:11px!important;}',
+        '  #khafar-print-root .sep-row{height:3px!important;padding:0!important;}',
         '}'
       ].join('\\n');
       (pdoc.head||pdoc.documentElement).appendChild(style);
@@ -584,16 +591,48 @@ def _zoom_script() -> str:
     }
     return root;
   }
+  function collectTakmeelStyles(){
+    var chunks=[];
+    try{
+      document.querySelectorAll('style').forEach(function(node){
+        var t=node.textContent||'';
+        if(t) chunks.push(t);
+      });
+    }catch(e){}
+    return chunks.join('\\n');
+  }
+  function injectTakmeelPrintCss(pdoc, cssText){
+    var headCss=pdoc.getElementById('takmeel-print-css');
+    if(!headCss){
+      headCss=pdoc.createElement('style');
+      headCss.id='takmeel-print-css';
+      (pdoc.head||pdoc.documentElement).appendChild(headCss);
+    }
+    headCss.textContent=cssText||'';
+    return headCss;
+  }
   function printA4Sync(){
     clearForPrint();
     var ctx=getParentPrintCtx();
     var root=ensureParentPrintInfra(ctx.doc);
+    var cssText=collectTakmeelStyles();
+    injectTakmeelPrintCss(ctx.doc, cssText);
+    var styleEl=ctx.doc.createElement('style');
+    styleEl.setAttribute('data-takmeel-bundled','1');
+    styleEl.textContent=cssText;
     var clone=sheet.cloneNode(true);
     clone.id='a4PrintClone';
     clone.style.cssText='transform:none!important;zoom:1!important;width:100%!important;max-width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;border:none!important;box-shadow:none!important;padding:0!important;background:#fff!important;';
     while(root.firstChild) root.removeChild(root.firstChild);
+    root.appendChild(styleEl);
     try{ root.appendChild(ctx.doc.importNode(clone,true)); }catch(e){ root.appendChild(clone); }
-    var cleanup=function(){ try{ while(root.firstChild) root.removeChild(root.firstChild); }catch(e){} };
+    var cleanup=function(){
+      try{ while(root.firstChild) root.removeChild(root.firstChild); }catch(e){}
+      try{
+        var hc=ctx.doc.getElementById('takmeel-print-css');
+        if(hc) hc.textContent='';
+      }catch(e){}
+    };
     try{ ctx.win.addEventListener('afterprint', cleanup, {once:true}); }catch(e){}
     try{ ctx.win.print(); }catch(e1){ try{ window.print(); }catch(e2){} }
   }
@@ -663,16 +702,22 @@ th{{background:#d9ead3;font-weight:800!important;-webkit-print-color-adjust:exac
 .a4-monthly .hdr-title{{font-size:15px}}
 .a4-monthly th,.a4-monthly td{{font-size:14px;padding:3px 5px}}
 @media print{{
-  @page{{size:A4 portrait;margin:6mm!important}}
-  html,body{{background:#fff;padding:0;margin:0}}
+  @page{{size:A4 portrait;margin:4mm!important}}
+  html,body{{background:#fff;padding:0;margin:0;overflow:visible!important;max-height:none!important}}
   .toolbar,.no-print,.zoom-bar{{display:none!important}}
   .preview-scroll{{overflow:visible!important;height:auto!important;max-height:none!important}}
-  .a4{{width:100%!important;max-width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;border:none!important;padding:0!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+  .a4{{width:100%!important;max-width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;border:none!important;padding:0!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}}
+  .a4,.a4 *{{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-sizing:border-box!important}}
   .a4-monthly{{padding:0!important}}
-  th,td{{font-size:11.5px!important;padding:2px 4px!important;line-height:1.2!important;border:1.4px solid #000!important}}
-  th{{background:#d9ead3!important}}
-  .lbl{{background:#f4f7f6!important}}
-  .hdr-title{{font-size:13px!important}}
+  table{{width:100%!important;border-collapse:collapse!important;table-layout:fixed!important;direction:rtl!important;border:1.5px solid #000000!important}}
+  th,td{{font-size:11px!important;padding:2px 4px!important;line-height:1.15!important;border:1.2px solid #000000!important;color:#000000!important;font-weight:700!important;text-align:center!important;vertical-align:middle!important}}
+  th{{background:#d9ead3!important;background-color:#d9ead3!important;font-weight:800!important}}
+  .lbl{{background:#f4f7f6!important;background-color:#f4f7f6!important}}
+  .bg-green{{background:#d9ead3!important;background-color:#d9ead3!important}}
+  .bg-blue{{background:#dce6f1!important;background-color:#dce6f1!important}}
+  .bg-peach{{background:#fbe4d5!important;background-color:#fbe4d5!important}}
+  .txt-red,.note-red{{color:#c00000!important}}
+  .hdr-title{{font-size:12.5px!important}}
   .logo-img{{display:inline-block!important;visibility:visible!important}}
 }}
 </style></head><body>
@@ -959,14 +1004,28 @@ table.waqoat-grid td{{font-size:12.2px}}
 .waqoat-note{{text-align:center;margin-top:4px;font-size:12.5px;font-weight:800}}
 .waqoat-foot{{display:flex;justify-content:space-between;margin-top:4px;font-size:13px;font-weight:800;direction:rtl}}
 @media print{{
-  @page{{size:A4 portrait;margin:6mm!important}}
-  html,body{{background:#fff!important;padding:0!important;margin:0!important}}
+  @page{{size:A4 portrait;margin:4mm!important}}
+  html,body{{background:#fff!important;padding:0!important;margin:0!important;overflow:visible!important;max-height:none!important}}
   .toolbar,.no-print,.zoom-bar{{display:none!important}}
   .preview-scroll{{overflow:visible!important;height:auto!important;max-height:none!important}}
-  .a4{{width:100%!important;max-width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;border:none!important;padding:0!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
-  table.waqoat-grid{{page-break-inside:avoid!important}}
-  table.waqoat-grid th,table.waqoat-grid td{{font-size:11.5px!important;padding:1px 2px!important;line-height:1.15!important;border:1.4px solid #000!important}}
-  table.waqoat-grid th{{font-size:13px!important}}
+  .a4{{width:100%!important;max-width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;border:none!important;padding:0!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}}
+  .a4,.a4 *{{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;box-sizing:border-box!important}}
+  table.waqoat-grid{{width:100%!important;border-collapse:collapse!important;table-layout:fixed!important;direction:rtl!important;border:1.5px solid #000000!important;page-break-inside:avoid!important;max-height:none!important;overflow:visible!important}}
+  table.waqoat-grid th,table.waqoat-grid td{{
+    border:1.2px solid #000000!important;color:#000000!important;font-weight:700!important;
+    text-align:center!important;vertical-align:middle!important;
+    font-size:10.8px!important;padding:1px 2px!important;line-height:1.15!important;height:16px!important;
+    -webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;
+  }}
+  table.waqoat-grid th{{font-size:11px!important;font-weight:800!important;background:#d9ead3!important;background-color:#d9ead3!important}}
+  .bg-green{{background:#d9ead3!important;background-color:#d9ead3!important}}
+  .bg-blue{{background:#dce6f1!important;background-color:#dce6f1!important}}
+  .bg-peach{{background:#fbe4d5!important;background-color:#fbe4d5!important}}
+  .bg-white{{background:#ffffff!important;background-color:#ffffff!important}}
+  .txt-red,.waqoat-note{{color:#c00000!important}}
+  .sep-row{{height:3px!important;padding:0!important}}
+  .waqoat-note{{font-size:10.5px!important;margin-top:2px!important}}
+  .waqoat-foot{{margin-top:2px!important;font-size:11px!important;font-weight:800!important}}
   .logo-img{{display:inline-block!important;visibility:visible!important}}
 }}
 </style></head><body>
