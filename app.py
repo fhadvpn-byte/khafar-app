@@ -2790,7 +2790,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     _logo = (logo_b64 or "").strip() or get_traffic_logo_b64()
     center_logo_html = (
         f"<img class='hdr-logo' src='data:image/png;base64,{_logo}' "
-        f"style='height:58px;width:auto;max-width:120px;object-fit:contain;"
+        f"style='width:88px!important;height:88px!important;max-width:88px!important;"
+        f"max-height:88px!important;object-fit:contain!important;display:block;"
+        f"margin:0 auto;padding:0;border:none;background:transparent;"
         f"-webkit-print-color-adjust:exact;print-color-adjust:exact;' "
         f"alt='شعار المرور' />"
         if _logo
@@ -3265,7 +3267,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             margin: 0 auto;
             background: #ffffff !important;
             color: #000000 !important;
-            padding: 36px 42px !important;
+            padding: 14px 32px 20px 32px !important;
             border: 2px solid #000000;
             overflow: visible !important;
             display: flex !important;
@@ -3312,16 +3314,46 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     .a4-fit {{ display: flex; flex-direction: column; justify-content: flex-start; flex: 1 1 auto; min-height: 100%; }}
     .hdr {{
-        display: grid; grid-template-columns: 1.35fr 0.8fr 1.15fr;
-        align-items: center; border-bottom: 2px solid #000000;
-        padding-bottom: 12px; margin-bottom: 16px;
+        display: grid; grid-template-columns: 1fr auto 1fr;
+        align-items: center; gap: 12px;
+        padding: 2px 0 8px 0 !important; margin-bottom: 6px !important;
+        border-bottom: 2px solid #0f5132;
     }}
-    .hdr-right {{ text-align: center; line-height: 1.7 !important; }}
-    .hdr-right p {{ margin: 0; font-size: 14px !important; font-weight: 800 !important; line-height: 1.7 !important; color: #000000 !important; }}
-    .hdr-center {{ text-align: center; display: flex; justify-content: center; align-items: center; }}
-    .hdr-center img {{ height: 58px !important; width: auto; object-fit: contain; }}
-    .hdr-left {{ text-align: right; padding-right: 8px; line-height: 1.7 !important; }}
-    .hdr-left p {{ margin: 0; font-size: 14px !important; font-weight: 800 !important; line-height: 1.7 !important; color: #000000 !important; }}
+    .hdr-right {{
+        text-align: center; line-height: 1.28 !important;
+        margin: 0 !important; padding: 0 !important;
+    }}
+    .hdr-right p {{
+        margin: 0 !important; padding: 0 !important;
+        font-size: 12.5px !important; font-weight: 800 !important;
+        line-height: 1.28 !important; color: #000000 !important;
+    }}
+    .hdr-center {{
+        text-align: center; display: flex; justify-content: center; align-items: center;
+        width: 88px; height: 88px; min-width: 88px; min-height: 88px;
+        margin: 0; padding: 0 !important; background: transparent !important;
+        border: none !important; border-radius: 0 !important; box-shadow: none !important;
+    }}
+    .hdr-center img, .hdr-logo {{
+        width: 88px !important; height: 88px !important;
+        max-width: 88px !important; max-height: 88px !important;
+        object-fit: contain !important; display: block;
+        margin: 0 auto; padding: 0 !important; border: none !important;
+        background: transparent !important;
+        -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+    }}
+    .hdr-left {{
+        text-align: right; padding: 0 !important; margin: 0 !important;
+        line-height: 1.32 !important;
+    }}
+    .hdr-left p {{
+        margin: 0 !important; padding: 0 !important;
+        font-size: 11.5px !important; font-weight: 700 !important;
+        line-height: 1.32 !important; color: #000000 !important;
+    }}
+    .hdr-left p.hdr-nowrap {{
+        white-space: nowrap !important;
+    }}
     .doc-banner {{
         background: #0f3d2e; color: #ffffff !important; text-align: center;
         padding: 10px 16px !important; border-radius: 6px; font-size: 16px !important; font-weight: 800;
@@ -3410,10 +3442,19 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-sheet table a, .a4-sheet .legal-box a, a[href^="tel"] {{
         color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
     }}
-    .a4-compact {{ padding: 7mm 8mm !important; }}
-    .a4-compact .hdr {{ padding-bottom: 4px !important; margin-bottom: 6px !important; }}
-    .a4-compact .hdr-center img {{ height: 44px !important; }}
-    .a4-compact .hdr-right p, .a4-compact .hdr-left p {{ font-size: 11px !important; line-height: 1.35 !important; }}
+    .a4-compact {{ padding: 14px 32px 20px 32px !important; }}
+    .a4-compact .hdr {{
+        padding: 2px 0 8px 0 !important; margin-bottom: 6px !important;
+        grid-template-columns: 1fr auto 1fr; gap: 12px;
+        border-bottom: 2px solid #0f5132;
+    }}
+    .a4-compact .hdr-center {{ width: 88px; height: 88px; min-width: 88px; min-height: 88px; padding: 0 !important; }}
+    .a4-compact .hdr-center img, .a4-compact .hdr-logo {{
+        width: 88px !important; height: 88px !important;
+        max-width: 88px !important; max-height: 88px !important;
+    }}
+    .a4-compact .hdr-right p {{ font-size: 12.5px !important; line-height: 1.28 !important; }}
+    .a4-compact .hdr-left p {{ font-size: 11.5px !important; line-height: 1.32 !important; }}
     .a4-compact .doc-banner {{ font-size: 13px !important; padding: 4px 8px !important; margin-bottom: 6px !important; }}
     .a4-compact table.data-tbl {{ margin-bottom: 6px !important; }}
     .a4-compact table.data-tbl td, .a4-compact table.data-tbl td.val {{ padding: 3px 6px !important; font-size: 11px !important; line-height: 1.35 !important; }}
@@ -3453,7 +3494,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             height: auto !important;
             min-height: 0 !important;
             max-height: none !important;
-            padding: 0 !important;
+            padding: 4mm 8mm !important;
             margin: 0 auto !important;
             display: block !important;
             box-sizing: border-box !important;
@@ -3486,7 +3527,34 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             line-height: 1.55 !important;
             word-spacing: normal !important;
         }}
-        .a4-paper .hdr {{ margin-bottom: 8px !important; padding-bottom: 6px !important; }}
+        .a4-paper .hdr {{
+            display: grid !important; grid-template-columns: 1fr auto 1fr !important;
+            align-items: center !important; gap: 12px !important;
+            padding: 2px 0 8px 0 !important; margin-bottom: 6px !important;
+            border-bottom: 2px solid #0f5132 !important;
+        }}
+        .a4-paper .hdr-right p {{
+            margin: 0 !important; padding: 0 !important;
+            font-size: 12.5px !important; font-weight: 800 !important;
+            line-height: 1.28 !important; color: #000000 !important;
+        }}
+        .a4-paper .hdr-left p {{
+            margin: 0 !important; padding: 0 !important;
+            font-size: 11.5px !important; font-weight: 700 !important;
+            line-height: 1.32 !important; color: #000000 !important;
+        }}
+        .a4-paper .hdr-left p.hdr-nowrap {{ white-space: nowrap !important; }}
+        .a4-paper .hdr-center {{
+            width: 88px !important; height: 88px !important;
+            min-width: 88px !important; min-height: 88px !important;
+            padding: 0 !important; background: transparent !important;
+            border: none !important; box-shadow: none !important;
+        }}
+        .a4-paper .hdr-center img, .a4-paper .hdr-logo {{
+            width: 88px !important; height: 88px !important;
+            max-width: 88px !important; max-height: 88px !important;
+            object-fit: contain !important;
+        }}
         .a4-paper .doc-banner {{ margin-bottom: 8px !important; padding: 6px 10px !important; }}
         .a4-paper table.data-tbl {{ margin-bottom: 8px !important; }}
         .a4-paper table.data-tbl td {{ padding: 5px 7px !important; line-height: 1.4 !important; }}
@@ -3534,8 +3602,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                     {center_logo_html}
                 </div>
                 <div class="hdr-left">
-                    <p>الرقم المرجعي: {rec['doc_no']}</p>
-                    <p>التاريخ والوقت: {rec['created_at']}</p>
+                    <p class="hdr-nowrap">الرقم المرجعي: {rec['doc_no']}</p>
+                    <p class="hdr-nowrap">التاريخ والوقت: {rec['created_at']}</p>
                     {gps_line_html}
                 </div>
             </div>
@@ -3736,11 +3804,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 '@media print{{',
                 '  #root,[data-testid="stAppViewContainer"],[data-testid="stHeader"],header,footer,.stApp,.main,.block-container{{display:none!important;visibility:hidden!important;}}',
                 '  body>*:not(#khafar-print-root){{display:none!important;visibility:hidden!important;}}',
-                '  #khafar-print-root{{display:block!important;visibility:visible!important;width:100%!important;max-width:100%!important;padding:6mm 8mm!important;margin:0!important;background:#fff!important;color:#000!important;direction:rtl!important;text-align:right!important;font-family:"Cairo","Tajawal","Segoe UI",Tahoma,Arial,sans-serif!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}',
+                '  #khafar-print-root{{display:block!important;visibility:visible!important;width:100%!important;max-width:100%!important;padding:0!important;margin:0!important;background:#fff!important;color:#000!important;direction:rtl!important;text-align:right!important;font-family:"Cairo","Tajawal","Segoe UI",Tahoma,Arial,sans-serif!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}',
                 '  #khafar-print-root,#khafar-print-root *{{visibility:visible!important;color:#000!important;font-family:"Cairo","Tajawal","Segoe UI",Tahoma,Arial,sans-serif!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}}',
-                '  #khafar-print-root .a4-sheet,#khafar-print-root .a4-paper{{transform:none!important;zoom:1!important;width:100%!important;max-width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;padding:0!important;box-shadow:none!important;border:none!important;background:#fff!important;direction:rtl!important;}}',
+                '  #khafar-print-root .a4-sheet,#khafar-print-root .a4-paper{{transform:none!important;zoom:1!important;width:100%!important;max-width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;padding:4mm 8mm!important;box-shadow:none!important;border:none!important;background:#fff!important;direction:rtl!important;}}',
                 '  #khafar-print-root .toolbar,#khafar-print-root .no-print,#khafar-print-root .zoom-bar,#khafar-print-root .live-sig-dock,#khafar-print-root .clear-sig-btn,#khafar-print-root .live-pad-canvas,#khafar-print-root .sig-guide-hint,#khafar-print-root .sig-mode-note{{display:none!important;}}',
-                '  #khafar-print-root .hdr{{display:grid!important;grid-template-columns:1.35fr 0.8fr 1.15fr!important;align-items:center!important;border-bottom:2px solid #000!important;margin-bottom:8px!important;padding-bottom:6px!important;}}',
+                '  #khafar-print-root .hdr{{display:grid!important;grid-template-columns:1fr auto 1fr!important;align-items:center!important;gap:12px!important;padding:2px 0 8px 0!important;margin-bottom:6px!important;border-bottom:2px solid #0f5132!important;}}',
+                '  #khafar-print-root .hdr-right p{{margin:0!important;padding:0!important;font-size:12.5px!important;font-weight:800!important;line-height:1.28!important;color:#000!important;}}',
+                '  #khafar-print-root .hdr-left p{{margin:0!important;padding:0!important;font-size:11.5px!important;font-weight:700!important;line-height:1.32!important;color:#000!important;}}',
+                '  #khafar-print-root .hdr-left p.hdr-nowrap{{white-space:nowrap!important;}}',
+                '  #khafar-print-root .hdr-center{{width:88px!important;height:88px!important;min-width:88px!important;min-height:88px!important;padding:0!important;background:transparent!important;border:none!important;box-shadow:none!important;}}',
+                '  #khafar-print-root .hdr-center img,#khafar-print-root .hdr-logo{{width:88px!important;height:88px!important;max-width:88px!important;max-height:88px!important;object-fit:contain!important;}}',
                 '  #khafar-print-root .doc-banner{{background-color:#0f3d2e!important;color:#fff!important;text-align:center!important;border-radius:6px!important;font-weight:800!important;margin-bottom:8px!important;padding:6px 10px!important;}}',
                 '  #khafar-print-root .doc-banner,#khafar-print-root .doc-banner *{{background-color:#0f3d2e!important;color:#fff!important;}}',
                 '  #khafar-print-root table.data-tbl{{width:100%!important;border-collapse:collapse!important;margin-bottom:8px!important;}}',
@@ -3752,7 +3825,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 '  #khafar-print-root table.sig-tbl th,#khafar-print-root .sig-head{{background:#f1f5f3!important;font-weight:800!important;}}',
                 '  #khafar-print-root table.sig-tbl td,#khafar-print-root .sig-cell{{min-height:52px!important;padding:6px!important;}}',
                 '  #khafar-print-root .footer-qr{{margin-top:6px!important;padding:6px 8px!important;border:1.4px solid #000!important;}}',
-                '  #khafar-print-root img{{max-width:100%!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}',
+                '  #khafar-print-root img{{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}',
                 '}}'
             ].join('\\n');
             (pdoc.head || pdoc.documentElement).appendChild(style);
@@ -3774,7 +3847,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         var root = ensureParentPrintInfra(ctx.doc);
         var clone = paper.cloneNode(true);
         clone.id = 'a4PrintClone';
-        clone.style.cssText = 'transform:none!important;zoom:1!important;width:100%!important;max-width:100%!important;min-height:0!important;height:auto!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;box-shadow:none!important;border:none!important;padding:0!important;background:#fff!important;';
+        clone.style.cssText = 'transform:none!important;zoom:1!important;width:100%!important;max-width:100%!important;min-height:0!important;height:auto!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;box-shadow:none!important;border:none!important;padding:4mm 8mm!important;background:#fff!important;';
         while (root.firstChild) root.removeChild(root.firstChild);
         try {{
             root.appendChild(ctx.doc.importNode(clone, true));
