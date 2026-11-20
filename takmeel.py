@@ -594,8 +594,9 @@ html,body{{direction:rtl;margin:0;padding:10px;background:#0d1316;color:#e2e8f0}
 .a4,.a4 *{{color:#000000!important;opacity:1!important}}
 .a4 .txt-red,.a4 .note-red{{color:#c00000!important}}
 table{{width:100%;border-collapse:collapse;margin:4px 0;table-layout:fixed}}
-th,td{{border:1.4px solid #000000!important;padding:4px 6px;text-align:center;vertical-align:middle;font-size:13.5px;line-height:1.35;font-weight:700!important}}
-th{{background:#d9ead3;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+th,td{{border:1.4px solid #000000!important;padding:4px 6px!important;text-align:center;vertical-align:middle;font-size:13px!important;line-height:1.3!important;font-weight:700!important}}
+th{{background:#d9ead3;font-weight:800!important;height:34px!important;min-height:34px!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+td{{height:32px!important;min-height:32px!important}}
 .lbl{{background:#f4f7f6;font-weight:800!important;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 .hdr{{display:grid;grid-template-columns:1fr 2.2fr 1fr;align-items:center;gap:6px;margin-bottom:6px;border-bottom:2px solid #000;padding-bottom:4px}}
 .hdr-title{{text-align:center;font-size:16px;font-weight:800!important;line-height:1.4}}
@@ -603,7 +604,8 @@ th{{background:#d9ead3;font-weight:800!important;-webkit-print-color-adjust:exac
 .note-red{{color:#c00000!important;font-size:12.5px;font-weight:800;margin-top:6px}}
 .foot{{display:flex;justify-content:space-between;margin-top:8px;font-size:13.5px;font-weight:800}}
 .a4-monthly .hdr-title{{font-size:15px}}
-.a4-monthly th,.a4-monthly td{{font-size:14px;padding:3px 5px}}
+.a4-monthly th{{height:34px!important;min-height:34px!important;font-size:13px!important}}
+.a4-monthly td{{height:32px!important;min-height:32px!important;padding:4px 6px!important;font-size:13px!important;font-weight:700!important}}
 @media print{{
   @page{{size:A4 portrait;margin:4mm!important}}
   html,body{{background:#fff;padding:0;margin:0}}
@@ -611,8 +613,8 @@ th{{background:#d9ead3;font-weight:800!important;-webkit-print-color-adjust:exac
   .preview-scroll{{overflow:visible!important;height:auto!important;max-height:none!important}}
   .a4{{width:100%!important;max-width:200mm!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;border:none!important;padding:3mm 4mm!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
   .a4-monthly{{padding:2.5mm 3.5mm!important}}
-  th,td{{font-size:11.5px!important;padding:2px 4px!important;line-height:1.2!important;border:1.4px solid #000000!important}}
-  th{{background:#d9ead3!important}}
+  th{{height:34px!important;min-height:34px!important;font-size:13px!important;font-weight:800!important;background:#d9ead3!important;padding:4px 6px!important;border:1.4px solid #000000!important}}
+  td{{height:32px!important;min-height:32px!important;font-size:13px!important;font-weight:700!important;padding:4px 6px!important;line-height:1.3!important;border:1.4px solid #000000!important}}
   .lbl{{background:#f4f7f6!important}}
   .bg-green{{background:#d9ead3!important}}
   .bg-blue{{background:#dce6f1!important}}
@@ -633,20 +635,30 @@ def _waqoat_cell(v) -> str:
     return html.escape(str(v if v is not None and str(v) != "" else "0"))
 
 
+def _cell_text(v) -> str:
+    """محتوى خلية غير فارغ بصرياً: يمنع انطباق الصف عند القيمة الفارغة."""
+    if v is None:
+        return "&nbsp;"
+    s = str(v).strip() if isinstance(v, str) else str(v)
+    if s == "":
+        return "&nbsp;"
+    return html.escape(s)
+
+
 def _waqoat_person_rows(items: list[dict], min_rows: int = 5) -> str:
     rows = []
     count = max(min_rows, len(items or []))
     for index in range(count):
         item = (items or [])[index] if index < len(items or []) else {}
         rows.append(
-            "<tr>"
-            f"<td colspan='2'>{html.escape(str(item.get('name') or ''))}</td>"
-            f"<td colspan='2'>{html.escape(str(item.get('incident_no') or ''))}</td>"
-            f"<td colspan='2'>{html.escape(str(item.get('place') or ''))}</td>"
-            f"<td>{html.escape(str(item.get('registry_no') or ''))}</td>"
-            f"<td>{html.escape(str(item.get('coverage') or ''))}</td>"
-            f"<td>{html.escape(str(item.get('male') if item.get('male') not in (None, '') else ''))}</td>"
-            f"<td>{html.escape(str(item.get('female') if item.get('female') not in (None, '') else ''))}</td>"
+            '<tr class="person-row">'
+            f"<td colspan='2'>{_cell_text(item.get('name'))}</td>"
+            f"<td colspan='2'>{_cell_text(item.get('incident_no'))}</td>"
+            f"<td colspan='2'>{_cell_text(item.get('place'))}</td>"
+            f"<td>{_cell_text(item.get('registry_no'))}</td>"
+            f"<td>{_cell_text(item.get('coverage'))}</td>"
+            f"<td>{_cell_text(item.get('male') if item.get('male') not in (None, '') else '')}</td>"
+            f"<td>{_cell_text(item.get('female') if item.get('female') not in (None, '') else '')}</td>"
             "</tr>"
         )
     return "".join(rows)
@@ -891,16 +903,25 @@ table.waqoat-grid{{
 }}
 table.waqoat-grid th,table.waqoat-grid td{{
   border:1.4px solid #000000!important;padding:1px 2px;text-align:center;vertical-align:middle;
-  font-size:12.2px;line-height:1.18;color:#000000!important;font-weight:700!important;height:auto;
+  font-size:12.2px;line-height:1.2;color:#000000!important;font-weight:700!important;
+  height:19px!important;min-height:19px!important;
 }}
-table.waqoat-grid th,.waqoat-grid .bg-green,.waqoat-grid .bg-blue,.waqoat-grid .bg-peach{{font-weight:800!important;font-size:14.5px}}
-table.waqoat-grid td{{font-size:12.2px}}
+table.waqoat-grid th,.waqoat-grid .bg-green,.waqoat-grid .bg-blue,.waqoat-grid .bg-peach{{font-weight:800!important;font-size:13.5px}}
+table.waqoat-grid td{{font-size:12px}}
+table.waqoat-grid tr.person-row td{{
+  height:21px!important;min-height:21px!important;padding:2px 4px!important;line-height:1.25!important;
+}}
 .bg-green{{background-color:#d9ead3!important;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 .bg-blue{{background-color:#dce6f1!important;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 .bg-peach{{background-color:#fbe4d5!important;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 .bg-white{{background-color:#ffffff!important;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 .txt-red{{color:#c00000!important;font-weight:800}}
-.sep-row{{height:5px!important;padding:0!important;background:#ffffff!important;border-left:1.4px solid #000;border-right:1.4px solid #000}}
+td.sep-row,.sep-row{{
+  height:6px!important;min-height:6px!important;max-height:6px!important;
+  line-height:6px!important;padding:0!important;font-size:0!important;
+  background:#ffffff!important;border-left:1.4px solid #000;border-right:1.4px solid #000;
+  overflow:hidden!important;
+}}
 .logo-img{{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
 .waqoat-note{{text-align:center;margin-top:4px;font-size:12.5px;font-weight:800}}
 .waqoat-foot{{display:flex;justify-content:space-between;margin-top:4px;font-size:13px;font-weight:800;direction:rtl}}
@@ -911,8 +932,18 @@ table.waqoat-grid td{{font-size:12.2px}}
   .preview-scroll{{overflow:visible!important;height:auto!important;max-height:none!important}}
   .a4{{width:100%!important;max-width:198mm!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;border:none!important;padding:0!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
   table.waqoat-grid{{page-break-inside:avoid!important;border:1.4px solid #000000!important}}
-  table.waqoat-grid th,table.waqoat-grid td{{font-size:11.5px!important;padding:1px 2px!important;line-height:1.15!important;border:1.4px solid #000000!important}}
-  table.waqoat-grid th{{font-size:13px!important;background:#d9ead3!important}}
+  table.waqoat-grid th,table.waqoat-grid td{{
+    font-size:11.5px!important;padding:1px 2px!important;line-height:1.2!important;
+    border:1.4px solid #000000!important;height:19px!important;min-height:19px!important;
+  }}
+  table.waqoat-grid th{{font-size:12.5px!important;background:#d9ead3!important}}
+  table.waqoat-grid tr.person-row td{{
+    height:21px!important;min-height:21px!important;padding:2px 4px!important;line-height:1.25!important;
+  }}
+  td.sep-row,.sep-row{{
+    height:6px!important;min-height:6px!important;max-height:6px!important;
+    line-height:6px!important;padding:0!important;font-size:0!important;
+  }}
   .bg-green{{background:#d9ead3!important}}
   .bg-blue{{background:#dce6f1!important}}
   .bg-peach{{background:#fbe4d5!important}}
@@ -938,7 +969,7 @@ def build_accidents_a4(rows: list[dict], dates: dict, prepared_by: str, phone: s
         lines.append(
             "<tr>"
             + "".join(
-                f"<td>{html.escape(str(r.get(k) or ''))}</td>"
+                f"<td>{_cell_text(r.get(k))}</td>"
                 for k in (
                     "incident_no", "road_name", "road_no", "severity", "accident_type",
                     "cause", "gender", "nationality", "coverage",
@@ -973,11 +1004,11 @@ def build_violations_a4(rows: list[dict], dates: dict, prepared_by: str, phone: 
         r = rows[i] if i < len(rows) else {}
         lines.append(
             "<tr>"
-            f"<td>{i+1 if r else ''}</td>"
-            f"<td>{html.escape(str(r.get('incident_no') or ''))}</td>"
-            f"<td>{html.escape(str(r.get('violation_no') or ''))}</td>"
-            f"<td>{html.escape(str(r.get('violation_type') or ''))}</td>"
-            f"<td>{html.escape(str(r.get('accident_type') or ''))}</td>"
+            f"<td>{_cell_text(i + 1 if r else '')}</td>"
+            f"<td>{_cell_text(r.get('incident_no'))}</td>"
+            f"<td>{_cell_text(r.get('violation_no'))}</td>"
+            f"<td>{_cell_text(r.get('violation_type'))}</td>"
+            f"<td>{_cell_text(r.get('accident_type'))}</td>"
             "</tr>"
         )
     body = f"""
@@ -1043,8 +1074,8 @@ def build_monthly_injured_a4(stats: dict, month_ar: str, year: int, prepared_by:
       </tr>
     </table>
     <table class="footer-meta">
-      <tr><td class="lbl">اسم معد البيان</td><td>{html.escape(prepared_by or '')}</td>
-          <td class="lbl">رقم الجوال</td><td>{html.escape(phone or '')}</td></tr>
+      <tr><td class="lbl">اسم معد البيان</td><td>{_cell_text(prepared_by)}</td>
+          <td class="lbl">رقم الجوال</td><td>{_cell_text(phone)}</td></tr>
     </table>
     </div>
     """
