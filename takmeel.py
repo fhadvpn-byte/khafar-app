@@ -485,8 +485,12 @@ def compute_monthly_stats(cases: list[dict]) -> dict:
 # ---------- طباعة A4 ----------
 def _logo_img(logo_b64: str, h: int = 48) -> str:
     if logo_b64:
-        return f"<img src='data:image/png;base64,{logo_b64}' style='height:{h}px;width:auto;' alt='شعار' />"
-    return "<div style='font-size:11px;font-weight:800;color:#0f3d2e;'>المرور</div>"
+        return (
+            f"<img class='logo-img' src='data:image/png;base64,{logo_b64}' "
+            f"alt='شعار المرور' style='height:{h}px;width:auto;max-width:100%;"
+            f"object-fit:contain;-webkit-print-color-adjust:exact;print-color-adjust:exact;' />"
+        )
+    return "<div style='font-size:11px;font-weight:800;color:#0f3d2e;'>الإدارة العامة للمرور</div>"
 
 
 def _print_shell(title: str, body: str, logo_b64: str) -> str:
@@ -503,17 +507,26 @@ html,body{{direction:rtl;margin:0;padding:10px;background:#0d1316;color:#e2e8f0}
 .a4{{width:794px;margin:0 auto;background:#fff;color:#0f172a;border:2px solid #0f3d2e;padding:8mm 9mm;direction:rtl}}
 table{{width:100%;border-collapse:collapse;margin:4px 0;table-layout:fixed}}
 th,td{{border:1px solid #94a3b8;padding:3px 5px;font-size:10.5px;text-align:center;vertical-align:middle}}
-th{{background:#e8f5ef;color:#0f3d2e;font-weight:800}}
-.lbl{{background:#f4f7f6;font-weight:700;color:#0f3d2e;text-align:right}}
+th{{background:#e8f5ef;color:#0f3d2e;font-weight:800;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.lbl{{background:#f4f7f6;font-weight:700;color:#0f3d2e;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 .hdr{{display:grid;grid-template-columns:1fr 2.2fr 1fr;align-items:center;gap:6px;margin-bottom:6px;border-bottom:2px solid #0f3d2e;padding-bottom:4px}}
 .hdr-title{{text-align:center;font-size:13px;font-weight:800;color:#0f3d2e;line-height:1.45}}
+.logo-img{{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
 .note-red{{color:#b91c1c;font-size:10.5px;font-weight:700;margin-top:6px}}
 .foot{{display:flex;justify-content:space-between;margin-top:8px;font-size:11px;font-weight:700}}
+.a4-monthly .hdr{{margin-bottom:4px;padding-bottom:3px}}
+.a4-monthly .hdr-title{{font-size:12px;line-height:1.35}}
+.a4-monthly table{{margin:3px 0}}
+.a4-monthly th,.a4-monthly td{{padding:2.5px 4px;font-size:10px}}
+.a4-monthly .foot,.a4-monthly .footer-meta{{margin-top:6px}}
 @media print{{
   @page{{size:A4 portrait;margin:5mm}}
   html,body{{background:#fff;padding:0;margin:0}}
   .toolbar,.no-print{{display:none!important}}
-  .a4{{width:100%!important;max-width:200mm!important;margin:0 auto!important;border:none!important;padding:4mm 5mm!important;box-shadow:none!important;page-break-inside:avoid!important}}
+  .a4{{width:100%!important;max-width:200mm!important;margin:0 auto!important;border:none!important;padding:3.5mm 5mm!important;box-shadow:none!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important}}
+  .a4-monthly{{padding:3mm 5mm!important}}
+  .a4-monthly .hdr{{margin-bottom:3px!important;padding-bottom:2px!important}}
+  .logo-img{{display:inline-block!important;visibility:visible!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
 }}
 </style></head><body>
 <div class="toolbar no-print"><button class="print-btn" onclick="window.print()">🖨️ طباعة / حفظ PDF (1/1)</button></div>
@@ -697,7 +710,12 @@ def build_monthly_injured_a4(stats: dict, month_ar: str, year: int, prepared_by:
     )
     ages = stats.get("ages") or {}
     body = f"""
-    <div class="hdr-title" style="margin-bottom:8px">{html.escape(title)}</div>
+    <div class="a4-monthly">
+    <div class="hdr">
+      <div style="text-align:center">{_logo_img(logo_b64, 42)}</div>
+      <div class="hdr-title">{html.escape(title)}</div>
+      <div style="text-align:center">{_logo_img(logo_b64, 42)}</div>
+    </div>
     <table>
       <tr>
         <th colspan="4">عدد الحوادث الإصابات (حسب المكان)</th>
@@ -722,7 +740,7 @@ def build_monthly_injured_a4(stats: dict, month_ar: str, year: int, prepared_by:
       </tr>
     </table>
     <table>
-      <tr><th colspan="7">عدد الأشخاص المصابين حسب العمر التي مضى عليهم أكثر من (24) ساعة منومين بسبب الإصابة</th></tr>
+      <tr><th colspan="6">عدد الأشخاص المصابين حسب العمر التي مضى عليهم أكثر من (24) ساعة منومين بسبب الإصابة</th></tr>
       <tr><th>أقل من 18</th><th>من 19 إلى 30</th><th>من 31 إلى 40</th><th>من 41 إلى 50</th><th>من 51 وأكثر</th><th>المجموع</th></tr>
       <tr>
         <td>{ages.get(AGE_BUCKETS[0],0)}</td><td>{ages.get(AGE_BUCKETS[1],0)}</td>
@@ -731,10 +749,11 @@ def build_monthly_injured_a4(stats: dict, month_ar: str, year: int, prepared_by:
         <td>{sum(_i(ages.get(k)) for k in AGE_BUCKETS)}</td>
       </tr>
     </table>
-    <table>
+    <table class="footer-meta">
       <tr><td class="lbl">اسم معد البيان</td><td>{html.escape(prepared_by or '')}</td>
           <td class="lbl">رقم الجوال</td><td>{html.escape(phone or '')}</td></tr>
     </table>
+    </div>
     """
     return _print_shell(title, body, logo_b64)
 
