@@ -218,6 +218,25 @@ img[src*="avatars.githubusercontent.com"] {
     opacity: 0 !important;
     pointer-events: none !important;
 }
+iframe[height="0"] {
+    height: 0px !important;
+    margin: -1rem 0 0 0 !important;
+    display: block !important;
+    border: none !important;
+    overflow: hidden !important;
+}
+textarea[placeholder*="DUTY_SIG_BRIDGE"],
+div[data-testid="stTextArea"]:has(textarea[placeholder*="DUTY_SIG_BRIDGE"]) {
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    opacity: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+}
 [data-testid="collapsedControl"] { display: none !important; }
 section[data-testid="stSidebar"] { display: none !important; }
 .block-container {
@@ -947,7 +966,7 @@ def _animal_type_text(values: dict) -> str:
 
 
 def _animal_hit_legal(values: dict) -> str:
-    animal = _animal_type_text(values)
+    animal = _rtl_isolate(_animal_type_text(values), as_html=True)
     count = _val(values, "animal_count")
     damages = _val(values, "vehicle_damage")
     health = _val(values, "health_status")
@@ -1163,7 +1182,11 @@ def _settlement_fields() -> list[dict]:
 
 def _toxicology_legal(values: dict) -> str:
     awtar = normalize_western_digits(str((values or {}).get("awtar_no") or "").strip())
-    awtar_clause = f" والمقيد بمنصة (أوتار) برقم: ({awtar})" if awtar else ""
+    awtar_clause = (
+        f" والمقيد بمنصة (أوتار) برقم: ({_rtl_isolate(awtar, as_html=True)})"
+        if awtar
+        else ""
+    )
     return (
         f"سعادة مدير ({_val(values, 'lab_dest')}) المحترم، السلام عليكم ورحمة الله وبركاته.. "
         f"استناداً إلى أحكام نظام المرور ولائحته التنفيذية وإجراءات الاستدلال في الحادث/المحضر رقم ({_val(values, 'incident_no')})"
@@ -1463,7 +1486,8 @@ TRAFFIC_FORMS = {
             {"key": "incident_datetime", "label": "تاريخ ووقت الحادث / البلاغ", "type": "text",
              "sample": "2026/11/20 - 19:30", "prefill_now": True, "a4_hidden": True},
             {"key": "incident_loc", "label": "موقع الحادث واسم الطريق", "type": "text",
-             "sample": "الطريق العام جنوب العارضة باتجاه أحد المسارحة", "prefill_shift_gps": True, "a4_keep_pair": True},
+             "sample": "الطريق العام جنوب العارضة باتجاه أحد المسارحة", "prefill_shift_gps": True, "a4_keep_pair": True,
+             "placeholder": "اكتب اسم الطريق وموقع الحادث"},
             {"key": "road_condition", "label": "وقت الحادث وحالة الطريق", "type": "select", "options": [
                 "ليلي - طريق عام خارج النطاق العمراني",
                 "نهاري - طريق عام خارج النطاق العمراني",
@@ -2397,7 +2421,7 @@ def render_device_bootstrap(
 
 
 def render_hide_st_cloud_badges() -> None:
-    """يزرع CSS + MutationObserver في parent/top لإخفاء شارات Streamlit Cloud فقط."""
+    """يزرع CSS مرة واحدة في parent/top لإخفاء شارات Streamlit Cloud فقط (بدون Observer/Interval)."""
     components.html(
         """<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>html,body{margin:0;padding:0;width:0;height:0;overflow:hidden;}</style>
@@ -2414,7 +2438,8 @@ def render_hide_st_cloud_badges() -> None:
     '[data-testid="manage-app-button"], [data-testid="stToolbar"],',
     'header[data-testid="stHeader"], footer',
     '{ display: none !important; visibility: hidden !important; opacity: 0 !important;',
-    '  pointer-events: none !important; width: 0 !important; height: 0 !important; }'
+    '  pointer-events: none !important; width: 0 !important; height: 0 !important; }',
+    'iframe[height="0"]{height:0px!important;margin:-1rem 0 0 0!important;display:block!important;border:none!important;}'
   ].join("\\n");
 
   function plant(doc) {
@@ -2426,38 +2451,12 @@ def render_hide_st_cloud_badges() -> None:
         style.id = STYLE_ID;
         doc.head.appendChild(style);
       }
-      if (style.textContent !== CSS_TEXT) style.textContent = CSS_TEXT;
+      style.textContent = CSS_TEXT;
     } catch (e) {}
   }
 
-  function targets() {
-    var list = [];
-    try { list.push(document); } catch (e) {}
-    try { if (window.parent && window.parent.document) list.push(window.parent.document); } catch (e) {}
-    try { if (window.top && window.top.document) list.push(window.top.document); } catch (e) {}
-    return list;
-  }
-
-  function applyAll() {
-    var docs = targets();
-    for (var i = 0; i < docs.length; i++) plant(docs[i]);
-  }
-
-  applyAll();
-  try {
-    var docs = targets();
-    for (var i = 0; i < docs.length; i++) {
-      (function (doc) {
-        try {
-          if (!doc || !doc.documentElement || doc.__khafarBadgeObs) return;
-          var obs = new MutationObserver(function () { plant(doc); });
-          obs.observe(doc.documentElement, { childList: true, subtree: true });
-          doc.__khafarBadgeObs = true;
-        } catch (e) {}
-      })(docs[i]);
-    }
-  } catch (e) {}
-  try { setInterval(applyAll, 1500); } catch (e) {}
+  try { plant(window.parent && window.parent.document); } catch (e) {}
+  try { plant(window.top && window.top.document); } catch (e) {}
 })();
 </script>
 </body></html>""",
@@ -2566,31 +2565,60 @@ def render_officer_sig_pad_html() -> str:
 </body></html>"""
 
 
-def render_officer_sig_bridge_listener() -> None:
-    """يستقبل توقيع اللوحة من iframe ويملأ حقل الجسر في الصفحة الأم."""
+def render_officer_sig_bridge_listener(*, allow_ls_restore: bool = False) -> None:
+    """يستقبل توقيع اللوحة من iframe ويملأ حقل الجسر، مع استعادة اختيارية من localStorage."""
+    restore_flag = "true" if allow_ls_restore else "false"
     st.html(
-        """
+        f"""
+<style>
+textarea[placeholder*="DUTY_SIG_BRIDGE"],
+div[data-testid="stTextArea"]:has(textarea[placeholder*="DUTY_SIG_BRIDGE"]) {{
+  height: 0 !important; min-height: 0 !important; max-height: 0 !important;
+  padding: 0 !important; margin: 0 !important; border: none !important;
+  opacity: 0 !important; overflow: hidden !important; pointer-events: none !important;
+}}
+</style>
 <script>
-(function(){
-  if (window.__khafarDutySigBridge) return;
-  window.__khafarDutySigBridge = true;
-  window.addEventListener('message', function(ev){
-    try {
-      var data = ev.data || {};
-      if (!data || data.type !== 'khafar_duty_sig' || !data.b64) return;
-      var nodes = document.querySelectorAll('textarea');
-      for (var i = 0; i < nodes.length; i++) {
-        var ph = (nodes[i].getAttribute('placeholder') || '');
-        if (ph.indexOf('DUTY_SIG_BRIDGE') === -1) continue;
-        var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-        setter.call(nodes[i], String(data.b64));
-        nodes[i].dispatchEvent(new Event('input', { bubbles: true }));
-        nodes[i].dispatchEvent(new Event('change', { bubbles: true }));
-        break;
-      }
-    } catch (e) {}
-  });
-})();
+(function(){{
+  var LS_KEY = {json.dumps(DUTY_SIG_LS_KEY)};
+  var ALLOW_RESTORE = {restore_flag};
+  function fillBridge(b64) {{
+    if (!b64) return false;
+    var nodes = document.querySelectorAll('textarea');
+    for (var i = 0; i < nodes.length; i++) {{
+      var ph = (nodes[i].getAttribute('placeholder') || '');
+      if (ph.indexOf('DUTY_SIG_BRIDGE') === -1) continue;
+      var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+      setter.call(nodes[i], String(b64));
+      nodes[i].dispatchEvent(new Event('input', {{ bubbles: true }}));
+      nodes[i].dispatchEvent(new Event('change', {{ bubbles: true }}));
+      try {{ nodes[i].focus(); nodes[i].blur(); }} catch (e) {{}}
+      return true;
+    }}
+    return false;
+  }}
+  if (!window.__khafarDutySigBridge) {{
+    window.__khafarDutySigBridge = true;
+    window.addEventListener('message', function(ev){{
+      try {{
+        var data = ev.data || {{}};
+        if (!data || data.type !== 'khafar_duty_sig' || !data.b64) return;
+        fillBridge(data.b64);
+      }} catch (e) {{}}
+    }});
+  }}
+  if (ALLOW_RESTORE) {{
+    try {{
+      if (!sessionStorage.getItem('khafar_duty_sig_restored')) {{
+        var saved = localStorage.getItem(LS_KEY) || '';
+        if (saved) {{
+          sessionStorage.setItem('khafar_duty_sig_restored', '1');
+          setTimeout(function(){{ fillBridge(saved); }}, 80);
+        }}
+      }}
+    }} catch (e) {{}}
+  }}
+}})();
 </script>
 """,
         unsafe_allow_javascript=True,
@@ -2898,10 +2926,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     # --- Duty cell ---
     if is_toxicology:
         # خطاب تحليل السموم فقط: ختم إدارة مرور منطقة جازان + توثيق نصي لضابط الخفر بدون خانة توقيع
+        tox_officer_name = str(rec.get("officer_full") or "").strip()
+        for _pfx in ("ضابط الخفر /", "ضابط الخفر/", "ضابط الخفر -", "ضابط الخفر-"):
+            if tox_officer_name.startswith(_pfx):
+                tox_officer_name = tox_officer_name[len(_pfx):].strip()
+                break
         tox_officer_line = (
             '<div style="margin-top:8px;font-size:12px;font-weight:800;color:#000000 !important;'
             'line-height:1.45;text-align:center;">'
-            f"توثيق ضابط الخفر: {html.escape(str(rec.get('officer_full') or '').strip() or '—')}"
+            f"توثيق ضابط الخفر: {html.escape(tox_officer_name or '—')}"
             "</div>"
         )
         if rec.get("duty_stamp_b64"):
@@ -3442,29 +3475,43 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-sheet table a, .a4-sheet .legal-box a, a[href^="tel"] {{
         color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
     }}
-    .a4-compact {{ padding: 14px 32px 20px 32px !important; }}
-    .a4-compact .hdr {{
+    .a4-compact, .a4-dense-print {{ padding: 14px 32px 20px 32px !important; }}
+    .a4-compact .hdr, .a4-dense-print .hdr {{
         padding: 2px 0 8px 0 !important; margin-bottom: 6px !important;
         grid-template-columns: 1fr auto 1fr; gap: 12px;
         border-bottom: 2px solid #0f5132;
     }}
-    .a4-compact .hdr-center {{ width: 88px; height: 88px; min-width: 88px; min-height: 88px; padding: 0 !important; }}
-    .a4-compact .hdr-center img, .a4-compact .hdr-logo {{
+    .a4-compact .hdr-center, .a4-dense-print .hdr-center {{
+        width: 88px; height: 88px; min-width: 88px; min-height: 88px; padding: 0 !important;
+    }}
+    .a4-compact .hdr-center img, .a4-compact .hdr-logo,
+    .a4-dense-print .hdr-center img, .a4-dense-print .hdr-logo {{
         width: 88px !important; height: 88px !important;
         max-width: 88px !important; max-height: 88px !important;
     }}
-    .a4-compact .hdr-right p {{ font-size: 12.5px !important; line-height: 1.28 !important; }}
-    .a4-compact .hdr-left p {{ font-size: 11.5px !important; line-height: 1.32 !important; }}
-    .a4-compact .doc-banner {{ font-size: 13px !important; padding: 4px 8px !important; margin-bottom: 6px !important; }}
-    .a4-compact table.data-tbl {{ margin-bottom: 6px !important; }}
-    .a4-compact table.data-tbl td, .a4-compact table.data-tbl td.val {{ padding: 3px 6px !important; font-size: 11px !important; line-height: 1.35 !important; }}
-    .a4-compact .legal-box {{ font-size: 11px !important; line-height: 1.45 !important; padding: 6px 8px !important; margin-bottom: 6px !important; }}
-    .a4-compact .legal-box div {{ font-size: 11px !important; line-height: 1.45 !important; }}
-    .a4-compact table.sig-tbl td {{ min-height: 58px !important; padding: 4px 6px !important; }}
-    .a4-compact .sig-cell {{ min-height: 52px !important; padding: 4px !important; }}
-    .a4-compact .sig-head {{ font-size: 10px !important; padding: 3px !important; }}
-    .a4-compact .footer-qr {{ padding: 4px 8px !important; }}
-    .a4-compact .footer-qr img {{ width: 32px !important; height: 32px !important; }}
+    .a4-compact .hdr-right p, .a4-dense-print .hdr-right p {{ font-size: 12.5px !important; line-height: 1.28 !important; }}
+    .a4-compact .hdr-left p, .a4-dense-print .hdr-left p {{ font-size: 11.5px !important; line-height: 1.32 !important; }}
+    .a4-compact .doc-banner, .a4-dense-print .doc-banner {{
+        font-size: 13px !important; padding: 4px 8px !important; margin-bottom: 6px !important;
+    }}
+    .a4-compact table.data-tbl, .a4-dense-print table.data-tbl {{ margin-bottom: 6px !important; }}
+    .a4-compact table.data-tbl td, .a4-compact table.data-tbl td.val,
+    .a4-dense-print table.data-tbl td, .a4-dense-print table.data-tbl td.val {{
+        padding: 3px 6px !important; font-size: 11px !important; line-height: 1.35 !important;
+    }}
+    .a4-compact .legal-box, .a4-dense-print .legal-box {{
+        font-size: 11px !important; line-height: 1.45 !important; padding: 6px 8px !important; margin-bottom: 6px !important;
+    }}
+    .a4-compact .legal-box div, .a4-dense-print .legal-box div {{
+        font-size: 11px !important; line-height: 1.45 !important;
+    }}
+    .a4-compact table.sig-tbl td, .a4-dense-print table.sig-tbl td {{
+        min-height: 58px !important; padding: 4px 6px !important;
+    }}
+    .a4-compact .sig-cell, .a4-dense-print .sig-cell {{ min-height: 52px !important; padding: 4px !important; }}
+    .a4-compact .sig-head, .a4-dense-print .sig-head {{ font-size: 10px !important; padding: 3px !important; }}
+    .a4-compact .footer-qr, .a4-dense-print .footer-qr {{ padding: 4px 8px !important; }}
+    .a4-compact .footer-qr img, .a4-dense-print .footer-qr img {{ width: 32px !important; height: 32px !important; }}
     @media print {{
         @page {{ size: A4 portrait; margin: 6mm !important; }}
         html, body, .a4-preview-viewport, .a4-preview-wrapper {{
@@ -3567,6 +3614,29 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         a, a[href^="tel"] {{
             color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
+        }}
+        .a4-paper.a4-dense-print, .a4-paper.a4-compact {{
+            padding: 3mm 6mm !important;
+        }}
+        .a4-paper.a4-dense-print .doc-banner, .a4-paper.a4-compact .doc-banner {{
+            margin-bottom: 5px !important; padding: 4px 8px !important; font-size: 13px !important;
+        }}
+        .a4-paper.a4-dense-print table.data-tbl, .a4-paper.a4-compact table.data-tbl {{
+            margin-bottom: 5px !important;
+        }}
+        .a4-paper.a4-dense-print table.data-tbl td, .a4-paper.a4-compact table.data-tbl td {{
+            padding: 3px 5px !important; line-height: 1.3 !important; font-size: 12px !important;
+        }}
+        .a4-paper.a4-dense-print .legal-box, .a4-paper.a4-compact .legal-box {{
+            padding: 5px 8px !important; margin-bottom: 5px !important;
+            font-size: 11.5px !important; line-height: 1.4 !important;
+        }}
+        .a4-paper.a4-dense-print table.sig-tbl td, .a4-paper.a4-dense-print .sig-cell,
+        .a4-paper.a4-compact table.sig-tbl td, .a4-paper.a4-compact .sig-cell {{
+            min-height: 42px !important; padding: 4px !important;
+        }}
+        .a4-paper.a4-dense-print .footer-qr, .a4-paper.a4-compact .footer-qr {{
+            margin-top: 4px !important; padding: 4px 6px !important;
         }}
     }}
 </style>
@@ -3819,9 +3889,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     var printBtn = document.getElementById("printOfficialBtn");
     if (printBtn) {{
         printBtn.addEventListener("click", function(ev) {{
-            prepareA4Print();
-            setTimeout(function() {{ window.print(); }}, 40);
             ev.preventDefault();
+            prepareA4Print();
+            try {{ window.focus(); }} catch (e) {{}}
+            window.print();
         }});
     }}
 
@@ -4295,18 +4366,23 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     st.session_state[wkey] = now_ksa.strftime("%Y/%m/%d - %H:%M")
                 if fld.get("prefill_shift_gps") and wkey not in st.session_state:
                     gps_seed = str((shift or {}).get("default_gps") or "").strip()
-                    st.session_state[wkey] = gps_seed or fld.get("sample", "")
+                    waiting = gps_seed in ("", "بانتظار رصد الموقع") or "بانتظار" in gps_seed
+                    if gps_seed and not waiting and signed_gps_pair(gps_seed):
+                        st.session_state[wkey] = gps_seed
                 if fld["type"] == "select":
                     opts = fld["options"]
                     default_idx = opts.index(st.session_state[wkey]) if (wkey in st.session_state and st.session_state[wkey] in opts) else 0
                     return st.selectbox(fld["label"], options=opts, index=default_idx, key=wkey, disabled=locked)
                 if fld["type"] == "textarea":
                     return st.text_area(fld["label"], key=wkey, height=88, disabled=locked)
+                ph = fld.get("placeholder") or ""
+                if fld.get("prefill_shift_gps") and not ph:
+                    ph = "اكتب اسم الطريق وموقع الحادث"
                 return st.text_input(
                     fld["label"],
                     key=wkey,
                     disabled=locked,
-                    placeholder=fld.get("placeholder") or "",
+                    placeholder=ph,
                 )
 
             def render_field_grid(fields):
@@ -4935,8 +5011,13 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
         # لوحة التوقيع خارج st.form لالتقاط Base64 لحظياً دون تعارض مع نموذج الحفظ
         st.markdown("##### ✍️ التوقيع المعتمد لضابط الخفر (يُدرج تلقائياً في جميع النماذج)")
         st.caption("يُحفظ التوقيع على هذا الجهاز فقط (SQLite + localStorage) ولا يُوضع في الكوكيز حتى لا يتجاوز حد 4KB.")
-        render_officer_sig_bridge_listener()
+        _allow_ls_restore = not bool(
+            str(st.session_state.get(DUTY_SIG_KEY) or shift.get(DUTY_SIG_KEY) or "").strip()
+        )
+        render_officer_sig_bridge_listener(allow_ls_restore=_allow_ls_restore)
         components.html(render_officer_sig_pad_html(), height=290, scrolling=False)
+        if st.session_state.pop("_clear_duty_sig_bridge", False):
+            st.session_state["duty_sig_bridge"] = ""
         bridge_val = st.text_area(
             "جسر التوقيع",
             key="duty_sig_bridge",
@@ -4948,7 +5029,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
             compressed = compress_signature_b64(bridge_val)
             if compressed:
                 st.session_state[DUTY_SIG_KEY] = compressed
-                st.session_state["duty_sig_bridge"] = ""
+                st.session_state["_clear_duty_sig_bridge"] = True
                 if DEVICE_HASH:
                     cur = get_device_shift(DEVICE_HASH)
                     cur[DUTY_SIG_KEY] = compressed
@@ -4977,6 +5058,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                     st.warning("يُجهَّز تعريف هذا الجهاز داخل المتصفح. أعد الحفظ بعد لحظة.")
                 else:
                     st.session_state[DUTY_SIG_KEY] = payload
+                    st.session_state["_clear_duty_sig_bridge"] = True
                     cur = get_device_shift(DEVICE_HASH)
                     cur[DUTY_SIG_KEY] = payload
                     save_device_shift(DEVICE_HASH, cur)
@@ -4985,7 +5067,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
         with del_col:
             if st.button("🗑️ حذف / إعادة رسم توقيع ضابط الخفر", use_container_width=True):
                 st.session_state[DUTY_SIG_KEY] = ""
-                st.session_state["duty_sig_bridge"] = ""
+                st.session_state["_clear_duty_sig_bridge"] = True
                 if DEVICE_HASH:
                     cur = get_device_shift(DEVICE_HASH)
                     cur[DUTY_SIG_KEY] = ""
