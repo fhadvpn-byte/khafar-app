@@ -5,6 +5,7 @@ import csv
 import html
 import io
 import json
+import re
 import sqlite3
 from datetime import date, datetime
 from pathlib import Path
@@ -538,6 +539,17 @@ def _zoom_script() -> str:
     sheet.style.maxHeight='none';
     sheet.style.overflow='visible';
   }
+  function forceOpenEmptyCells(container){
+    if(!container) return;
+    container.querySelectorAll('table').forEach(function(tbl){
+      var h = tbl.querySelectorAll('tr').length > 25 ? 21 : 32;
+      tbl.querySelectorAll('td').forEach(function(td){
+        if (td.colSpan < 10 && !td.querySelector('img') && td.textContent.replace(/\u00a0/g, '').trim() === '') {
+          td.innerHTML = '<div style="display:block!important;height:' + h + 'px!important;min-height:' + h + 'px!important;line-height:' + h + 'px!important;">&nbsp;</div>';
+        }
+      });
+    });
+  }
   document.querySelectorAll('#zoomBar [data-z]').forEach(function(btn){
     btn.addEventListener('click', function(){
       var v=btn.getAttribute('data-z');
@@ -548,12 +560,16 @@ def _zoom_script() -> str:
       apply();
     });
   });
-  window.addEventListener('beforeprint', clearForPrint);
+  window.addEventListener('beforeprint', function(){
+    clearForPrint();
+    forceOpenEmptyCells(sheet);
+  });
   window.addEventListener('afterprint', apply);
   var printBtn=document.querySelector('.print-btn');
   if(printBtn){
     printBtn.addEventListener('click', function(ev){
       clearForPrint();
+      forceOpenEmptyCells(sheet);
       setTimeout(function(){ window.print(); }, 30);
       ev.preventDefault();
     });
@@ -575,7 +591,21 @@ def _logo_img(logo_b64: str, h: int = 48) -> str:
     return "<div style='font-size:12px;font-weight:800;color:#000000;'>الإدارة العامة للمرور</div>"
 
 
+def _force_open_empty_cells(html_str: str, box_h: int = 21) -> str:
+    box = (
+        f'<div style="display:block!important;height:{box_h}px!important;'
+        f'min-height:{box_h}px!important;line-height:{box_h}px!important;">&nbsp;</div>'
+    )
+    return re.sub(
+        r'(<td(?![^>]*colspan\s*=\s*["\']?10)[^>]*>)\s*(?:&nbsp;|\u00a0)?\s*(</td>)',
+        rf"\1{box}\2",
+        html_str,
+        flags=re.IGNORECASE,
+    )
+
+
 def _print_shell(title: str, body: str, logo_b64: str) -> str:
+    body = _force_open_empty_cells(body, box_h=32)
     return f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="UTF-8">
 <meta name="format-detection" content="telephone=no">
@@ -636,12 +666,12 @@ def _waqoat_cell(v) -> str:
 
 
 def _cell_text(v) -> str:
-    """محتوى خلية غير فارغ بصرياً: يمنع انطباق الصف عند القيمة الفارغة."""
+    """محتوى خلية؛ القيم الفارغة تُترك لـ _force_open_empty_cells لحقن صندوق الارتفاع."""
     if v is None:
-        return "&nbsp;"
+        return ""
     s = str(v).strip() if isinstance(v, str) else str(v)
     if s == "":
-        return "&nbsp;"
+        return ""
     return html.escape(s)
 
 
@@ -880,7 +910,7 @@ def build_daily_incidents_a4(payload: dict, logo_b64: str) -> str:
   <span>رقم الجوال ( {phone} )</span>
 </div>
 """
-    return f"""<!DOCTYPE html>
+    html_doc = f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="UTF-8">
 <meta name="format-detection" content="telephone=no">
 <title>{html.escape(title)}</title>
@@ -902,14 +932,12 @@ table.waqoat-grid{{
   border:1.4px solid #000000!important;font-family:{_FONT_STACK}!important;
 }}
 table.waqoat-grid th,table.waqoat-grid td{{
-  border:1.4px solid #000000!important;padding:1px 2px;text-align:center;vertical-align:middle;
-  font-size:12.2px;line-height:1.2;color:#000000!important;font-weight:700!important;
-  height:19px!important;min-height:19px!important;
+  border:1.4px solid #000000!important;padding:2px 3px!important;text-align:center;vertical-align:middle;
+  font-size:12px!important;line-height:1.3!important;color:#000000!important;font-weight:700!important;
 }}
 table.waqoat-grid th,.waqoat-grid .bg-green,.waqoat-grid .bg-blue,.waqoat-grid .bg-peach{{font-weight:800!important;font-size:13.5px}}
-table.waqoat-grid td{{font-size:12px}}
 table.waqoat-grid tr.person-row td{{
-  height:21px!important;min-height:21px!important;padding:2px 4px!important;line-height:1.25!important;
+  padding:2px 4px!important;line-height:1.3!important;
 }}
 .bg-green{{background-color:#d9ead3!important;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 .bg-blue{{background-color:#dce6f1!important;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
@@ -933,12 +961,12 @@ td.sep-row,.sep-row{{
   .a4{{width:100%!important;max-width:198mm!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;border:none!important;padding:0!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
   table.waqoat-grid{{page-break-inside:avoid!important;border:1.4px solid #000000!important}}
   table.waqoat-grid th,table.waqoat-grid td{{
-    font-size:11.5px!important;padding:1px 2px!important;line-height:1.2!important;
-    border:1.4px solid #000000!important;height:19px!important;min-height:19px!important;
+    font-size:11.5px!important;padding:2px 3px!important;line-height:1.3!important;
+    border:1.4px solid #000000!important;
   }}
   table.waqoat-grid th{{font-size:12.5px!important;background:#d9ead3!important}}
   table.waqoat-grid tr.person-row td{{
-    height:21px!important;min-height:21px!important;padding:2px 4px!important;line-height:1.25!important;
+    padding:2px 4px!important;line-height:1.3!important;font-size:11.5px!important;
   }}
   td.sep-row,.sep-row{{
     height:6px!important;min-height:6px!important;max-height:6px!important;
@@ -956,6 +984,7 @@ td.sep-row,.sep-row{{
 <div class="preview-scroll" id="previewScroll"><div class="a4" id="a4Sheet">{body}</div></div>
 {_zoom_script()}
 </body></html>"""
+    return _force_open_empty_cells(html_doc, box_h=21)
 
 
 def build_accidents_a4(rows: list[dict], dates: dict, prepared_by: str, phone: str, logo_b64: str) -> str:
