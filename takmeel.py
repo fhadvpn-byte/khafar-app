@@ -483,6 +483,86 @@ def compute_monthly_stats(cases: list[dict]) -> dict:
 
 
 # ---------- طباعة A4 ----------
+_FONT_STACK = '"Cairo","Tajawal","Segoe UI",Tahoma,Arial,sans-serif'
+_FONT_IMPORT = "@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap');"
+
+
+def _zoom_controls_html() -> str:
+    return """
+<div class="zoom-bar no-print" id="zoomBar">
+  <button type="button" class="z-btn" data-z="-">➖ تصغير</button>
+  <button type="button" class="z-btn" data-z="+">➕ تكبير</button>
+  <span class="z-pct" id="zoomPct">100%</span>
+  <button type="button" class="z-btn" data-z="1">100%</button>
+  <button type="button" class="z-btn" data-z="1.3">130%</button>
+  <button type="button" class="z-btn" data-z="1.6">160%</button>
+  <button type="button" class="z-btn" data-z="fit">↔️ ملاءمة الشاشة</button>
+</div>
+"""
+
+
+def _zoom_script() -> str:
+    return """
+<script>
+(function(){
+  var KEY='khafar_preview_zoom';
+  var sheet=document.getElementById('a4Sheet');
+  var scroller=document.getElementById('previewScroll');
+  var pctEl=document.getElementById('zoomPct');
+  if(!sheet||!scroller) return;
+  var zoom=1;
+  try{ var saved=parseFloat(localStorage.getItem(KEY)||''); if(saved>=0.55&&saved<=2.2) zoom=saved; }catch(e){}
+  function clamp(v){ return Math.max(0.55, Math.min(2.2, Math.round(v*100)/100)); }
+  function apply(){
+    sheet.style.zoom=String(zoom);
+    sheet.style.transform='';
+    sheet.style.transformOrigin='top right';
+    scroller.style.overflow='auto';
+    scroller.style.height='auto';
+    if(pctEl) pctEl.textContent=Math.round(zoom*100)+'%';
+    try{ localStorage.setItem(KEY, String(zoom)); }catch(e){}
+  }
+  function fit(){
+    var avail=scroller.clientWidth||scroller.parentElement.clientWidth||794;
+    var base=sheet.offsetWidth||794;
+    if(sheet.style.zoom){ try{ sheet.style.zoom='1'; }catch(e){} }
+    zoom=clamp(avail/Math.max(base,1));
+    apply();
+  }
+  function clearForPrint(){
+    sheet.style.zoom='1';
+    sheet.style.transform='none';
+    sheet.style.transformOrigin='';
+    scroller.style.height='auto';
+    scroller.style.overflow='visible';
+  }
+  document.querySelectorAll('#zoomBar [data-z]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var v=btn.getAttribute('data-z');
+      if(v==='+') zoom=clamp(zoom+0.15);
+      else if(v==='-') zoom=clamp(zoom-0.15);
+      else if(v==='fit'){ fit(); return; }
+      else zoom=clamp(parseFloat(v)||1);
+      apply();
+    });
+  });
+  window.addEventListener('beforeprint', clearForPrint);
+  window.addEventListener('afterprint', apply);
+  var printBtn=document.querySelector('.print-btn');
+  if(printBtn){
+    printBtn.addEventListener('click', function(ev){
+      clearForPrint();
+      setTimeout(function(){ window.print(); }, 30);
+      ev.preventDefault();
+    });
+  }
+  apply();
+  setTimeout(apply, 200);
+})();
+</script>
+"""
+
+
 def _logo_img(logo_b64: str, h: int = 48) -> str:
     if logo_b64:
         return (
@@ -490,7 +570,7 @@ def _logo_img(logo_b64: str, h: int = 48) -> str:
             f"alt='شعار المرور' style='height:{h}px;width:auto;max-width:100%;"
             f"object-fit:contain;-webkit-print-color-adjust:exact;print-color-adjust:exact;' />"
         )
-    return "<div style='font-size:11px;font-weight:800;color:#0f3d2e;'>الإدارة العامة للمرور</div>"
+    return "<div style='font-size:12px;font-weight:800;color:#000000;'>الإدارة العامة للمرور</div>"
 
 
 def _print_shell(title: str, body: str, logo_b64: str) -> str:
@@ -498,39 +578,46 @@ def _print_shell(title: str, body: str, logo_b64: str) -> str:
 <html lang="ar" dir="rtl"><head><meta charset="UTF-8">
 <meta name="format-detection" content="telephone=no">
 <title>{html.escape(title)}</title>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
-*{{box-sizing:border-box;font-family:'Cairo',sans-serif}}
+{_FONT_IMPORT}
+*{{box-sizing:border-box;font-family:{_FONT_STACK}!important}}
 html,body{{direction:rtl;margin:0;padding:10px;background:#0d1316;color:#e2e8f0}}
-.toolbar{{max-width:210mm;margin:0 auto 10px;text-align:center}}
-.print-btn{{background:linear-gradient(135deg,#d4a853,#a37a2c);color:#fff;border:none;padding:8px 20px;border-radius:8px;font-weight:800;cursor:pointer}}
-.a4{{width:794px;margin:0 auto;background:#fff;color:#0f172a;border:2px solid #0f3d2e;padding:8mm 9mm;direction:rtl}}
+.toolbar{{max-width:210mm;margin:0 auto 8px;text-align:center}}
+.print-btn{{background:linear-gradient(135deg,#d4a853,#a37a2c);color:#fff;border:none;padding:8px 20px;border-radius:8px;font-weight:800;cursor:pointer;font-size:14px}}
+.zoom-bar{{max-width:210mm;margin:0 auto 10px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center}}
+.z-btn{{background:#112924;color:#fff;border:1px solid #d4a853;border-radius:8px;padding:6px 10px;font-weight:800;cursor:pointer;font-size:12.5px}}
+.z-pct{{background:#fff;color:#000;border-radius:8px;padding:6px 10px;font-weight:900;min-width:58px;text-align:center}}
+.preview-scroll{{max-width:100%;overflow:auto;margin:0 auto}}
+.a4{{width:794px;margin:0 auto;background:#fff;color:#000000!important;border:2px solid #000000;padding:6mm 7mm;direction:rtl}}
+.a4,.a4 *{{color:#000000!important;opacity:1!important}}
+.a4 .txt-red,.a4 .note-red{{color:#c00000!important}}
 table{{width:100%;border-collapse:collapse;margin:4px 0;table-layout:fixed}}
-th,td{{border:1px solid #94a3b8;padding:3px 5px;font-size:10.5px;text-align:center;vertical-align:middle}}
-th{{background:#e8f5ef;color:#0f3d2e;font-weight:800;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-.lbl{{background:#f4f7f6;font-weight:700;color:#0f3d2e;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-.hdr{{display:grid;grid-template-columns:1fr 2.2fr 1fr;align-items:center;gap:6px;margin-bottom:6px;border-bottom:2px solid #0f3d2e;padding-bottom:4px}}
-.hdr-title{{text-align:center;font-size:13px;font-weight:800;color:#0f3d2e;line-height:1.45}}
+th,td{{border:1.4px solid #000000!important;padding:4px 6px;text-align:center;vertical-align:middle;font-size:13.5px;line-height:1.35;font-weight:700!important}}
+th{{background:#d9ead3;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.lbl{{background:#f4f7f6;font-weight:800!important;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.hdr{{display:grid;grid-template-columns:1fr 2.2fr 1fr;align-items:center;gap:6px;margin-bottom:6px;border-bottom:2px solid #000;padding-bottom:4px}}
+.hdr-title{{text-align:center;font-size:16px;font-weight:800!important;line-height:1.4}}
 .logo-img{{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
-.note-red{{color:#b91c1c;font-size:10.5px;font-weight:700;margin-top:6px}}
-.foot{{display:flex;justify-content:space-between;margin-top:8px;font-size:11px;font-weight:700}}
-.a4-monthly .hdr{{margin-bottom:4px;padding-bottom:3px}}
-.a4-monthly .hdr-title{{font-size:12px;line-height:1.35}}
-.a4-monthly table{{margin:3px 0}}
-.a4-monthly th,.a4-monthly td{{padding:2.5px 4px;font-size:10px}}
-.a4-monthly .foot,.a4-monthly .footer-meta{{margin-top:6px}}
+.note-red{{color:#c00000!important;font-size:12.5px;font-weight:800;margin-top:6px}}
+.foot{{display:flex;justify-content:space-between;margin-top:8px;font-size:13.5px;font-weight:800}}
+.a4-monthly .hdr-title{{font-size:15px}}
+.a4-monthly th,.a4-monthly td{{font-size:14px;padding:3px 5px}}
 @media print{{
-  @page{{size:A4 portrait;margin:5mm}}
+  @page{{size:A4 portrait;margin:4mm!important}}
   html,body{{background:#fff;padding:0;margin:0}}
-  .toolbar,.no-print{{display:none!important}}
-  .a4{{width:100%!important;max-width:200mm!important;margin:0 auto!important;border:none!important;padding:3.5mm 5mm!important;box-shadow:none!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important}}
-  .a4-monthly{{padding:3mm 5mm!important}}
-  .a4-monthly .hdr{{margin-bottom:3px!important;padding-bottom:2px!important}}
-  .logo-img{{display:inline-block!important;visibility:visible!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+  .toolbar,.no-print,.zoom-bar{{display:none!important}}
+  .preview-scroll{{overflow:visible!important;height:auto!important}}
+  .a4{{width:100%!important;max-width:200mm!important;margin:0 auto!important;border:none!important;padding:3mm 4mm!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important}}
+  .a4-monthly{{padding:2.5mm 3.5mm!important}}
+  th,td{{font-size:11.5px!important;padding:2px 4px!important;line-height:1.2!important}}
+  .hdr-title{{font-size:13px!important}}
+  .logo-img{{display:inline-block!important;visibility:visible!important}}
 }}
 </style></head><body>
-<div class="toolbar no-print"><button class="print-btn" onclick="window.print()">🖨️ طباعة / حفظ PDF (1/1)</button></div>
-<div class="a4" id="a4Sheet">{body}</div>
+<div class="toolbar no-print"><button class="print-btn" type="button">🖨️ طباعة / حفظ PDF (1/1)</button></div>
+{_zoom_controls_html()}
+<div class="preview-scroll" id="previewScroll"><div class="a4" id="a4Sheet">{body}</div></div>
+{_zoom_script()}
 </body></html>"""
 
 
@@ -620,7 +707,7 @@ def build_daily_incidents_a4(payload: dict, logo_b64: str) -> str:
     <td colspan="10" style="height:48px;padding:4px 14px;background:#fff;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;direction:rtl;">
         <div style="flex:0 0 auto;">{logo_r}</div>
-        <div style="flex:1 1 auto;text-align:center;font-weight:800;font-size:13px;line-height:1.35;color:#000;">
+        <div style="flex:1 1 auto;text-align:center;font-weight:800;font-size:14.5px;line-height:1.3;color:#000000;">
           {html.escape(title)}
         </div>
         <div style="flex:0 0 auto;">{logo_l}</div>
@@ -777,41 +864,54 @@ def build_daily_incidents_a4(payload: dict, logo_b64: str) -> str:
 <html lang="ar" dir="rtl"><head><meta charset="UTF-8">
 <meta name="format-detection" content="telephone=no">
 <title>{html.escape(title)}</title>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet">
 <style>
-*{{box-sizing:border-box}}
+{_FONT_IMPORT}
+*{{box-sizing:border-box;font-family:{_FONT_STACK}!important}}
 html,body{{direction:rtl;margin:0;padding:10px;background:#0d1316;color:#e2e8f0}}
-.toolbar{{max-width:210mm;margin:0 auto 10px;text-align:center}}
-.print-btn{{background:linear-gradient(135deg,#d4a853,#a37a2c);color:#fff;border:none;padding:8px 20px;border-radius:8px;font-weight:800;cursor:pointer}}
-.a4{{width:794px;margin:0 auto;background:#fff;color:#000;border:1px solid #cbd5e1;padding:5mm 6mm;direction:rtl}}
+.toolbar{{max-width:210mm;margin:0 auto 8px;text-align:center}}
+.print-btn{{background:linear-gradient(135deg,#d4a853,#a37a2c);color:#fff;border:none;padding:8px 20px;border-radius:8px;font-weight:800;cursor:pointer;font-size:14px}}
+.zoom-bar{{max-width:210mm;margin:0 auto 10px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center}}
+.z-btn{{background:#112924;color:#fff;border:1px solid #d4a853;border-radius:8px;padding:6px 10px;font-weight:800;cursor:pointer;font-size:12.5px}}
+.z-pct{{background:#fff;color:#000;border-radius:8px;padding:6px 10px;font-weight:900;min-width:58px;text-align:center}}
+.preview-scroll{{max-width:100%;overflow:auto;margin:0 auto}}
+.a4{{width:794px;margin:0 auto;background:#fff;color:#000000!important;border:1px solid #000;padding:3mm 4mm;direction:rtl}}
+.a4,.a4 *{{color:#000000!important;opacity:1!important}}
+.a4 .txt-red{{color:#c00000!important}}
 table.waqoat-grid{{
   width:100%;border-collapse:collapse;table-layout:fixed;direction:rtl;
-  border:1.5px solid #000;font-family:"Traditional Arabic","Tajawal",Arial,sans-serif;
+  border:1.4px solid #000000!important;font-family:{_FONT_STACK}!important;
 }}
 table.waqoat-grid th,table.waqoat-grid td{{
-  border:1px solid #000;padding:1.5px 3px;text-align:center;vertical-align:middle;
-  font-size:10.5px;line-height:1.22;color:#000;height:18px;
+  border:1.4px solid #000000!important;padding:1px 2px;text-align:center;vertical-align:middle;
+  font-size:12.2px;line-height:1.18;color:#000000!important;font-weight:700!important;height:auto;
 }}
-.bg-green{{background-color:#d9ead3!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-.bg-blue{{background-color:#dce6f1!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-.bg-peach{{background-color:#fbe4d5!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-.bg-white{{background-color:#ffffff!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-.txt-red{{color:#c00000!important;font-weight:700}}
-.sep-row{{height:7px!important;padding:0!important;background:#ffffff!important;border-left:1px solid #000;border-right:1px solid #000}}
+table.waqoat-grid th,.waqoat-grid .bg-green,.waqoat-grid .bg-blue,.waqoat-grid .bg-peach{{font-weight:800!important;font-size:14.5px}}
+table.waqoat-grid td{{font-size:12.2px}}
+.bg-green{{background-color:#d9ead3!important;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.bg-blue{{background-color:#dce6f1!important;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.bg-peach{{background-color:#fbe4d5!important;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.bg-white{{background-color:#ffffff!important;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.txt-red{{color:#c00000!important;font-weight:800}}
+.sep-row{{height:5px!important;padding:0!important;background:#ffffff!important;border-left:1.4px solid #000;border-right:1.4px solid #000}}
 .logo-img{{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
-.waqoat-note{{text-align:center;margin-top:6px;font-size:11px;font-weight:700}}
-.waqoat-foot{{display:flex;justify-content:space-between;margin-top:6px;font-size:12px;font-weight:800;direction:rtl}}
+.waqoat-note{{text-align:center;margin-top:4px;font-size:12.5px;font-weight:800}}
+.waqoat-foot{{display:flex;justify-content:space-between;margin-top:4px;font-size:13px;font-weight:800;direction:rtl}}
 @media print{{
-  @page{{size:A4 portrait;margin:6mm!important}}
+  @page{{size:A4 portrait;margin:4mm!important}}
   html,body{{background:#fff!important;padding:0!important;margin:0!important}}
-  .toolbar,.no-print{{display:none!important}}
-  .a4{{width:100%!important;max-width:198mm!important;margin:0 auto!important;border:none!important;padding:0!important;box-shadow:none!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important}}
+  .toolbar,.no-print,.zoom-bar{{display:none!important}}
+  .preview-scroll{{overflow:visible!important;height:auto!important}}
+  .a4{{width:100%!important;max-width:198mm!important;margin:0 auto!important;border:none!important;padding:0!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important}}
   table.waqoat-grid{{page-break-inside:avoid!important}}
+  table.waqoat-grid th,table.waqoat-grid td{{font-size:11.5px!important;padding:1px 2px!important;line-height:1.15!important}}
+  table.waqoat-grid th{{font-size:13px!important}}
   .logo-img{{display:inline-block!important;visibility:visible!important}}
 }}
 </style></head><body>
-<div class="toolbar no-print"><button class="print-btn" onclick="window.print()">🖨️ طباعة / حفظ PDF (1/1)</button></div>
-<div class="a4" id="a4Sheet">{body}</div>
+<div class="toolbar no-print"><button class="print-btn" type="button">🖨️ طباعة / حفظ PDF (1/1)</button></div>
+{_zoom_controls_html()}
+<div class="preview-scroll" id="previewScroll"><div class="a4" id="a4Sheet">{body}</div></div>
+{_zoom_script()}
 </body></html>"""
 
 
@@ -1222,7 +1322,7 @@ def render_daily_incidents(logo_b64: str, shift: dict) -> None:
         st.success("تم الحفظ التراكمي وترحيل المصابين إلى التكميل الشهري.")
 
     st.markdown("#### معاينة وطباعة A4")
-    components.html(build_daily_incidents_a4(payload, logo_b64), height=1280, scrolling=True)
+    components.html(build_daily_incidents_a4(payload, logo_b64), height=1380, scrolling=True)
     render_backup_controls(dates["month_key"])
 
 
@@ -1270,7 +1370,7 @@ def render_accidents_daily(logo_b64: str, shift: dict) -> None:
 
     prepared_by = st.text_input("معد البيان", value=shift.get("officer_name") or "", key="prep_acc")
     phone = st.text_input("رقم الجوال", value="", key="phone_acc")
-    components.html(build_accidents_a4(rows, dates, prepared_by, phone, logo_b64), height=900, scrolling=True)
+    components.html(build_accidents_a4(rows, dates, prepared_by, phone, logo_b64), height=1000, scrolling=True)
     render_backup_controls(dates["month_key"])
 
 
@@ -1308,7 +1408,7 @@ def render_violations_daily(logo_b64: str, shift: dict) -> None:
 
     prepared_by = st.text_input("معد البيان", value=shift.get("officer_name") or "", key="prep_viol")
     phone = st.text_input("رقم الجوال", value="", key="phone_viol")
-    components.html(build_violations_a4(rows, dates, prepared_by, phone, logo_b64), height=900, scrolling=True)
+    components.html(build_violations_a4(rows, dates, prepared_by, phone, logo_b64), height=1000, scrolling=True)
     render_backup_controls(dates["month_key"])
 
 
@@ -1398,7 +1498,7 @@ def render_injured_monthly(logo_b64: str, shift: dict) -> None:
 
     components.html(
         build_monthly_injured_a4(stats, AR_MONTHS[int(month)], int(year), prepared_by, phone, logo_b64),
-        height=850,
+        height=980,
         scrolling=True,
     )
     render_backup_controls(month_key)

@@ -139,7 +139,7 @@ def attachment_fingerprint(item: dict) -> str:
 # =====================================================================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=JetBrains+Mono:wght@600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&family=JetBrains+Mono:wght@600&display=swap');
 
 :root {
     --bg-main: #0f1417;
@@ -644,6 +644,8 @@ div[data-testid="stSelectbox"] div {
     -webkit-text-fill-color: #ffffff !important;
     caret-color: #ffffff !important;
     font-family: 'Cairo', sans-serif !important;
+    font-size: 15.5px !important;
+    font-weight: 700 !important;
     opacity: 1 !important;
 }
 div[data-baseweb="input"] input::placeholder,
@@ -664,8 +666,11 @@ small, .stMarkdown small {
     font-weight: 700 !important;
     opacity: 1 !important;
 }
-label[data-testid="stWidgetLabel"] p {
-    font-size: 13.5px !important;
+label[data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] p {
+    font-size: 15.5px !important;
+    font-weight: 700 !important;
+    line-height: 1.45 !important;
 }
 
 div.stButton > button {
@@ -1950,7 +1955,7 @@ def gps_header_line(coords: str) -> str:
     return (
         f"<p>إحداثيات الموقع: {safe} "
         f"<a href='{href}' target='_blank' rel='noopener noreferrer' "
-        f"style='font-size:9px; font-weight:800; color:#0f3d2e; margin-right:6px;'>خرائط</a></p>"
+        f"style='font-size:11px; font-weight:800; color:#000000; margin-right:6px;'>خرائط</a></p>"
     )
 
 
@@ -2302,7 +2307,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     center_logo_html = (
         f"<img src='data:image/png;base64,{logo_b64}' style='height:58px; width:auto; object-fit:contain;' alt='شعار المرور' />"
         if logo_b64
-        else "<div style='font-size:13px; font-weight:800; color:#0f3d2e;'>الإدارة العامة للمرور</div>"
+        else "<div style='font-size:14px; font-weight:800; color:#000000;'>الإدارة العامة للمرور</div>"
     )
 
     is_medical = rec.get("category") == "إحالة طبية"
@@ -2375,7 +2380,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         )
     elif is_medical and "ختم وتوقيع" in citizen_mode:
         citizen_box_inner = """
-        <div class='sig-guide sig-guide-print-clean' style='border:1px dashed #64748b; border-radius:6px; padding:8px 6px; margin:3px 4px; font-size:10px; color:#334155; line-height:1.6;'>
+        <div class='sig-guide sig-guide-print-clean' style='border:1px dashed #000000; border-radius:6px; padding:8px 6px; margin:3px 4px; font-size:11px; color:#000000; font-weight:700; line-height:1.6;'>
             التوقيع والختم الرسمي لجهة الاستلام
         </div>
         """
@@ -2409,7 +2414,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         )
     elif "ختم" in duty_mode or not duty_mode:
         duty_box_inner = """
-            <div style="display:inline-block; border:1.5px solid #0f3d2e; color:#0f3d2e; padding:3px 10px; border-radius:5px; font-size:10.5px; font-weight:800;">
+            <div style="display:inline-block; border:1.5px solid #000000; color:#000000; padding:3px 10px; border-radius:5px; font-size:11.5px; font-weight:800;">
                 مُصادق ومُعتمد نظاماً
             </div>
         """
@@ -2587,10 +2592,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 <meta charset="UTF-8">
 <meta name="format-detection" content="telephone=no">
 <title>{rec['doc_no']} - {banner_title}</title>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
-    * {{ box-sizing: border-box; font-family: 'Cairo', sans-serif; }}
-    /* ورقة A4 معزولة داخل iframe: نص داكن فوق خلفية بيضاء بغض النظر عن ثيم الجهاز */
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap');
+    * {{ box-sizing: border-box; font-family: "Cairo", "Tajawal", "Segoe UI", Tahoma, Arial, sans-serif !important; }}
+    /* ورقة A4 معزولة داخل iframe: نص أسود عريض فوق خلفية بيضاء */
     html, body {{ color-scheme: light; direction: rtl; }}
     body {{ margin: 0; padding: 14px; background: #0d1316; direction: rtl; text-align: right; color: #e2e8f0; }}
     .a4-sheet, .a4-paper,
@@ -2611,12 +2616,24 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         text-align: center !important;
     }}
     .toolbar {{
-        max-width: 210mm; margin: 0 auto 12px auto; display: flex; gap: 10px;
+        max-width: 210mm; margin: 0 auto 8px auto; display: flex; gap: 10px;
         justify-content: center; background: #0f3d2e; border: 1px solid #d4a853; padding: 10px; border-radius: 10px;
     }}
     .print-btn {{
         background: linear-gradient(135deg, #d4a853 0%, #a37a2c 100%); color: #fff; border: none; padding: 8px 24px;
         font-size: 14px; font-weight: 800; border-radius: 8px; cursor: pointer;
+    }}
+    .zoom-bar {{
+        max-width: 210mm; margin: 0 auto 12px; display: flex; flex-wrap: wrap; gap: 6px;
+        justify-content: center; align-items: center;
+    }}
+    .z-btn {{
+        background: #112924; color: #fff; border: 1px solid #d4a853; border-radius: 8px;
+        padding: 6px 10px; font-weight: 800; cursor: pointer; font-size: 12.5px;
+    }}
+    .z-pct {{
+        background: #fff; color: #000; border-radius: 8px; padding: 6px 10px;
+        font-weight: 900; min-width: 58px; text-align: center;
     }}
     .live-sig-dock {{
         max-width: 794px; margin: 0 auto 14px auto; background: #101820; border: 1px solid #1e6b50;
@@ -2645,16 +2662,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .sig-guide {{ border: 1px dashed #94a3b8; border-radius: 6px; padding: 4px; min-height: 48px; }}
     .sig-guide-hint, .sig-mode-note {{ display: none !important; }}
     .sig-person {{ font-size: 10.5px; font-weight: 800; margin-bottom: 2px; }}
-    .sig-role {{ font-size: 9.5px; font-weight: 700; color: #0f3d2e; margin-bottom: 3px; }}
+    .sig-role {{ font-size: 10.5px; font-weight: 700; color: #000000 !important; margin-bottom: 3px; }}
     .sig-grid {{
-        display: grid; margin-top: 10px; border: 1px solid #94a3b8;
+        display: grid; margin-top: 10px; border: 1.4px solid #000000;
         page-break-inside: avoid; break-inside: avoid;
     }}
     .sig-cell {{
-        border: 1px solid #94a3b8; text-align: center; padding: 12px 10px !important; min-height: 95px; line-height: 1.65 !important;
+        border: 1.4px solid #000000 !important; text-align: center; padding: 12px 10px !important; min-height: 95px; line-height: 1.65 !important; color: #000000 !important;
     }}
     .sig-head {{
-        background: #f1f5f3; color: #0f3d2e !important; font-size: 12px; font-weight: 800; padding: 9px !important; line-height: 1.65 !important;
+        background: #f1f5f3; color: #000000 !important; font-size: 13px; font-weight: 800; padding: 9px !important; line-height: 1.65 !important; border: 1.4px solid #000000 !important;
     }}
     .sig-grid .sig-slot-img {{ height: 34px !important; max-width: 96%; }}
     .sig-multi .sig-slot-img {{ height: 34px !important; max-width: 96%; }}
@@ -2668,7 +2685,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         .a4-preview-viewport {{
             direction: rtl !important;
             width: 100% !important;
-            overflow: hidden !important;
+            overflow: auto !important;
             display: block !important;
             padding: 0 !important;
             margin: 0 !important;
@@ -2683,15 +2700,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             box-sizing: border-box !important;
             margin: 0 auto;
             background: #ffffff !important;
-            color: #0f172a !important;
+            color: #000000 !important;
             padding: 12mm 13mm !important;
-            border: 2px solid #0f3d2e;
+            border: 2px solid #000000;
             overflow: visible !important;
             display: flex !important;
             flex-direction: column !important;
             justify-content: flex-start !important;
             box-shadow: 0 12px 32px rgba(0,0,0,0.45);
-            transform: none;
+            transform-origin: top right !important;
         }}
         .a4-fit {{
             justify-content: flex-start !important;
@@ -2699,16 +2716,18 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             height: auto !important;
             flex: 1 1 auto;
         }}
-        .a4-sheet, .a4-sheet p, .a4-sheet td, .a4-sheet th, .a4-sheet div, .a4-sheet span {{
-            color: #0f172a;
+        .a4-sheet, .a4-sheet p, .a4-sheet td, .a4-sheet th, .a4-sheet div, .a4-sheet span,
+        .a4-paper, .a4-paper p, .a4-paper td, .a4-paper th, .a4-paper div, .a4-paper span {{
+            color: #000000 !important;
+            opacity: 1 !important;
         }}
-        .a4-sheet .doc-banner {{ color: #ffffff !important; }}
+        .a4-sheet .doc-banner, .a4-paper .doc-banner {{ color: #ffffff !important; }}
     }}
     @media only screen and (max-width: 820px) {{
         .a4-preview-viewport {{
             direction: rtl !important;
             width: 100% !important;
-            overflow: hidden !important;
+            overflow: auto !important;
             display: block !important;
             padding: 0 !important;
         }}
@@ -2723,15 +2742,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-fit {{ display: flex; flex-direction: column; justify-content: flex-start; flex: 1 1 auto; min-height: 100%; }}
     .hdr {{
         display: grid; grid-template-columns: 1.35fr 0.8fr 1.15fr;
-        align-items: center; border-bottom: 2px solid #0f3d2e;
+        align-items: center; border-bottom: 2px solid #000000;
         padding-bottom: 12px; margin-bottom: 16px;
     }}
     .hdr-right {{ text-align: center; line-height: 1.7 !important; }}
-    .hdr-right p {{ margin: 0; font-size: 13px !important; font-weight: 800; line-height: 1.7 !important; color: #0f172a !important; }}
+    .hdr-right p {{ margin: 0; font-size: 14px !important; font-weight: 800 !important; line-height: 1.7 !important; color: #000000 !important; }}
     .hdr-center {{ text-align: center; display: flex; justify-content: center; align-items: center; }}
     .hdr-center img {{ height: 58px !important; width: auto; object-fit: contain; }}
     .hdr-left {{ text-align: right; padding-right: 8px; line-height: 1.7 !important; }}
-    .hdr-left p {{ margin: 0; font-size: 13px !important; font-weight: 700; line-height: 1.7 !important; color: #0f172a !important; }}
+    .hdr-left p {{ margin: 0; font-size: 14px !important; font-weight: 800 !important; line-height: 1.7 !important; color: #000000 !important; }}
     .doc-banner {{
         background: #0f3d2e; color: #ffffff !important; text-align: center;
         padding: 10px 16px !important; border-radius: 6px; font-size: 16px !important; font-weight: 800;
@@ -2742,20 +2761,20 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }}
     table.data-tbl {{ width: 100%; border-collapse: collapse; margin-bottom: 20px !important; }}
-    table.data-tbl td {{ border: 1px solid #cbd5e1; padding: 10px 12px !important; font-size: 13px !important; line-height: 1.75 !important; vertical-align: top; direction: rtl; text-align: right; color: #0f172a !important; }}
-    table.data-tbl td.lbl {{ width: 21%; background: #f4f7f6; font-weight: 700; color: #0f3d2e !important; }}
-    table.data-tbl td.val {{ width: 29%; color: #0f172a !important; font-weight: 600; white-space: pre-line; font-size: 13px !important; }}
+    table.data-tbl td {{ border: 1.4px solid #000000 !important; padding: 10px 12px !important; font-size: 14px !important; line-height: 1.7 !important; vertical-align: top; direction: rtl; text-align: right; color: #000000 !important; font-weight: 700 !important; }}
+    table.data-tbl td.lbl {{ width: 21%; background: #f4f7f6; font-weight: 800 !important; color: #000000 !important; }}
+    table.data-tbl td.val {{ width: 29%; color: #000000 !important; font-weight: 700 !important; white-space: pre-line; font-size: 14px !important; }}
     table.data-tbl.cols-4 td.lbl.half {{ width: 21%; }}
     table.data-tbl.cols-4 td.val.half {{ width: 29%; }}
     table.data-tbl.cols-4 td.lbl {{ width: 21%; }}
     table.data-tbl.cols-4 td.val.span3 {{ width: auto; }}
     .legal-box {{
-        background: #f8fafc; border: 1px solid #0f3d2e; border-right: 5px solid #0f3d2e;
+        background: #f8fafc; border: 1.4px solid #000000; border-right: 5px solid #000000;
         border-radius: 6px; padding: 16px 20px !important; margin-bottom: 22px !important;
-        font-size: 13.5px !important; line-height: 2.05 !important; text-align: justify; color: #0f172a !important;
+        font-size: 14px !important; line-height: 2.0 !important; text-align: justify; color: #000000 !important; font-weight: 700 !important;
     }}
-    .legal-box > div:first-child {{ margin-bottom: 10px !important; }}
-    .legal-box div {{ font-size: 13.5px !important; line-height: 2.05 !important; }}
+    .legal-box > div:first-child {{ margin-bottom: 10px !important; font-weight: 800 !important; }}
+    .legal-box div {{ font-size: 14px !important; line-height: 2.0 !important; color: #000000 !important; font-weight: 700 !important; }}
     table.sig-tbl {{
         table-layout: fixed !important; width: 100% !important;
         border-collapse: collapse; margin-top: 10px; text-align: center;
@@ -2765,25 +2784,30 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     table.sig-multi .sig-person, table.sig-multi .sig-head, table.sig-multi .sig-role {{
         word-break: normal !important; overflow-wrap: break-word; white-space: normal;
     }}
-    table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #94a3b8; padding: 9px !important; font-size: 12px; line-height: 1.65 !important; color: #0f3d2e !important; }}
-    table.sig-tbl td {{ border: 1px solid #94a3b8; padding: 12px 10px !important; width: {col_width}; vertical-align: middle; height: auto; min-height: 95px; line-height: 1.65 !important; color: #0f172a !important; }}
+    table.sig-tbl th {{ background: #f1f5f3; border: 1.4px solid #000000 !important; padding: 9px !important; font-size: 13px; line-height: 1.65 !important; color: #000000 !important; font-weight: 800 !important; }}
+    table.sig-tbl td {{ border: 1.4px solid #000000 !important; padding: 12px 10px !important; width: {col_width}; vertical-align: middle; height: auto; min-height: 95px; line-height: 1.65 !important; color: #000000 !important; font-weight: 700 !important; }}
+    .sig-person {{ color: #000000 !important; font-weight: 800 !important; }}
+    .sig-role {{ color: #000000 !important; font-weight: 700 !important; }}
+    .sig-head {{ color: #000000 !important; font-weight: 800 !important; border: 1.4px solid #000000 !important; }}
+    .sig-cell {{ border: 1.4px solid #000000 !important; color: #000000 !important; }}
     .sig-footer {{
         display: flex; flex-direction: column; flex: 1 1 auto;
         page-break-inside: avoid; break-inside: avoid;
     }}
     .footer-qr {{
         margin-top: auto !important; padding-top: 12px !important;
-        background: #f4f7f6; border: 1px solid #cbd5e1; border-radius: 6px;
+        background: #f4f7f6; border: 1.4px solid #000000; border-radius: 6px;
         padding: 12px 10px; display: flex; flex-direction: row; justify-content: space-between; align-items: center;
         direction: rtl !important;
         page-break-inside: avoid; break-inside: avoid;
+        color: #000000 !important; font-weight: 700 !important;
     }}
     .attachment-section {{
-        margin-top: 4px; border: 1px dashed #94a3b8; border-radius: 6px; padding: 3px 6px;
+        margin-top: 4px; border: 1px dashed #000000; border-radius: 6px; padding: 3px 6px;
         background: #f8fafc; page-break-inside: avoid; break-inside: avoid;
     }}
     .attachment-title {{
-        font-size: 10.5px; font-weight: 800; color: #0f3d2e; margin-bottom: 2px; text-align: right;
+        font-size: 12px; font-weight: 800; color: #000000; margin-bottom: 2px; text-align: right;
     }}
     .attachment-grid {{
         display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; overflow: hidden;
@@ -2791,19 +2815,19 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .att-card {{ flex: 1 1 0; text-align: center; min-width: 0; }}
     .att-card img {{
         max-width: 100%; width: auto; height: auto; object-fit: contain;
-        border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; display: block; margin: 0 auto;
+        border: 1.4px solid #000000; border-radius: 4px; background: #fff; display: block; margin: 0 auto;
     }}
     .attachment-grid.atts-single .att-card img,
     .attachment-grid.atts-multi .att-card img {{ max-height: 80px; }}
     .att-caption, .att-pdf-name {{ display: none !important; }}
     .att-pdf-card {{
-        border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px; background: #fff;
+        border: 1.4px solid #000000; border-radius: 4px; padding: 2px 6px; background: #fff;
         max-height: 75px; display: flex; align-items: center; justify-content: center; gap: 4px;
     }}
     .att-pdf-icon {{ font-size: 16px; line-height: 1; }}
-    .att-pdf-note {{ font-size: 9px; color: #475569; }}
+    .att-pdf-note {{ font-size: 10px; color: #000000; font-weight: 700; }}
     .a4-sheet table a, .a4-sheet .legal-box a, a[href^="tel"] {{
-        color: #0f172a !important; text-decoration: none !important; pointer-events: none !important;
+        color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
     }}
     .a4-compact {{ padding: 7mm 8mm !important; }}
     .a4-compact .hdr {{ padding-bottom: 4px !important; margin-bottom: 6px !important; }}
@@ -2837,7 +2861,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             max-height: none !important;
             overflow: visible !important;
         }}
-        .toolbar, .no-print, .live-sig-dock, .clear-sig-btn, .sig-guide-hint, .sig-mode-note,
+        .toolbar, .no-print, .zoom-bar, .live-sig-dock, .clear-sig-btn, .sig-guide-hint, .sig-mode-note,
         .live-pad-actions, .live-sig-dock-head {{ display: none !important; }}
         .a4-preview-viewport ~ *, .a4-paper ~ * {{ display: none !important; }}
         .sig-guide, .sig-guide-print-clean {{
@@ -2900,18 +2924,25 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         .a4-paper table.data-tbl th,
         .a4-paper table.data-tbl td {{
             padding: 3px 6px !important;
-            font-size: 10.5px !important;
-            line-height: 1.3 !important;
+            font-size: 11px !important;
+            line-height: 1.28 !important;
+            color: #000000 !important;
+            font-weight: 700 !important;
+            border-color: #000000 !important;
         }}
         .a4-paper .legal-box {{
-            padding: 6px 9px !important;
+            padding: 5px 8px !important;
             margin-bottom: 5px !important;
-            font-size: 10.5px !important;
-            line-height: 1.4 !important;
+            font-size: 11px !important;
+            line-height: 1.35 !important;
+            color: #000000 !important;
+            font-weight: 700 !important;
         }}
         .a4-paper .legal-box div {{
-            font-size: 10.5px !important;
-            line-height: 1.4 !important;
+            font-size: 11px !important;
+            line-height: 1.35 !important;
+            color: #000000 !important;
+            font-weight: 700 !important;
         }}
         .a4-paper table.sig-tbl {{
             margin-top: 4px !important;
@@ -2952,8 +2983,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             max-height: 70px !important;
         }}
         a, a[href^="tel"] {{
-            color: #0f172a !important; text-decoration: none !important; pointer-events: none !important;
+            color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
         }}
+        .a4-paper, .a4-paper * {{ color: #000000 !important; opacity: 1 !important; }}
+        .a4-paper .doc-banner, .a4-paper .doc-banner * {{ color: #ffffff !important; }}
         div.a4-paper.a4-dense-print {{
             width: 100% !important;
             max-width: 202mm !important;
@@ -2974,7 +3007,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 </head>
 <body>
     <div class="toolbar no-print">
-        <button class="print-btn" onclick="window.print()">🖨️ طباعة الوثيقة الرسمية / حفظ كملف A4 PDF</button>
+        <button class="print-btn" type="button" id="printOfficialBtn">🖨️ طباعة الوثيقة الرسمية / حفظ كملف A4 PDF</button>
+    </div>
+    <div class="zoom-bar no-print" id="zoomBar">
+        <button type="button" class="z-btn" data-z="-">➖ تصغير</button>
+        <button type="button" class="z-btn" data-z="+">➕ تكبير</button>
+        <span class="z-pct" id="zoomPct">100%</span>
+        <button type="button" class="z-btn" data-z="1">100%</button>
+        <button type="button" class="z-btn" data-z="1.3">130%</button>
+        <button type="button" class="z-btn" data-z="1.6">160%</button>
+        <button type="button" class="z-btn" data-z="fit">↔️ ملاءمة الشاشة</button>
     </div>
 
     {live_dock_html}
@@ -2988,7 +3030,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                     <p>وزارة الداخلية</p>
                     <p>الأمن العام - الإدارة العامة للمرور</p>
                     <p>إدارة مرور منطقة جازان</p>
-                    <p style="color:#0f3d2e;">قسم مرور العارضة</p>
+                    <p>قسم مرور العارضة</p>
                 </div>
                 <div class="hdr-center">
                     {center_logo_html}
@@ -3004,8 +3046,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             <table class="{data_tbl_cls}">{rows_html}</table>
 
             <div class="legal-box" dir="rtl" style="direction:rtl; text-align:justify; text-align-last:right;">
-                <div dir="rtl" style="font-weight:800; color:#0f3d2e; margin-bottom:10px; direction:rtl; text-align:right;">{legal_box_title}</div>
-                <div dir="rtl" style="direction:rtl; unicode-bidi:embed; text-align:justify; text-align-last:right; text-justify:inter-word;">&#8207;{rec['legal_text']}</div>
+                <div dir="rtl" style="font-weight:800; color:#000000; margin-bottom:10px; direction:rtl; text-align:right;">{legal_box_title}</div>
+                <div dir="rtl" style="direction:rtl; unicode-bidi:embed; text-align:justify; text-align-last:right; text-justify:inter-word; color:#000000; font-weight:700;">&#8207;{rec['legal_text']}</div>
             </div>
             {attachment_block}
         </div>
@@ -3015,10 +3057,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
             <div class="footer-qr">
                 <div>
-                    <div style="font-size:9.5px; font-weight:800; color:#0f3d2e;">
+                    <div style="font-size:10.5px; font-weight:800; color:#000000;">
                         وثيقة رسمية مقفلة إلكترونياً ضد الكشط أو التعديل اليدوي — قسم مرور العارضة.
                     </div>
-                    <div style="font-size:9px; color:#475569;">ختم التحقق الرقمي (SHA-256 Seal): {rec['verify_hash']}</div>
+                    <div style="font-size:10px; font-weight:700; color:#000000;">ختم التحقق الرقمي (SHA-256 Seal): {rec['verify_hash']}</div>
                 </div>
                 <img src="data:image/png;base64,{qr_b64}" style="width:42px; height:42px;" />
             </div>
@@ -3103,39 +3145,68 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     LIVE_PADS.forEach(wireLivePad);
 
+    var ZOOM_KEY = "khafar_preview_zoom";
+    var userZoom = 1;
+    try {{
+        var savedZ = parseFloat(localStorage.getItem(ZOOM_KEY) || "");
+        if (savedZ >= 0.55 && savedZ <= 2.2) userZoom = savedZ;
+    }} catch (e) {{}}
+
+    function clampZoom(v) {{
+        return Math.max(0.55, Math.min(2.2, Math.round(v * 100) / 100));
+    }}
+
     function fitA4Preview() {{
         if (window.matchMedia && window.matchMedia("print").matches) return;
         const viewport = document.getElementById("a4PreviewViewport");
         const paper = document.getElementById("a4Sheet");
+        const pctEl = document.getElementById("zoomPct");
         if (!viewport || !paper) return;
-        const availW = viewport.clientWidth;
-        const mobile = window.matchMedia("(max-width: 820px)").matches && availW > 0 && availW < 794;
-        if (mobile) {{
-            const scale = availW / 794;
-            paper.style.width = "794px";
-            paper.style.margin = "0";
-            paper.style.direction = "rtl";
-            paper.style.transformOrigin = "top right";
-            paper.style.transform = "scale(" + scale + ")";
-            const nextH = Math.ceil(paper.offsetHeight * scale) + "px";
-            if (viewport.style.height !== nextH) viewport.style.height = nextH;
-        }} else {{
-            paper.style.transform = "none";
-            paper.style.transformOrigin = "";
-            paper.style.direction = "";
-            paper.style.margin = "0 auto";
-            paper.style.width = "";
-            if (viewport.style.height !== "auto") viewport.style.height = "auto";
-        }}
+        paper.style.width = "794px";
+        paper.style.margin = "0 auto";
+        paper.style.direction = "rtl";
+        paper.style.transformOrigin = "top right";
+        paper.style.transform = "";
+        paper.style.zoom = String(userZoom);
+        viewport.style.overflow = "auto";
+        viewport.style.height = "auto";
+        if (pctEl) pctEl.textContent = Math.round(userZoom * 100) + "%";
+        try {{ localStorage.setItem(ZOOM_KEY, String(userZoom)); }} catch (e) {{}}
         try {{
             if (window.frameElement) {{
                 const dock = document.querySelector(".live-sig-dock");
                 const dockH = dock ? dock.offsetHeight + 18 : 0;
-                const viewH = viewport.getBoundingClientRect().height || paper.offsetHeight;
-                window.frameElement.style.height = Math.ceil(viewH + 85 + dockH) + "px";
+                const zoomBar = document.getElementById("zoomBar");
+                const zH = zoomBar ? zoomBar.offsetHeight + 12 : 0;
+                const viewH = viewport.scrollHeight || paper.offsetHeight * userZoom;
+                window.frameElement.style.height = Math.ceil(viewH + 120 + dockH + zH) + "px";
             }}
         }} catch (e) {{}}
     }}
+
+    function setUserZoom(v) {{
+        userZoom = clampZoom(v);
+        fitA4Preview();
+    }}
+
+    function fitToScreenZoom() {{
+        const viewport = document.getElementById("a4PreviewViewport");
+        const paper = document.getElementById("a4Sheet");
+        if (!viewport || !paper) return;
+        paper.style.zoom = "1";
+        const avail = viewport.clientWidth || 794;
+        setUserZoom(avail / Math.max(paper.offsetWidth || 794, 1));
+    }}
+
+    document.querySelectorAll("#zoomBar [data-z]").forEach(function(btn) {{
+        btn.addEventListener("click", function() {{
+            var v = btn.getAttribute("data-z");
+            if (v === "+") setUserZoom(userZoom + 0.15);
+            else if (v === "-") setUserZoom(userZoom - 0.15);
+            else if (v === "fit") fitToScreenZoom();
+            else setUserZoom(parseFloat(v) || 1);
+        }});
+    }});
 
     function prepareA4Print() {{
         const viewport = document.getElementById("a4PreviewViewport");
@@ -3156,7 +3227,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         const paper = document.getElementById("a4Sheet");
         if (viewport) {{
             viewport.style.height = "";
-            viewport.style.overflow = "";
+            viewport.style.overflow = "auto";
         }}
         if (paper) {{
             paper.style.zoom = "";
@@ -3168,6 +3239,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             paper.style.overflow = "";
         }}
         scheduleA4Fit();
+    }}
+
+    var printBtn = document.getElementById("printOfficialBtn");
+    if (printBtn) {{
+        printBtn.addEventListener("click", function(ev) {{
+            prepareA4Print();
+            setTimeout(function() {{ window.print(); }}, 40);
+            ev.preventDefault();
+        }});
     }}
 
     window.onbeforeprint = prepareA4Print;
