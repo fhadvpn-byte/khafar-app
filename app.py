@@ -173,20 +173,34 @@ html, body, .stApp {
     color: inherit;
 }
 
-/* إخفاء شريط Streamlit العلوي وأيقونات Share/GitHub لمنع التداخل مع العربية */
+/* إخفاء شريط Streamlit العلوي وشارات Cloud (التاج / GitHub) دون المساس بـ #root */
 header[data-testid="stHeader"],
 [data-testid="stToolbar"],
 [data-testid="stDecoration"],
 [data-testid="stStatusWidget"],
+[data-testid="manage-app-button"],
 .stDeployButton,
 #MainMenu,
 footer,
 footer[data-testid="stFooter"],
-.stAppDeployButton {
+.stAppDeployButton,
+[class*="viewerBadge"],
+[class*="_viewerBadge"],
+[class*="_link_gzau3"],
+[class*="profileContainer"],
+[class*="_profileContainer"],
+[class*="profilePreview"],
+[class*="_profilePreview"],
+a[href*="streamlit.io"],
+a[href*="share.streamlit.io/user"],
+img[src*="avatars.githubusercontent.com"] {
     display: none !important;
     visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
     height: 0 !important;
     min-height: 0 !important;
+    width: 0 !important;
     opacity: 0 !important;
     pointer-events: none !important;
 }
@@ -2349,6 +2363,78 @@ def render_device_bootstrap(
 </script>
 """,
         unsafe_allow_javascript=True,
+    )
+    # إخفاء شارات Streamlit Cloud (التاج / GitHub) من الغلاف الخارجي دون فراغ في الواجهة
+    render_hide_st_cloud_badges()
+
+
+def render_hide_st_cloud_badges() -> None:
+    """يزرع CSS + MutationObserver في parent/top لإخفاء شارات Streamlit Cloud فقط."""
+    components.html(
+        """<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>html,body{margin:0;padding:0;width:0;height:0;overflow:hidden;}</style>
+</head><body>
+<script>
+(function () {
+  var STYLE_ID = "hide-st-cloud-badges";
+  var CSS_TEXT = [
+    '[class*="viewerBadge"], [class*="_viewerBadge"], [class*="_link_gzau3"],',
+    '[class*="profileContainer"], [class*="_profileContainer"],',
+    '[class*="profilePreview"], [class*="_profilePreview"],',
+    'a[href*="streamlit.io"], a[href*="share.streamlit.io/user"],',
+    'img[src*="avatars.githubusercontent.com"],',
+    '[data-testid="manage-app-button"], [data-testid="stToolbar"],',
+    'header[data-testid="stHeader"], footer',
+    '{ display: none !important; visibility: hidden !important; opacity: 0 !important;',
+    '  pointer-events: none !important; width: 0 !important; height: 0 !important; }'
+  ].join("\\n");
+
+  function plant(doc) {
+    try {
+      if (!doc || !doc.head) return;
+      var style = doc.getElementById(STYLE_ID);
+      if (!style) {
+        style = doc.createElement("style");
+        style.id = STYLE_ID;
+        doc.head.appendChild(style);
+      }
+      if (style.textContent !== CSS_TEXT) style.textContent = CSS_TEXT;
+    } catch (e) {}
+  }
+
+  function targets() {
+    var list = [];
+    try { list.push(document); } catch (e) {}
+    try { if (window.parent && window.parent.document) list.push(window.parent.document); } catch (e) {}
+    try { if (window.top && window.top.document) list.push(window.top.document); } catch (e) {}
+    return list;
+  }
+
+  function applyAll() {
+    var docs = targets();
+    for (var i = 0; i < docs.length; i++) plant(docs[i]);
+  }
+
+  applyAll();
+  try {
+    var docs = targets();
+    for (var i = 0; i < docs.length; i++) {
+      (function (doc) {
+        try {
+          if (!doc || !doc.documentElement || doc.__khafarBadgeObs) return;
+          var obs = new MutationObserver(function () { plant(doc); });
+          obs.observe(doc.documentElement, { childList: true, subtree: true });
+          doc.__khafarBadgeObs = true;
+        } catch (e) {}
+      })(docs[i]);
+    }
+  } catch (e) {}
+  try { setInterval(applyAll, 1500); } catch (e) {}
+})();
+</script>
+</body></html>""",
+        height=0,
+        scrolling=False,
     )
 
 
