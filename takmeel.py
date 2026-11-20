@@ -536,6 +536,67 @@ def _zoom_script() -> str:
     scroller.style.height='auto';
     scroller.style.overflow='visible';
   }
+  function getParentPrintCtx(){
+    var pwin=window, pdoc=document;
+    try{
+      if(window.parent && window.parent!==window && window.parent.document){
+        pwin=window.parent; pdoc=window.parent.document;
+      }
+    }catch(e){}
+    return {win:pwin, doc:pdoc};
+  }
+  function ensureParentPrintInfra(pdoc){
+    var style=pdoc.getElementById('khafar-print-style');
+    if(!style){
+      style=pdoc.createElement('style');
+      style.id='khafar-print-style';
+      style.textContent=[
+        '@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap");',
+        '#khafar-print-root{display:none!important;}',
+        '@page{size:A4 portrait;margin:6mm!important;}',
+        '@media print{',
+        '  #root,[data-testid="stAppViewContainer"],[data-testid="stHeader"],header,footer,.stApp,.main,.block-container{display:none!important;visibility:hidden!important;}',
+        '  body>*:not(#khafar-print-root){display:none!important;visibility:hidden!important;}',
+        '  #khafar-print-root{display:block!important;visibility:visible!important;width:100%!important;max-width:100%!important;padding:6mm 8mm!important;margin:0!important;background:#fff!important;color:#000!important;direction:rtl!important;text-align:right!important;font-family:"Cairo","Tajawal","Segoe UI",Tahoma,Arial,sans-serif!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
+        '  #khafar-print-root,#khafar-print-root *{visibility:visible!important;color:#000!important;font-family:"Cairo","Tajawal","Segoe UI",Tahoma,Arial,sans-serif!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}',
+        '  #khafar-print-root .a4{transform:none!important;zoom:1!important;width:100%!important;max-width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;padding:0!important;border:none!important;box-shadow:none!important;background:#fff!important;direction:rtl!important;}',
+        '  #khafar-print-root .toolbar,#khafar-print-root .no-print,#khafar-print-root .zoom-bar{display:none!important;}',
+        '  #khafar-print-root table{width:100%!important;border-collapse:collapse!important;table-layout:fixed!important;}',
+        '  #khafar-print-root th,#khafar-print-root td{border:1.4px solid #000!important;padding:2px 4px!important;text-align:center!important;vertical-align:middle!important;font-size:11.5px!important;line-height:1.2!important;font-weight:700!important;}',
+        '  #khafar-print-root th{background:#d9ead3!important;font-weight:800!important;}',
+        '  #khafar-print-root .lbl{background:#f4f7f6!important;font-weight:800!important;text-align:right!important;}',
+        '  #khafar-print-root .bg-green{background:#d9ead3!important;}',
+        '  #khafar-print-root .bg-blue{background:#dce6f1!important;}',
+        '  #khafar-print-root .bg-peach{background:#fbe4d5!important;}',
+        '  #khafar-print-root .txt-red,#khafar-print-root .note-red{color:#c00000!important;}',
+        '  #khafar-print-root .hdr{display:grid!important;grid-template-columns:1fr 2.2fr 1fr!important;align-items:center!important;border-bottom:2px solid #000!important;margin-bottom:6px!important;padding-bottom:4px!important;}',
+        '  #khafar-print-root .hdr-title{text-align:center!important;font-size:13px!important;font-weight:800!important;}',
+        '  #khafar-print-root img,.logo-img{max-width:100%!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}',
+        '}'
+      ].join('\\n');
+      (pdoc.head||pdoc.documentElement).appendChild(style);
+    }
+    var root=pdoc.getElementById('khafar-print-root');
+    if(!root){
+      root=pdoc.createElement('div');
+      root.id='khafar-print-root';
+      pdoc.body.appendChild(root);
+    }
+    return root;
+  }
+  function printA4Sync(){
+    clearForPrint();
+    var ctx=getParentPrintCtx();
+    var root=ensureParentPrintInfra(ctx.doc);
+    var clone=sheet.cloneNode(true);
+    clone.id='a4PrintClone';
+    clone.style.cssText='transform:none!important;zoom:1!important;width:100%!important;max-width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;border:none!important;box-shadow:none!important;padding:0!important;background:#fff!important;';
+    while(root.firstChild) root.removeChild(root.firstChild);
+    try{ root.appendChild(ctx.doc.importNode(clone,true)); }catch(e){ root.appendChild(clone); }
+    var cleanup=function(){ try{ while(root.firstChild) root.removeChild(root.firstChild); }catch(e){} };
+    try{ ctx.win.addEventListener('afterprint', cleanup, {once:true}); }catch(e){}
+    try{ ctx.win.print(); }catch(e1){ try{ window.print(); }catch(e2){} }
+  }
   document.querySelectorAll('#zoomBar [data-z]').forEach(function(btn){
     btn.addEventListener('click', function(){
       var v=btn.getAttribute('data-z');
@@ -551,9 +612,8 @@ def _zoom_script() -> str:
   var printBtn=document.querySelector('.print-btn');
   if(printBtn){
     printBtn.addEventListener('click', function(ev){
-      clearForPrint();
-      setTimeout(function(){ window.print(); }, 30);
       ev.preventDefault();
+      printA4Sync();
     });
   }
   apply();
@@ -603,13 +663,15 @@ th{{background:#d9ead3;font-weight:800!important;-webkit-print-color-adjust:exac
 .a4-monthly .hdr-title{{font-size:15px}}
 .a4-monthly th,.a4-monthly td{{font-size:14px;padding:3px 5px}}
 @media print{{
-  @page{{size:A4 portrait;margin:4mm!important}}
+  @page{{size:A4 portrait;margin:6mm!important}}
   html,body{{background:#fff;padding:0;margin:0}}
   .toolbar,.no-print,.zoom-bar{{display:none!important}}
-  .preview-scroll{{overflow:visible!important;height:auto!important}}
-  .a4{{width:100%!important;max-width:200mm!important;margin:0 auto!important;border:none!important;padding:3mm 4mm!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important}}
-  .a4-monthly{{padding:2.5mm 3.5mm!important}}
-  th,td{{font-size:11.5px!important;padding:2px 4px!important;line-height:1.2!important}}
+  .preview-scroll{{overflow:visible!important;height:auto!important;max-height:none!important}}
+  .a4{{width:100%!important;max-width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;border:none!important;padding:0!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+  .a4-monthly{{padding:0!important}}
+  th,td{{font-size:11.5px!important;padding:2px 4px!important;line-height:1.2!important;border:1.4px solid #000!important}}
+  th{{background:#d9ead3!important}}
+  .lbl{{background:#f4f7f6!important}}
   .hdr-title{{font-size:13px!important}}
   .logo-img{{display:inline-block!important;visibility:visible!important}}
 }}
@@ -897,13 +959,13 @@ table.waqoat-grid td{{font-size:12.2px}}
 .waqoat-note{{text-align:center;margin-top:4px;font-size:12.5px;font-weight:800}}
 .waqoat-foot{{display:flex;justify-content:space-between;margin-top:4px;font-size:13px;font-weight:800;direction:rtl}}
 @media print{{
-  @page{{size:A4 portrait;margin:4mm!important}}
+  @page{{size:A4 portrait;margin:6mm!important}}
   html,body{{background:#fff!important;padding:0!important;margin:0!important}}
   .toolbar,.no-print,.zoom-bar{{display:none!important}}
-  .preview-scroll{{overflow:visible!important;height:auto!important}}
-  .a4{{width:100%!important;max-width:198mm!important;margin:0 auto!important;border:none!important;padding:0!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important}}
+  .preview-scroll{{overflow:visible!important;height:auto!important;max-height:none!important}}
+  .a4{{width:100%!important;max-width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;border:none!important;padding:0!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
   table.waqoat-grid{{page-break-inside:avoid!important}}
-  table.waqoat-grid th,table.waqoat-grid td{{font-size:11.5px!important;padding:1px 2px!important;line-height:1.15!important}}
+  table.waqoat-grid th,table.waqoat-grid td{{font-size:11.5px!important;padding:1px 2px!important;line-height:1.15!important;border:1.4px solid #000!important}}
   table.waqoat-grid th{{font-size:13px!important}}
   .logo-img{{display:inline-block!important;visibility:visible!important}}
 }}

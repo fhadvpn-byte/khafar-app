@@ -796,9 +796,9 @@ iframe[data-testid="stIFrame"],
 .official-5lines, .official-5lines div,
 .official-5lines-compact, .official-5lines-compact div { text-align: right !important; }
 .auth-panel:empty { display: none !important; }
-.legal-dark-box { direction: rtl !important; text-align: justify !important; text-align-last: right !important; unicode-bidi: embed !important; color: #e2e8f0 !important; }
+.legal-dark-box { direction: rtl !important; text-align: right !important; unicode-bidi: embed !important; color: #e2e8f0 !important; word-spacing: normal !important; }
 .legal-dark-box .legal-title { direction: rtl !important; text-align: right !important; color: #d4a853 !important; font-weight: 800 !important; margin-bottom: 8px !important; }
-.legal-dark-box .legal-body { direction: rtl !important; unicode-bidi: embed !important; text-align: justify !important; text-align-last: right !important; text-justify: inter-word !important; line-height: 2.0 !important; color: #e2e8f0 !important; }
+.legal-dark-box .legal-body { direction: rtl !important; unicode-bidi: embed !important; text-align: right !important; line-height: 1.55 !important; word-spacing: normal !important; color: #e2e8f0 !important; }
 @media print {
     @page { size: A4 portrait; margin: 4mm !important; }
     html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], .main, .block-container {
@@ -3350,11 +3350,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     table.data-tbl.cols-4 td.val.span3 {{ width: auto; }}
     .legal-box {{
         background: #f8fafc !important; border: 1.4px solid #0f3d2e; border-right: 5px solid #0f3d2e !important;
-        border-radius: 6px; padding: 16px 20px !important; margin-bottom: 22px !important;
-        font-size: 14px !important; line-height: 2.0 !important; text-align: justify; color: #000000 !important; font-weight: 700 !important;
+        border-radius: 6px; padding: 14px 16px !important; margin-bottom: 14px !important;
+        font-size: 13.5px !important; line-height: 1.55 !important; text-align: right !important; direction: rtl !important;
+        word-spacing: normal !important; color: #000000 !important; font-weight: 700 !important;
     }}
-    .legal-box > div:first-child {{ margin-bottom: 10px !important; font-weight: 800 !important; }}
-    .legal-box div {{ font-size: 14px !important; line-height: 2.0 !important; color: #000000 !important; font-weight: 700 !important; }}
+    .legal-box > div:first-child {{ margin-bottom: 8px !important; font-weight: 800 !important; text-align: right !important; }}
+    .legal-box div {{ font-size: 13.5px !important; line-height: 1.55 !important; color: #000000 !important; font-weight: 700 !important; text-align: right !important; word-spacing: normal !important; }}
     table.sig-tbl {{
         table-layout: fixed !important; width: 100% !important;
         border-collapse: collapse; margin-top: 10px; text-align: center;
@@ -3424,17 +3425,13 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-compact .footer-qr {{ padding: 4px 8px !important; }}
     .a4-compact .footer-qr img {{ width: 32px !important; height: 32px !important; }}
     @media print {{
-        @page {{ size: A4 portrait; margin: 0mm !important; }}
+        @page {{ size: A4 portrait; margin: 6mm !important; }}
         html, body, .a4-preview-viewport, .a4-preview-wrapper {{
             direction: rtl !important;
             text-align: right !important;
             transform: none !important;
             margin: 0 !important;
             padding: 0 !important;
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
             background: #ffffff !important;
             height: auto !important;
             min-height: 0 !important;
@@ -3443,36 +3440,24 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         .toolbar, .no-print, .zoom-bar, .live-sig-dock, .clear-sig-btn, .sig-guide-hint, .sig-mode-note,
         .live-pad-actions, .live-sig-dock-head {{ display: none !important; }}
-        .a4-preview-viewport ~ *, .a4-paper ~ * {{ display: none !important; }}
         .sig-guide, .sig-guide-print-clean {{
             border: none !important; padding: 0 !important; margin: 0 !important; background: transparent !important;
         }}
         .live-pad-canvas {{ display: none !important; border: none !important; }}
-        .a4-preview-viewport {{
-            height: auto !important;
-            overflow: visible !important;
-            width: 100% !important;
-            direction: rtl !important;
-            transform: none !important;
-        }}
         .a4-sheet, .a4-paper {{
             direction: rtl !important;
             transform: none !important;
             zoom: 1 !important;
-            width: 210mm !important;
-            max-width: 210mm !important;
+            width: 100% !important;
+            max-width: 100% !important;
             height: auto !important;
-            min-height: 297mm !important;
-            max-height: 297mm !important;
-            padding: 36px 42px !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            padding: 0 !important;
             margin: 0 auto !important;
-            display: flex !important;
-            flex-direction: column !important;
+            display: block !important;
             box-sizing: border-box !important;
             page-break-inside: avoid !important;
-            page-break-after: avoid !important;
-            break-inside: avoid !important;
-            break-after: avoid !important;
             box-shadow: none !important;
             border: none !important;
             overflow: visible !important;
@@ -3481,13 +3466,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             print-color-adjust: exact !important;
             color-adjust: exact !important;
         }}
-        .a4-fit {{
-            justify-content: flex-start !important;
-            min-height: 0 !important;
-            height: auto !important;
-            zoom: 1 !important;
-            transform: none !important;
-        }}
+        .a4-fit {{ height: auto !important; min-height: 0 !important; transform: none !important; zoom: 1 !important; }}
         .a4-paper, .a4-paper * {{
             color: #000000 !important; opacity: 1 !important;
             -webkit-print-color-adjust: exact !important;
@@ -3503,26 +3482,23 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             background: #f8fafc !important;
             border-right: 5px solid #0f3d2e !important;
             color: #000000 !important;
+            text-align: right !important;
+            line-height: 1.55 !important;
+            word-spacing: normal !important;
         }}
+        .a4-paper .hdr {{ margin-bottom: 8px !important; padding-bottom: 6px !important; }}
+        .a4-paper .doc-banner {{ margin-bottom: 8px !important; padding: 6px 10px !important; }}
+        .a4-paper table.data-tbl {{ margin-bottom: 8px !important; }}
+        .a4-paper table.data-tbl td {{ padding: 5px 7px !important; line-height: 1.4 !important; }}
+        .a4-paper .legal-box {{ padding: 8px 10px !important; margin-bottom: 8px !important; }}
+        .a4-paper table.sig-tbl td, .a4-paper .sig-cell {{ min-height: 52px !important; padding: 6px !important; }}
+        .a4-paper .footer-qr {{ margin-top: 6px !important; padding: 6px 8px !important; }}
         .a4-paper table.sig-tbl th, .a4-paper .sig-head {{ background: #f1f5f3 !important; }}
-        .a4-paper table.data-tbl td.val.plate-val, .a4-paper .rtl-iso {{
-            white-space: nowrap !important;
-            unicode-bidi: isolate;
-        }}
         .sig-footer, table.sig-tbl, .sig-grid, .footer-qr, .attachment-section {{
             page-break-inside: avoid !important; break-inside: avoid !important;
         }}
         a, a[href^="tel"] {{
             color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
-        }}
-        div.a4-paper.a4-dense-print {{
-            width: 210mm !important;
-            max-width: 210mm !important;
-            padding: 28px 32px !important;
-            margin: 0 auto !important;
-        }}
-        div.a4-paper.a4-dense-print table.sig-multi.cols-4 > tbody > tr:first-child > td {{
-            width: 25% !important;
         }}
     }}
 </style>
@@ -3567,9 +3543,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             <div class="doc-banner">{banner_title}</div>
             <table class="{data_tbl_cls}">{rows_html}</table>
 
-            <div class="legal-box" dir="rtl" style="direction:rtl; text-align:justify; text-align-last:right;">
-                <div dir="rtl" style="font-weight:800; color:#000000; margin-bottom:10px; direction:rtl; text-align:right;">{legal_box_title}</div>
-                <div dir="rtl" style="direction:rtl; unicode-bidi:embed; text-align:justify; text-align-last:right; text-justify:inter-word; color:#000000; font-weight:700;">&#8207;{rec['legal_text']}</div>
+            <div class="legal-box" dir="rtl" style="direction:rtl; text-align:right; line-height:1.55; word-spacing:normal;">
+                <div dir="rtl" style="font-weight:800; color:#000000; margin-bottom:8px; direction:rtl; text-align:right;">{legal_box_title}</div>
+                <div dir="rtl" style="direction:rtl; unicode-bidi:embed; text-align:right; line-height:1.55; word-spacing:normal; color:#000000; font-weight:700;">&#8207;{rec['legal_text']}</div>
             </div>
             {attachment_block}
         </div>
@@ -3736,127 +3712,97 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }} catch (e) {{}}
     }}
 
-    function collectPreviewStyles() {{
-        var chunks = [];
+    function getParentPrintCtx() {{
+        var pwin = window;
+        var pdoc = document;
         try {{
-            document.querySelectorAll('style').forEach(function(node) {{
-                chunks.push(node.outerHTML);
-            }});
-            document.querySelectorAll('link[rel="stylesheet"]').forEach(function(node) {{
-                chunks.push(node.outerHTML);
-            }});
+            if (window.parent && window.parent !== window && window.parent.document) {{
+                pwin = window.parent;
+                pdoc = window.parent.document;
+            }}
         }} catch (e) {{}}
-        var lock = [];
-        lock.push('<style id="wysiwyg-print-lock">');
-        lock.push('@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap");');
-        lock.push('@page{{size:A4 portrait;margin:0mm!important;}}');
-        lock.push('html,body{{margin:0!important;padding:0!important;background:#fff!important;}}');
-        lock.push('.toolbar,.no-print,.zoom-bar,.live-sig-dock{{display:none!important;}}');
-        lock.push('.a4-preview-viewport{{overflow:visible!important;height:auto!important;width:100%!important;}}');
-        lock.push('.a4-sheet,.a4-paper{{transform:none!important;zoom:1!important;width:210mm!important;min-height:297mm!important;max-height:297mm!important;margin:0 auto!important;box-shadow:none!important;border:none!important;padding:36px 42px!important;box-sizing:border-box!important;background:#fff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}}');
-        lock.push('.a4-paper,.a4-paper *{{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}}');
-        lock.push('.a4-paper .doc-banner,.a4-paper .doc-banner *{{background-color:#0f3d2e!important;color:#fff!important;}}');
-        lock.push('.a4-paper table.data-tbl td.lbl{{background:#f4f7f6!important;}}');
-        lock.push('.a4-paper .legal-box{{background:#f8fafc!important;border-right:5px solid #0f3d2e!important;}}');
-        lock.push('.a4-paper table.data-tbl td.val.plate-val,.a4-paper .rtl-iso{{white-space:nowrap!important;unicode-bidi:isolate;}}');
-        lock.push('</style>');
-        chunks.push(lock.join(""));
-        return chunks.join("\\n");
+        return {{ win: pwin, doc: pdoc }};
     }}
 
-    function waitImages(root) {{
-        var imgs = Array.prototype.slice.call((root && root.querySelectorAll) ? root.querySelectorAll('img') : []);
-        return Promise.all(imgs.map(function(img) {{
-            return new Promise(function(resolve) {{
-                if (img.complete) return resolve();
-                img.onload = function() {{ resolve(); }};
-                img.onerror = function() {{ resolve(); }};
-            }});
-        }}));
+    function ensureParentPrintInfra(pdoc) {{
+        var style = pdoc.getElementById('khafar-print-style');
+        if (!style) {{
+            style = pdoc.createElement('style');
+            style.id = 'khafar-print-style';
+            style.textContent = [
+                '@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap");',
+                '#khafar-print-root{{display:none!important;}}',
+                '@page{{size:A4 portrait;margin:6mm!important;}}',
+                '@media print{{',
+                '  #root,[data-testid="stAppViewContainer"],[data-testid="stHeader"],header,footer,.stApp,.main,.block-container{{display:none!important;visibility:hidden!important;}}',
+                '  body>*:not(#khafar-print-root){{display:none!important;visibility:hidden!important;}}',
+                '  #khafar-print-root{{display:block!important;visibility:visible!important;width:100%!important;max-width:100%!important;padding:6mm 8mm!important;margin:0!important;background:#fff!important;color:#000!important;direction:rtl!important;text-align:right!important;font-family:"Cairo","Tajawal","Segoe UI",Tahoma,Arial,sans-serif!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}',
+                '  #khafar-print-root,#khafar-print-root *{{visibility:visible!important;color:#000!important;font-family:"Cairo","Tajawal","Segoe UI",Tahoma,Arial,sans-serif!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}}',
+                '  #khafar-print-root .a4-sheet,#khafar-print-root .a4-paper{{transform:none!important;zoom:1!important;width:100%!important;max-width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;padding:0!important;box-shadow:none!important;border:none!important;background:#fff!important;direction:rtl!important;}}',
+                '  #khafar-print-root .toolbar,#khafar-print-root .no-print,#khafar-print-root .zoom-bar,#khafar-print-root .live-sig-dock,#khafar-print-root .clear-sig-btn,#khafar-print-root .live-pad-canvas,#khafar-print-root .sig-guide-hint,#khafar-print-root .sig-mode-note{{display:none!important;}}',
+                '  #khafar-print-root .hdr{{display:grid!important;grid-template-columns:1.35fr 0.8fr 1.15fr!important;align-items:center!important;border-bottom:2px solid #000!important;margin-bottom:8px!important;padding-bottom:6px!important;}}',
+                '  #khafar-print-root .doc-banner{{background-color:#0f3d2e!important;color:#fff!important;text-align:center!important;border-radius:6px!important;font-weight:800!important;margin-bottom:8px!important;padding:6px 10px!important;}}',
+                '  #khafar-print-root .doc-banner,#khafar-print-root .doc-banner *{{background-color:#0f3d2e!important;color:#fff!important;}}',
+                '  #khafar-print-root table.data-tbl{{width:100%!important;border-collapse:collapse!important;margin-bottom:8px!important;}}',
+                '  #khafar-print-root table.data-tbl td{{border:1.4px solid #000!important;padding:5px 7px!important;line-height:1.4!important;vertical-align:top!important;text-align:right!important;font-weight:700!important;}}',
+                '  #khafar-print-root table.data-tbl td.lbl{{background:#f4f7f6!important;font-weight:800!important;}}',
+                '  #khafar-print-root .legal-box{{background:#f8fafc!important;border:1.4px solid #0f3d2e!important;border-right:5px solid #0f3d2e!important;border-radius:6px!important;text-align:right!important;line-height:1.55!important;word-spacing:normal!important;direction:rtl!important;padding:8px 10px!important;margin-bottom:8px!important;font-weight:700!important;}}',
+                '  #khafar-print-root table.sig-tbl{{width:100%!important;border-collapse:collapse!important;}}',
+                '  #khafar-print-root table.sig-tbl th,#khafar-print-root table.sig-tbl td,#khafar-print-root .sig-cell,#khafar-print-root .sig-head{{border:1.4px solid #000!important;text-align:center!important;}}',
+                '  #khafar-print-root table.sig-tbl th,#khafar-print-root .sig-head{{background:#f1f5f3!important;font-weight:800!important;}}',
+                '  #khafar-print-root table.sig-tbl td,#khafar-print-root .sig-cell{{min-height:52px!important;padding:6px!important;}}',
+                '  #khafar-print-root .footer-qr{{margin-top:6px!important;padding:6px 8px!important;border:1.4px solid #000!important;}}',
+                '  #khafar-print-root img{{max-width:100%!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}',
+                '}}'
+            ].join('\\n');
+            (pdoc.head || pdoc.documentElement).appendChild(style);
+        }}
+        var root = pdoc.getElementById('khafar-print-root');
+        if (!root) {{
+            root = pdoc.createElement('div');
+            root.id = 'khafar-print-root';
+            pdoc.body.appendChild(root);
+        }}
+        return root;
     }}
 
-    function printA4Wysiwyg() {{
+    function printA4Sync() {{
         syncAllLivePads();
         var paper = document.getElementById('a4Sheet');
         if (!paper) return;
+        var ctx = getParentPrintCtx();
+        var root = ensureParentPrintInfra(ctx.doc);
         var clone = paper.cloneNode(true);
         clone.id = 'a4PrintClone';
-        clone.classList.add('a4-print-clone');
-        clone.style.transform = 'none';
-        clone.style.zoom = '1';
-        clone.style.boxShadow = 'none';
-        clone.style.border = 'none';
-        clone.style.margin = '0 auto';
-        clone.style.width = '794px';
-        clone.style.minHeight = '1123px';
-        clone.style.padding = '36px 42px';
-        // قياس الارتفاع الفعلي ثم تصغير تناسبي طفيف إن تجاوز صفحة واحدة
-        var measureHost = document.createElement('div');
-        measureHost.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;visibility:hidden;';
-        measureHost.appendChild(clone);
-        document.body.appendChild(measureHost);
-        var contentH = Math.max(clone.scrollHeight || 0, clone.offsetHeight || 0);
-        if (contentH > 1122) {{
-            var scale = Math.max(0.82, Math.min(1, 1122 / contentH));
-            clone.style.transformOrigin = 'top center';
-            clone.style.transform = 'scale(' + scale + ')';
+        clone.style.cssText = 'transform:none!important;zoom:1!important;width:100%!important;max-width:100%!important;min-height:0!important;height:auto!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;box-shadow:none!important;border:none!important;padding:0!important;background:#fff!important;';
+        while (root.firstChild) root.removeChild(root.firstChild);
+        try {{
+            root.appendChild(ctx.doc.importNode(clone, true));
+        }} catch (e) {{
+            root.appendChild(clone);
         }}
-        var wrap = document.createElement('div');
-        wrap.setAttribute('class', 'a4-print-wrap');
-        wrap.style.cssText = 'width:210mm;height:297mm;overflow:hidden;margin:0 auto;background:#fff;';
-        wrap.appendChild(clone);
-        var htmlOut = '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">'
-            + '<title>طباعة مطابقة للمعاينة</title>'
-            + collectPreviewStyles()
-            + '</head><body>'
-            + wrap.outerHTML
-            + '</body></html>';
-        document.body.removeChild(measureHost);
-        var win = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1200');
-        if (!win) {{
-            // إن حُظر فتح نافذة: اطبع داخل إطار مخفي بنفس النسخة المستنسخة
-            var frame = document.getElementById('a4PrintFrame');
-            if (!frame) {{
-                frame = document.createElement('iframe');
-                frame.id = 'a4PrintFrame';
-                frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-                document.body.appendChild(frame);
-            }}
-            var doc = frame.contentDocument || frame.contentWindow.document;
-            doc.open(); doc.write(htmlOut); doc.close();
-            var runPrint = function() {{
-                try {{ frame.contentWindow.focus(); frame.contentWindow.print(); }} catch (e) {{}}
-            }};
-            Promise.resolve()
-                .then(function() {{ return (doc.fonts && doc.fonts.ready) ? doc.fonts.ready : null; }})
-                .then(function() {{ return waitImages(doc); }})
-                .then(function() {{ setTimeout(runPrint, 250); }});
-            return;
+        var cleanup = function() {{
+            try {{ while (root.firstChild) root.removeChild(root.firstChild); }} catch (e) {{}}
+        }};
+        try {{ ctx.win.addEventListener('afterprint', cleanup, {{ once: true }}); }} catch (e) {{}}
+        try {{
+            ctx.win.print();
+        }} catch (e1) {{
+            try {{ window.print(); }} catch (e2) {{}}
         }}
-        win.document.open();
-        win.document.write(htmlOut);
-        win.document.close();
-        Promise.resolve()
-            .then(function() {{ return (win.document.fonts && win.document.fonts.ready) ? win.document.fonts.ready : null; }})
-            .then(function() {{ return waitImages(win.document); }})
-            .then(function() {{
-                setTimeout(function() {{
-                    try {{ win.focus(); win.print(); }} catch (e) {{}}
-                }}, 250);
-            }});
     }}
 
     var printBtn = document.getElementById("printOfficialBtn");
     if (printBtn) {{
         printBtn.addEventListener("click", function(ev) {{
             ev.preventDefault();
-            printA4Wysiwyg();
+            printA4Sync();
         }});
     }}
     window.addEventListener('keydown', function(ev) {{
         if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'p' || ev.key === 'P')) {{
             ev.preventDefault();
-            printA4Wysiwyg();
+            printA4Sync();
         }}
     }});
     function scheduleA4Fit() {{
@@ -4509,7 +4455,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
 
             live_legal_text = " ".join(form_def["legal_fn"](current_values).splitlines())
             st.markdown(
-                f'<div class="legal-dark-box" dir="rtl" style="direction:rtl !important;text-align:justify !important;text-align-last:right !important;"><div class="legal-title" dir="rtl" style="direction:rtl !important;text-align:right !important;color:#d4a853;font-weight:800;margin-bottom:8px;">⚖️ معاينة النص الرسمي المعتمد في الوثيقة:</div><div class="legal-body" dir="rtl" style="direction:rtl !important;unicode-bidi:embed !important;text-align:justify !important;text-align-last:right !important;line-height:2.0;">\u200f{live_legal_text}</div></div>',
+                f'<div class="legal-dark-box" dir="rtl" style="direction:rtl !important;text-align:right !important;word-spacing:normal !important;"><div class="legal-title" dir="rtl" style="direction:rtl !important;text-align:right !important;color:#d4a853;font-weight:800;margin-bottom:8px;">⚖️ معاينة النص الرسمي المعتمد في الوثيقة:</div><div class="legal-body" dir="rtl" style="direction:rtl !important;unicode-bidi:embed !important;text-align:right !important;line-height:1.55 !important;word-spacing:normal !important;">\u200f{live_legal_text}</div></div>',
                 unsafe_allow_html=True,
             )
 
