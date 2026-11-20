@@ -1812,8 +1812,12 @@ BLANK_SHIFT = {
     "duty_name": "",
     "default_gps": "بانتظار رصد الموقع",
 }
+# مفتاح صورة توقيع ضابط الخفر — يُحفظ في SQLite وlocalStorage فقط (ليس في الكوكيز)
+DUTY_SIG_KEY = "duty_sig_b64"
+DUTY_SIG_LS_KEY = "khafar_duty_sig"
 DEVICE_COOKIE = "khafar_device_uid"
 SHIFT_COOKIE = "khafar_shift"
+_SHIFT_TEXT_KEYS = ("dept_name", "officer_rank", "officer_name", "duty_rank", "duty_name", "default_gps")
 _UUID4_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     re.IGNORECASE,
@@ -1856,6 +1860,9 @@ def init_db():
             default_gps TEXT
         )
     """)
+    device_shift_cols = {row[1] for row in c.execute("PRAGMA table_info(device_shifts)").fetchall()}
+    if "duty_sig_b64" not in device_shift_cols:
+        c.execute("ALTER TABLE device_shifts ADD COLUMN duty_sig_b64 TEXT")
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS records (
@@ -1909,14 +1916,16 @@ RECEIVER_ROLE_OPTIONS = [
 
 
 def _blank_shift() -> dict:
-    return dict(BLANK_SHIFT)
+    blank = dict(BLANK_SHIFT)
+    blank[DUTY_SIG_KEY] = ""
+    return blank
 
 
 def _clean_shift(data: dict | None) -> dict:
     cleaned = _blank_shift()
     if not isinstance(data, dict):
         return cleaned
-    for key in cleaned:
+    for key in _SHIFT_TEXT_KEYS:
         if data.get(key) is None:
             continue
         cleaned[key] = str(data.get(key) or "")[:180]
@@ -1927,7 +1936,41 @@ def _clean_shift(data: dict | None) -> dict:
         cleaned["duty_rank"] = "وحدة الحوادث"
     if not cleaned["default_gps"].strip():
         cleaned["default_gps"] = "بانتظار رصد الموقع"
+    # صورة التوقيع قد تكون كبيرة — لا تُقطع بحد 180 ولا تُمرَّر للكوكيز
+    raw_sig = str(data.get(DUTY_SIG_KEY) or "").strip()
+    if raw_sig.startswith("data:"):
+        raw_sig = raw_sig.split(",", 1)[-1].strip()
+    cleaned[DUTY_SIG_KEY] = raw_sig[:250000] if raw_sig else ""
     return cleaned
+
+
+def shift_light_payload(data: dict | None) -> dict:
+    """بيانات المناوبة النصية الخفيفة فقط (بدون Base64 التوقيع) للكوكيز."""
+    cleaned = _clean_shift(data)
+    return {key: cleaned.get(key, "") for key in _SHIFT_TEXT_KEYS}
+
+
+def compress_signature_b64(raw_b64: str) -> str:
+    """ضغط توقيع ضابط الخفر إلى PNG صغير مناسب للطباعة A4."""
+    payload = str(raw_b64 or "").strip()
+    if not payload:
+        return ""
+    if payload.startswith("data:"):
+        payload = payload.split(",", 1)[-1]
+    try:
+        img = Image.open(io.BytesIO(base64.b64decode(payload)))
+        img = ImageOps.exif_transpose(img)
+        if img.mode not in ("RGB", "RGBA", "L"):
+            img = img.convert("RGBA")
+        img.thumbnail((480, 160), Image.Resampling.LANCZOS)
+        # خلفية شفافة إن أمكن مع الحفاظ على الحبر الداكن
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG", optimize=True)
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+    except Exception:
+        return payload[:250000]
 
 
 def device_hash_for(uid: str) -> str:
@@ -1959,7 +2002,8 @@ def get_device_shift(device_hash: str) -> dict:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     row = conn.execute(
-        "SELECT dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps FROM device_shifts WHERE device_hash=?",
+        "SELECT dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps, duty_sig_b64 "
+        "FROM device_shifts WHERE device_hash=?",
         (device_hash,),
     ).fetchone()
     conn.close()
@@ -1983,18 +2027,21 @@ def save_device_shift(device_hash: str, data: dict) -> dict:
         return cleaned
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
-        INSERT INTO device_shifts (device_hash, dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO device_shifts (
+            device_hash, dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps, duty_sig_b64
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(device_hash) DO UPDATE SET
             dept_name=excluded.dept_name,
             officer_rank=excluded.officer_rank,
             officer_name=excluded.officer_name,
             duty_rank=excluded.duty_rank,
             duty_name=excluded.duty_name,
-            default_gps=excluded.default_gps
+            default_gps=excluded.default_gps,
+            duty_sig_b64=excluded.duty_sig_b64
     """, (
         device_hash, cleaned["dept_name"], cleaned["officer_rank"], cleaned["officer_name"],
-        cleaned["duty_rank"], cleaned["duty_name"], cleaned["default_gps"],
+        cleaned["duty_rank"], cleaned["duty_name"], cleaned["default_gps"], cleaned.get(DUTY_SIG_KEY, ""),
     ))
     conn.commit()
     conn.close()
@@ -2208,18 +2255,29 @@ def delete_record_db(rec_id: int, device_hash: str):
     conn.close()
 
 
-def render_device_bootstrap(server_has_uid: bool, shift_payload: dict | None, wipe: bool) -> None:
-    """يبقي معرّف الجهاز في الكوكيز والتخزين المحلي دون إضافته إلى الرابط."""
-    shift_js = json.dumps(shift_payload, ensure_ascii=True) if shift_payload else "null"
+def render_device_bootstrap(
+    server_has_uid: bool,
+    shift_payload: dict | None,
+    wipe: bool,
+    duty_sig_b64: str = "",
+) -> None:
+    """يبقي معرّف الجهاز في الكوكيز والتخزين المحلي دون إضافته إلى الرابط.
+    التوقيع (duty_sig_b64) يُحفظ في localStorage فقط — وليس في الكوكيز — لتفادي حد 4KB.
+    """
+    light = shift_light_payload(shift_payload) if shift_payload else None
+    shift_js = json.dumps(light, ensure_ascii=True) if light else "null"
+    sig_js = json.dumps(str(duty_sig_b64 or ""), ensure_ascii=True)
     st.html(
         f"""
 <script>
 (function () {{
   var uidKey = "khafar_device_uid";
   var shiftKey = "khafar_shift";
+  var dutySigKey = "{DUTY_SIG_LS_KEY}";
   var serverHasUid = {"true" if server_has_uid else "false"};
   var wipe = {"true" if wipe else "false"};
   var officialShift = {shift_js};
+  var officialDutySig = {sig_js};
   function readCookie(name) {{
     var parts = (document.cookie || "").split("; ");
     for (var i = 0; i < parts.length; i++) {{
@@ -2249,6 +2307,7 @@ def render_device_bootstrap(server_has_uid: bool, shift_payload: dict | None, wi
   writeCookie(uidKey, uid, 31536000);
   if (wipe) {{
     try {{ localStorage.removeItem(shiftKey); }} catch (e) {{}}
+    try {{ localStorage.removeItem(dutySigKey); }} catch (e) {{}}
     writeCookie(shiftKey, "", 0);
     if (!sessionStorage.getItem("khafar_wiped")) {{
       sessionStorage.setItem("khafar_wiped", "1");
@@ -2260,11 +2319,22 @@ def render_device_bootstrap(server_has_uid: bool, shift_payload: dict | None, wi
     var packed = JSON.stringify(officialShift);
     try {{ localStorage.setItem(shiftKey, packed); }} catch (e) {{}}
     writeCookie(shiftKey, packed, 31536000);
+    if (officialDutySig) {{
+      try {{ localStorage.setItem(dutySigKey, officialDutySig); }} catch (e) {{}}
+    }}
   }} else {{
     var localShift = "";
     try {{ localShift = localStorage.getItem(shiftKey) || ""; }} catch (e) {{}}
     if (localShift && !readCookie(shiftKey) && !sessionStorage.getItem("khafar_shift_sync")) {{
       sessionStorage.setItem("khafar_shift_sync", "1");
+      try {{
+        var parsed = JSON.parse(localShift);
+        if (parsed && typeof parsed === "object") {{
+          delete parsed.duty_sig_b64;
+          localShift = JSON.stringify(parsed);
+          localStorage.setItem(shiftKey, localShift);
+        }}
+      }} catch (e2) {{}}
       writeCookie(shiftKey, localShift, 31536000);
       window.location.replace(window.location.pathname + window.location.search + window.location.hash);
       return;
@@ -2310,6 +2380,107 @@ def _live_pad_card(pad_id: str, title: str, subtitle: str) -> str:
         </div>
     </div>
     """
+
+
+def render_officer_sig_pad_html() -> str:
+    """لوحة توقيع حي لضابط الخفر في الإعدادات — تنقل الناتج إلى جسر Streamlit عبر postMessage."""
+    return f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<style>
+  body{{margin:0;padding:8px;background:#0d1316;font-family:Cairo,Tahoma,sans-serif;color:#e2e8f0}}
+  .wrap{{background:#101820;border:1px solid #1e6b50;border-radius:12px;padding:10px}}
+  .title{{font-weight:800;color:#f3cc7a;font-size:13px;margin-bottom:6px;text-align:center}}
+  canvas{{width:100%;height:180px;border:1.5px dashed #0d47a1;border-radius:8px;background:#fff;touch-action:none;cursor:crosshair;display:block}}
+  .actions{{display:flex;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap}}
+  button{{border:1px solid #d4a853;background:#112924;color:#fff;border-radius:8px;padding:7px 12px;font-weight:800;cursor:pointer}}
+  .ok{{color:#34d399;font-size:12px;font-weight:700;text-align:center;margin-top:6px;min-height:18px}}
+</style></head><body>
+<div class="wrap">
+  <div class="title">ارسم توقيع ضابط الخفر هنا (خط أسود حاد للطباعة)</div>
+  <canvas id="pad_officer_settings" width="900" height="220"></canvas>
+  <div class="actions">
+    <button type="button" id="btnClear">مسح اللوحة</button>
+    <button type="button" id="btnAdopt">✅ اعتماد التوقيع في الجلسة</button>
+  </div>
+  <div class="ok" id="padStatus"></div>
+</div>
+<script>
+(function(){{
+  var canvas = document.getElementById('pad_officer_settings');
+  var ctx = canvas.getContext('2d');
+  var drawing = false;
+  function pos(e){{
+    var r = canvas.getBoundingClientRect();
+    var src = (e.touches && e.touches[0]) ? e.touches[0] : e;
+    return {{ x: (src.clientX - r.left) * (canvas.width / r.width), y: (src.clientY - r.top) * (canvas.height / r.height) }};
+  }}
+  function start(e){{ e.preventDefault(); drawing = true; var p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }}
+  function move(e){{
+    if (!drawing) return; e.preventDefault();
+    var p = pos(e);
+    ctx.lineWidth = 3.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#000000'; ctx.lineTo(p.x, p.y); ctx.stroke();
+  }}
+  function end(){{ drawing = false; }}
+  canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', move);
+  canvas.addEventListener('mouseup', end); canvas.addEventListener('mouseleave', end);
+  canvas.addEventListener('touchstart', start, {{passive:false}});
+  canvas.addEventListener('touchmove', move, {{passive:false}});
+  canvas.addEventListener('touchend', end);
+  document.getElementById('btnClear').onclick = function(){{
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    document.getElementById('padStatus').textContent = '';
+  }};
+  document.getElementById('btnAdopt').onclick = function(){{
+    var blank = document.createElement('canvas');
+    blank.width = canvas.width; blank.height = canvas.height;
+    if (canvas.toDataURL() === blank.toDataURL()) {{
+      document.getElementById('padStatus').textContent = 'ارسم التوقيع أولاً';
+      return;
+    }}
+    var dataUrl = canvas.toDataURL('image/png');
+    var b64 = dataUrl.split(',')[1] || '';
+    try {{ localStorage.setItem('{DUTY_SIG_LS_KEY}', b64); }} catch (e) {{}}
+    try {{
+      parent.postMessage({{ type: 'khafar_duty_sig', b64: b64 }}, '*');
+    }} catch (e) {{}}
+    document.getElementById('padStatus').textContent = 'تم اعتماد التوقيع — اضغط حفظ التوقيع بالأسفل إن لزم';
+  }};
+}})();
+</script>
+</body></html>"""
+
+
+def render_officer_sig_bridge_listener() -> None:
+    """يستقبل توقيع اللوحة من iframe ويملأ حقل الجسر في الصفحة الأم."""
+    st.html(
+        """
+<script>
+(function(){
+  if (window.__khafarDutySigBridge) return;
+  window.__khafarDutySigBridge = true;
+  window.addEventListener('message', function(ev){
+    try {
+      var data = ev.data || {};
+      if (!data || data.type !== 'khafar_duty_sig' || !data.b64) return;
+      var nodes = document.querySelectorAll('textarea');
+      for (var i = 0; i < nodes.length; i++) {
+        var ph = (nodes[i].getAttribute('placeholder') || '');
+        if (ph.indexOf('DUTY_SIG_BRIDGE') === -1) continue;
+        var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+        setter.call(nodes[i], String(data.b64));
+        nodes[i].dispatchEvent(new Event('input', { bubbles: true }));
+        nodes[i].dispatchEvent(new Event('change', { bubbles: true }));
+        break;
+      }
+    } catch (e) {}
+  });
+})();
+</script>
+""",
+        unsafe_allow_javascript=True,
+    )
 
 
 _WIDE_FIELD_KEYS = {
@@ -3559,15 +3730,26 @@ if DEVICE_HASH and st.session_state.get("pending_live_gps"):
     update_default_gps(DEVICE_HASH, str(st.session_state.pop("pending_live_gps")))
     st.session_state["gps_live_ok"] = True
 shift = get_device_shift(DEVICE_HASH)
+if shift.get(DUTY_SIG_KEY):
+    st.session_state[DUTY_SIG_KEY] = shift.get(DUTY_SIG_KEY) or ""
+elif DUTY_SIG_KEY not in st.session_state:
+    st.session_state[DUTY_SIG_KEY] = ""
 _mirror_shift = shift if (DEVICE_HASH and device_shift_exists(DEVICE_HASH) and not _wipe_shift) else None
-render_device_bootstrap(bool(_device_uid), _mirror_shift, _wipe_shift)
+render_device_bootstrap(
+    bool(_device_uid),
+    _mirror_shift,
+    _wipe_shift,
+    duty_sig_b64=str(shift.get(DUTY_SIG_KEY) or ""),
+)
 if _wipe_shift:
     st.session_state.pop("wipe_device_shift", None)
+    st.session_state[DUTY_SIG_KEY] = ""
 logo_b64_global = get_traffic_logo_b64()
 now_ksa = datetime.now(KSA_TZ)
 
 unit_display = format_entity(shift["officer_rank"], shift["officer_name"])
 duty_display = format_entity(shift["duty_rank"], shift["duty_name"])
+saved_officer_sig = str(shift.get(DUTY_SIG_KEY) or st.session_state.get(DUTY_SIG_KEY) or "").strip()
 
 VALID_NAV_TABS = ["النماذج الميدانية", "الأرشيف المحلي", "الإعدادات والبصمة"]
 NAV_ALIASES = {
@@ -4300,21 +4482,40 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 )
 
                 chosen_officer_auth = st.session_state.officer_auth_mode or "توقيع حي على الشاشة بالإصبع (لضابط الخفر)"
+                use_saved_officer_sig = False
                 if not is_toxicology_form:
-                    officer_auth_opts = [
-                        "توقيع حي على الشاشة بالإصبع (لضابط الخفر)",
-                        "بصمة رقمية (منفذ الشحن Type-C) لضابط الخفر",
-                    ]
-                    officer_default_idx = 0
-                    if "بصمة" in (st.session_state.officer_auth_mode or ""):
-                        officer_default_idx = 1
-                    chosen_officer_auth = st.radio(
-                        "وسيلة توثيق ضابط الخفر:",
-                        officer_auth_opts,
-                        index=officer_default_idx,
-                        key=f"officer_auth_radio_{st.session_state.doc_no}",
-                        disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
-                    )
+                    manual_sig_key = f"manual_officer_sig_{st.session_state.doc_no}"
+                    if saved_officer_sig:
+                        st.success("✅ تم إدراج توقيع ضابط الخفر المحفوظ من الإعدادات تلقائياً")
+                        st.checkbox(
+                            "✏️ التوقيع يدوياً لهذا النموذج فقط",
+                            key=manual_sig_key,
+                            help="فعّل هذا الخيار لرسم/بصمة مؤقتة دون المساس بالتوقيع المحفوظ في الإعدادات.",
+                            disabled=st.session_state.officer_approved,
+                        )
+                        use_saved_officer_sig = not bool(st.session_state.get(manual_sig_key))
+                        if use_saved_officer_sig and not st.session_state.officer_approved:
+                            st.session_state.officer_stamp_b64 = saved_officer_sig
+                            st.session_state.officer_auth_mode = "توقيع محفوظ من الإعدادات (تلقائي)"
+                            chosen_officer_auth = st.session_state.officer_auth_mode
+                        elif st.session_state.get(manual_sig_key) and st.session_state.officer_auth_mode == "توقيع محفوظ من الإعدادات (تلقائي)":
+                            st.session_state.officer_stamp_b64 = ""
+                            st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لضابط الخفر)"
+                    if not use_saved_officer_sig:
+                        officer_auth_opts = [
+                            "توقيع حي على الشاشة بالإصبع (لضابط الخفر)",
+                            "بصمة رقمية (منفذ الشحن Type-C) لضابط الخفر",
+                        ]
+                        officer_default_idx = 0
+                        if "بصمة" in (st.session_state.officer_auth_mode or ""):
+                            officer_default_idx = 1
+                        chosen_officer_auth = st.radio(
+                            "وسيلة توثيق ضابط الخفر:",
+                            officer_auth_opts,
+                            index=officer_default_idx,
+                            key=f"officer_auth_radio_{st.session_state.doc_no}",
+                            disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
+                        )
 
                 if is_toxicology_form:
                     duty_auth_opts = [
@@ -4359,9 +4560,12 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         st.session_state.duty_auth_mode = chosen_duty_auth
                         st.session_state.duty_stamp_b64 = ""
                         if is_toxicology_form:
-                            # تحليل السموم فقط: لا يُشترط توقيع/بصمة ضابط الخفر
+                            # تحليل السموم فقط: لا يُشترط توقيع/بصمة ضابط الخفر ولا يُدرج التوقيع المحفوظ
                             st.session_state.officer_auth_mode = "توثيق نصي لضابط الخفر (بدون توقيع)"
                             st.session_state.officer_stamp_b64 = ""
+                        elif use_saved_officer_sig and saved_officer_sig:
+                            st.session_state.officer_auth_mode = "توقيع محفوظ من الإعدادات (تلقائي)"
+                            st.session_state.officer_stamp_b64 = saved_officer_sig
                         else:
                             st.session_state.officer_auth_mode = chosen_officer_auth
                             if "بصمة" in chosen_officer_auth:
@@ -4571,8 +4775,9 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 clear_shift = st.form_submit_button("🗑️ مسح بياناتي من هذا الجهاز", use_container_width=True)
             if clear_shift:
                 clear_device_shift(DEVICE_HASH)
+                st.session_state[DUTY_SIG_KEY] = ""
                 st.session_state["wipe_device_shift"] = True
-                st.success("تم مسح اسم المناوبة وبيانات هذا الجهاز من المتصفح.")
+                st.success("تم مسح اسم المناوبة وبيانات هذا الجهاز (بما فيها توقيع ضابط الخفر) من المتصفح.")
                 safe_rerun()
             if save_shift:
                 if not DEVICE_HASH:
@@ -4585,9 +4790,85 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                         "duty_rank": s_drank,
                         "duty_name": s_dname,
                         "default_gps": s_gps,
+                        DUTY_SIG_KEY: st.session_state.get(DUTY_SIG_KEY) or shift.get(DUTY_SIG_KEY) or "",
                     })
                     st.success("تم حفظ الإعدادات على هذا الجهاز فقط.")
                     safe_rerun()
+
+        # لوحة التوقيع خارج st.form لالتقاط Base64 لحظياً دون تعارض مع نموذج الحفظ
+        st.markdown("##### ✍️ التوقيع المعتمد لضابط الخفر (يُدرج تلقائياً في جميع النماذج)")
+        st.caption("يُحفظ التوقيع على هذا الجهاز فقط (SQLite + localStorage) ولا يُوضع في الكوكيز حتى لا يتجاوز حد 4KB.")
+        render_officer_sig_bridge_listener()
+        components.html(render_officer_sig_pad_html(), height=290, scrolling=False)
+        bridge_val = st.text_area(
+            "جسر التوقيع",
+            key="duty_sig_bridge",
+            height=68,
+            placeholder="DUTY_SIG_BRIDGE — يُملأ تلقائياً عند اعتماد التوقيع من اللوحة",
+            label_visibility="collapsed",
+        )
+        if bridge_val and str(bridge_val).strip() and str(bridge_val).strip() != str(st.session_state.get(DUTY_SIG_KEY) or ""):
+            compressed = compress_signature_b64(bridge_val)
+            if compressed:
+                st.session_state[DUTY_SIG_KEY] = compressed
+                st.session_state["duty_sig_bridge"] = ""
+                if DEVICE_HASH:
+                    cur = get_device_shift(DEVICE_HASH)
+                    cur[DUTY_SIG_KEY] = compressed
+                    save_device_shift(DEVICE_HASH, cur)
+                st.toast("تم اعتماد توقيع ضابط الخفر من اللوحة", icon="✅")
+                safe_rerun()
+
+        sig_upload = st.file_uploader(
+            "أو ارفع صورة توقيع شفافة (PNG/JPG) كخيار مساند",
+            type=["png", "jpg", "jpeg", "webp"],
+            key="duty_sig_upload",
+            help="يُفضّل خلفية شفافة أو بيضاء مع حبر أسود واضح.",
+        )
+        up_col, del_col = st.columns(2)
+        with up_col:
+            if st.button("💾 حفظ التوقيع المرفوع / الحالي في الجهاز", type="primary", use_container_width=True):
+                payload = ""
+                if sig_upload is not None:
+                    processed = process_uploaded_attachment(sig_upload)
+                    payload = compress_signature_b64((processed or {}).get("b64") or "")
+                elif st.session_state.get(DUTY_SIG_KEY):
+                    payload = compress_signature_b64(st.session_state.get(DUTY_SIG_KEY) or "")
+                if not payload:
+                    st.warning("ارسم التوقيع في اللوحة أو ارفع صورة أولاً.")
+                elif not DEVICE_HASH:
+                    st.warning("يُجهَّز تعريف هذا الجهاز داخل المتصفح. أعد الحفظ بعد لحظة.")
+                else:
+                    st.session_state[DUTY_SIG_KEY] = payload
+                    cur = get_device_shift(DEVICE_HASH)
+                    cur[DUTY_SIG_KEY] = payload
+                    save_device_shift(DEVICE_HASH, cur)
+                    st.success("تم حفظ توقيع ضابط الخفر على هذا الجهاز وتفعيله تلقائياً.")
+                    safe_rerun()
+        with del_col:
+            if st.button("🗑️ حذف / إعادة رسم توقيع ضابط الخفر", use_container_width=True):
+                st.session_state[DUTY_SIG_KEY] = ""
+                st.session_state["duty_sig_bridge"] = ""
+                if DEVICE_HASH:
+                    cur = get_device_shift(DEVICE_HASH)
+                    cur[DUTY_SIG_KEY] = ""
+                    save_device_shift(DEVICE_HASH, cur)
+                st.success("تم حذف التوقيع المحفوظ. يمكنك إعادة الرسم الآن.")
+                safe_rerun()
+
+        preview_sig = str(st.session_state.get(DUTY_SIG_KEY) or shift.get(DUTY_SIG_KEY) or "").strip()
+        if preview_sig:
+            st.markdown(
+                "<div style='background:#0f3d2e;border:1px solid #34d399;border-radius:10px;padding:10px 12px;"
+                "color:#ecfdf5;font-weight:800;margin:8px 0;'>✅ التوقيع محفوظ ومفعّل تلقائياً في جميع النماذج</div>",
+                unsafe_allow_html=True,
+            )
+            try:
+                st.image(base64.b64decode(preview_sig), caption="معاينة توقيع ضابط الخفر المعتمد", width=280)
+            except Exception:
+                st.caption("تعذّر عرض معاينة التوقيع المحفوظ.")
+        else:
+            st.info("لا يوجد توقيع محفوظ حالياً — ارسم على اللوحة أو ارفع صورة ثم احفظ.")
 
     with otg_tab:
         st.caption("وضع المحاكاة الصوري معزول حتى توصيل القارئ الفعلي عبر Type-C.")
