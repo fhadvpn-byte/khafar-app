@@ -1878,19 +1878,67 @@ def update_default_gps(device_hash: str, gps: str) -> None:
     save_device_shift(device_hash, current)
 
 
-def consume_live_gps_query(device_hash: str) -> None:
-    raw = str(st.query_params.get("live_gps") or "").strip()
+def parse_gps_paste(text: str) -> tuple[float, float] | None:
+    """يستخرج الإحداثيات من نص خام أو رابط Google Maps / واتساب."""
+    raw = str(text or "").strip()
     if not raw:
-        return
-    pair = signed_gps_pair(raw)
-    if pair and device_hash:
-        update_default_gps(device_hash, format_live_gps(*pair))
-        st.session_state["gps_toast"] = format_live_gps(*pair)
-    elif pair:
-        st.session_state["gps_toast_err"] = "تعذر ربط الموقع بهذا الجهاز بعد."
-    else:
+        return None
+    direct = signed_gps_pair(raw)
+    if direct:
+        return direct
+    patterns = (
+        r"[?&]q=(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)",
+        r"@(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)",
+        r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)",
+        r"destination=(-?\d+(?:\.\d+)?)%2C(-?\d+(?:\.\d+)?)",
+        r"(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, raw, flags=re.IGNORECASE)
+        if not match:
+            continue
+        try:
+            lat, lng = float(match.group(1)), float(match.group(2))
+        except ValueError:
+            continue
+        if -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0:
+            return lat, lng
+    return None
+
+
+def _query_gps_pair() -> tuple[float, float] | None:
+    lat_raw = str(st.query_params.get("gps_lat") or "").strip()
+    lon_raw = str(st.query_params.get("gps_lon") or "").strip()
+    if lat_raw and lon_raw:
+        try:
+            lat, lng = float(lat_raw), float(lon_raw)
+            if -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0:
+                return lat, lng
+        except ValueError:
+            pass
+    legacy = str(st.query_params.get("live_gps") or "").strip()
+    if legacy:
+        return signed_gps_pair(legacy)
+    return None
+
+
+def consume_live_gps_query(device_hash: str) -> None:
+    pair = _query_gps_pair()
+    hash_now = device_hash or str(st.session_state.get("device_hash") or "").strip()
+    if pair:
+        formatted = format_live_gps(*pair)
+        st.session_state["gps_live_ok"] = True
+        st.session_state["gps_live_value"] = formatted
+        if hash_now:
+            update_default_gps(hash_now, formatted)
+            st.session_state.pop("pending_live_gps", None)
+        else:
+            st.session_state["pending_live_gps"] = formatted
+        st.session_state["gps_toast"] = formatted
+    elif any(k in st.query_params for k in ("gps_lat", "gps_lon", "live_gps")):
         st.session_state["gps_toast_err"] = "تعذر قراءة إحداثي الموقع."
-    st.query_params.pop("live_gps", None)
+    for key in ("gps_lat", "gps_lon", "gps_ts", "live_gps"):
+        st.query_params.pop(key, None)
 
 
 def gps_header_line(coords: str) -> str:
@@ -3152,12 +3200,17 @@ init_db()
 init_takmeel_db()
 _device_uid = read_device_uid()
 DEVICE_HASH = device_hash_for(_device_uid) if _device_uid else ""
+if DEVICE_HASH:
+    st.session_state["device_hash"] = DEVICE_HASH
 _wipe_shift = bool(st.session_state.get("wipe_device_shift"))
 if DEVICE_HASH and not _wipe_shift and not device_shift_exists(DEVICE_HASH):
     _cookie_shift = shift_from_cookie()
     if _cookie_shift:
         save_device_shift(DEVICE_HASH, _cookie_shift)
 consume_live_gps_query(DEVICE_HASH)
+if DEVICE_HASH and st.session_state.get("pending_live_gps"):
+    update_default_gps(DEVICE_HASH, str(st.session_state.pop("pending_live_gps")))
+    st.session_state["gps_live_ok"] = True
 shift = get_device_shift(DEVICE_HASH)
 _mirror_shift = shift if (DEVICE_HASH and device_shift_exists(DEVICE_HASH) and not _wipe_shift) else None
 render_device_bootstrap(bool(_device_uid), _mirror_shift, _wipe_shift)
@@ -3308,6 +3361,14 @@ def render_compact_form_buttons(category: str, primary: bool = False):
 # 7. الترويسة المدمجة + شريط الحالة الأفقي
 # =====================================================================
 gps_now = str(shift["default_gps"])
+if st.session_state.get("gps_live_value") and not signed_gps_pair(gps_now):
+    gps_now = str(st.session_state.get("gps_live_value"))
+gps_is_live = bool(signed_gps_pair(gps_now)) or bool(st.session_state.get("gps_live_ok"))
+gps_chip_text = (
+    f"✅ موقع فعلي معتمد {gps_now}"
+    if gps_is_live
+    else f"GPS {gps_now}"
+)
 gps_maps = google_maps_url(gps_now)
 gps_maps_html = (
     f"<a class='gps-map-link' href='{html.escape(gps_maps, quote=True)}' target='_blank' rel='noopener noreferrer'>خرائط</a>"
@@ -3332,38 +3393,95 @@ st.html(
 <div class="compact-status-bar">
     <span class="status-chip">🟢 محلي جاهز</span>
     <span class="status-chip gold">🧬 {html.escape(scanner_short)}</span>
-    <span class="status-chip gps" id="khafar-gps-chip">GPS {html.escape(gps_now)}</span>
+    <span class="status-chip gps" id="khafar-gps-chip">{html.escape(gps_chip_text)}</span>
     {gps_maps_html}
     <button type="button" class="gps-locate-btn" id="khafar-gps-btn">📍 تحديد موقعي الفعلي</button>
     <span class="status-chip time">{now_ksa.strftime('%Y/%m/%d %H:%M')}</span>
 </div>
 <script>
 (function () {{
-  var btn = document.getElementById("khafar-gps-btn");
-  if (!btn || btn.dataset.bound === "1") return;
-  btn.dataset.bound = "1";
-  btn.addEventListener("click", function () {{
-    if (!window.isSecureContext) {{
+  var root = window.top || window.parent || window;
+  var doc = (root && root.document) ? root.document : document;
+  function geoApi() {{
+    return (root && root.navigator && root.navigator.geolocation)
+      || (window.parent && window.parent.navigator && window.parent.navigator.geolocation)
+      || navigator.geolocation;
+  }}
+  function applyCoords(lat, lon) {{
+    try {{
+      var u = new URL(root.location.href);
+      u.searchParams.set("gps_lat", String(lat));
+      u.searchParams.set("gps_lon", String(lon));
+      u.searchParams.set("gps_ts", String(Date.now()));
+      root.location.assign(u.toString());
+    }} catch (err) {{
+      var u2 = new URL(window.location.href);
+      u2.searchParams.set("gps_lat", String(lat));
+      u2.searchParams.set("gps_lon", String(lon));
+      u2.searchParams.set("gps_ts", String(Date.now()));
+      window.location.assign(u2.toString());
+    }}
+  }}
+  function locate(btn) {{
+    var geo = geoApi();
+    var secure = false;
+    try {{ secure = !!(root.isSecureContext || window.isSecureContext); }} catch (e) {{ secure = !!window.isSecureContext; }}
+    if (!secure) {{
       btn.textContent = "يلزم HTTPS أو localhost لرصد الموقع";
       return;
     }}
-    if (!navigator.geolocation) {{
+    if (!geo) {{
       btn.textContent = "المتصفح لا يدعم تحديد الموقع";
       return;
     }}
     btn.disabled = true;
     btn.textContent = "⏳ جارِ رصد الموقع...";
-    navigator.geolocation.getCurrentPosition(function (pos) {{
+    var onOk = function (pos) {{
       var lat = Number(pos.coords.latitude).toFixed(5);
-      var lng = Number(pos.coords.longitude).toFixed(5);
-      var url = new URL(window.location.href);
-      url.searchParams.set("live_gps", lat + "," + lng);
-      window.location.assign(url.toString());
-    }}, function () {{
+      var lon = Number(pos.coords.longitude).toFixed(5);
+      applyCoords(lat, lon);
+    }};
+    var onFailNetwork = function () {{
       btn.disabled = false;
-      btn.textContent = "📍 تعذر الرصد — اسمح بالموقع وأعد المحاولة";
-    }}, {{ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }});
-  }});
+      btn.textContent = "📍 تعذر الرصد — الصق رابط الخرائط من الإعدادات";
+    }};
+    var onFailFirst = function (err) {{
+      var code = err && err.code;
+      if (code === 2 || code === 3) {{
+        btn.textContent = "⏳ محاولة ثانية عبر الشبكة...";
+        geo.getCurrentPosition(onOk, onFailNetwork, {{
+          enableHighAccuracy: false, timeout: 8000, maximumAge: 60000
+        }});
+        return;
+      }}
+      btn.disabled = false;
+      btn.textContent = "📍 تعذر الرصد — اسمح بالموقع أو الصق رابط الخرائط";
+    }};
+    geo.getCurrentPosition(onOk, onFailFirst, {{
+      enableHighAccuracy: true, timeout: 6000, maximumAge: 0
+    }});
+  }}
+  function bind(btn) {{
+    if (!btn || btn.dataset.khafarGpsBound === "1") return;
+    btn.dataset.khafarGpsBound = "1";
+    btn.addEventListener("click", function (ev) {{
+      if (ev && ev.preventDefault) ev.preventDefault();
+      locate(btn);
+    }});
+  }}
+  function scan() {{
+    bind(doc.getElementById("khafar-gps-btn"));
+    try {{ bind(document.getElementById("khafar-gps-btn")); }} catch (e) {{}}
+  }}
+  scan();
+  if (!root.__khafarGpsObserver) {{
+    try {{
+      root.__khafarGpsObserver = new MutationObserver(function () {{ scan(); }});
+      root.__khafarGpsObserver.observe(doc.documentElement || doc.body, {{ childList: true, subtree: true }});
+    }} catch (e) {{}}
+  }}
+  setTimeout(scan, 300);
+  setTimeout(scan, 1200);
 }})();
 </script>
 """,
@@ -3988,6 +4106,28 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
 
     with sett_tab:
         st.caption("إعدادات المناوبة والموقع تُحفظ على هذا الجوال فقط، ولا يراها من يفتح الرابط من جهاز آخر.")
+        with st.expander("🖥️ مسار بديل للحاسوب (بدون شريحة GPS)", expanded=not gps_is_live):
+            st.caption("الصق رابط خرائط Google من واتساب أو إحداثيات مثل 17.0375, 43.0764 لاعتمادها فوراً.")
+            paste_gps = st.text_input(
+                "رابط الخرائط أو الإحداثيات",
+                value="",
+                key="gps_paste_input",
+                placeholder="https://maps.google.com/?q=17.0375,43.0764",
+            )
+            if st.button("✅ اعتماد الموقع من الرابط/الإحداثيات", type="primary", use_container_width=True, key="gps_paste_apply"):
+                pasted = parse_gps_paste(paste_gps)
+                if not pasted:
+                    st.error("تعذر استخراج الإحداثيات من النص الملصوق.")
+                elif not DEVICE_HASH:
+                    st.warning("يُجهَّز تعريف هذا الجهاز داخل المتصفح. أعد المحاولة بعد لحظة.")
+                else:
+                    formatted = format_live_gps(*pasted)
+                    update_default_gps(DEVICE_HASH, formatted)
+                    st.session_state["gps_live_ok"] = True
+                    st.session_state["gps_live_value"] = formatted
+                    st.session_state["gps_toast"] = formatted
+                    st.success(f"تم اعتماد الموقع الفعلي: {formatted}")
+                    safe_rerun()
         with st.form("shift_update_form"):
             s_dept = st.text_input("القسم", value=shift["dept_name"], disabled=True)
             r1, r2 = st.columns([1, 2])
