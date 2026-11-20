@@ -804,6 +804,14 @@ def _val(values: dict, key: str) -> str:
     return ("\u200f" + v + "\u200f") if v else "...................."
 
 
+_ARABIC_INDIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+
+
+def normalize_western_digits(text: str) -> str:
+    """تحويل الأرقام العربية/الفارسية الهندية إلى إنجليزية مع الإبقاء على الحروف والرموز."""
+    return str(text or "").translate(_ARABIC_INDIC_DIGITS)
+
+
 def _is_agent_role(value: str) -> bool:
     text = str(value or "")
     return ("وكيل" in text) or ("وكالة" in text)
@@ -1109,6 +1117,19 @@ def _settlement_fields() -> list[dict]:
          "sample": "الحادث تلفيات مادية فقط ولا توجد أي إصابات بشرية أو وفيات أو تلفيات في الممتلكات العامة"},
     ])
     return fields
+
+
+def _toxicology_legal(values: dict) -> str:
+    awtar = normalize_western_digits(str((values or {}).get("awtar_no") or "").strip())
+    awtar_clause = f" والمقيد بمنصة (أوتار) برقم: ({awtar})" if awtar else ""
+    return (
+        f"سعادة مدير ({_val(values, 'lab_dest')}) المحترم، السلام عليكم ورحمة الله وبركاته.. "
+        f"استناداً إلى أحكام نظام المرور ولائحته التنفيذية وإجراءات الاستدلال في الحادث/المحضر رقم ({_val(values, 'incident_no')})"
+        f"{awtar_clause}، "
+        f"نبعث لسعادتكم المدعو ({_val(values, 'party_name')})، حامل الهوية رقم ({_val(values, 'party_id')})، وعلاقته بالواقعة ({_val(values, 'plate_no')})، "
+        f"وذلك بناءً على المسوغ النظامي: ({_val(values, 'suspicion_signs')}). نأمل توجيه المختصين بإجراء ({_val(values, 'sample_type')}) وفق الأصول الفنية المعتمدة "
+        f"وتوثيق وقت أخذ العينة وسلسلة الحيازة النظامية، وموافاتنا بالتقرير المخبري القطعي السري في مظروف رسمي مختوم، مع مراعاة الترتيب الأمني: ({_val(values, 'escort_info')})."
+    )
 
 
 def _handover_legal(values: dict) -> str:
@@ -1686,7 +1707,11 @@ TRAFFIC_FORMS = {
         "allow_absence": True,
         "require_image": False,
         "fields": [
-            {"key": "incident_no", "label": "رقم الحادث / المحضر المرجعي", "type": "text", "sample": "460986890"},
+            {"key": "incident_no", "label": "رقم الحادث / المحضر المرجعي", "type": "text", "sample": "460986890",
+             "a4_keep_pair": True},
+            {"key": "awtar_no", "label": "رقم طلب (أوتار)", "type": "text", "sample": "AWT-2026-88412",
+             "placeholder": "أدخل رقم الطلب في منصة أوتار", "normalize_digits": True,
+             "a4_label": "رقم (أوتار)", "a4_keep_pair": True},
             {"key": "lab_dest", "label": "الجهة المحال إليها (المستشفى / مركز مراقبة السموم)", "type": "text", "sample": "قسم الطوارئ والمختبر / مركز مراقبة السموم والكيمياء الشرعية"},
             {"key": "party_name", "label": "اسم الشخص المحال للفحص رباعياً", "type": "text", "sample": "ماجد بن سالم بن عوض القحطاني"},
             {"key": "party_id", "label": "رقم الهوية / الإقامة والجنسية", "type": "text", "sample": "1089911223 - سعودي"},
@@ -1704,13 +1729,7 @@ TRAFFIC_FORMS = {
             ], "sample": "سحب عينتي دم وبول للكشف الكمي والنوعي عن الكحول والمخدرات والمؤثرات العقلية"},
             {"key": "escort_info", "label": "بيانات المرافق الأمني وإجراء التسليم والتحريز", "type": "textarea", "sample": "مبعوث برفقة الدورية المرورية المستلمة — يُسحب الفحص تحت الإشراف المباشر مع توثيق سلسلة الحيازة وإعادة المذكور برفقة المرافق الأمني فور الانتهاء."},
         ],
-        "legal_fn": lambda m: (
-            f"سعادة مدير ({_val(m, 'lab_dest')}) المحترم، السلام عليكم ورحمة الله وبركاته.. "
-            f"استناداً إلى أحكام نظام المرور ولائحته التنفيذية وإجراءات الاستدلال في الحادث/المحضر رقم ({_val(m, 'incident_no')})، "
-            f"نبعث لسعادتكم المدعو ({_val(m, 'party_name')})، حامل الهوية رقم ({_val(m, 'party_id')})، وعلاقته بالواقعة ({_val(m, 'plate_no')})، "
-            f"وذلك بناءً على المسوغ النظامي: ({_val(m, 'suspicion_signs')}). نأمل توجيه المختصين بإجراء ({_val(m, 'sample_type')}) وفق الأصول الفنية المعتمدة "
-            f"وتوثيق وقت أخذ العينة وسلسلة الحيازة النظامية، وموافاتنا بالتقرير المخبري القطعي السري في مظروف رسمي مختوم، مع مراعاة الترتيب الأمني: ({_val(m, 'escort_info')})."
-        ),
+        "legal_fn": _toxicology_legal,
     },
 }
 
@@ -2470,6 +2489,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     data_tbl_cls = "data-tbl cols-4"
 
     qr_payload = f"DOC:{rec['doc_no']}|ID:{rec['party_id']}|PLATE:{rec['plate_no']}|SEAL:{rec['verify_hash']}"
+    awtar_qr = normalize_western_digits(str(fields_map.get("awtar_no") or "").strip())
+    if awtar_qr:
+        qr_payload += f"|AWTAR:{awtar_qr}"
     qr_b64 = generate_qr_png_b64(qr_payload)
 
     center_logo_html = (
@@ -2749,7 +2771,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     banner_title = (form_def or {}).get("official_title") or rec["form_title"]
     sheet_cls = "a4-sheet a4-paper dense-fit"
     table_rows = rows_html.count("<tr")
-    if len(party_signers) >= 3 or table_rows > 9 or image_count > 0:
+    if (
+        len(party_signers) >= 3
+        or table_rows > 8
+        or image_count > 0
+        or str(rec.get("form_id") or "") == "med_toxicology"
+    ):
         sheet_cls += " a4-dense-print"
     gps_line_html = gps_header_line(str(rec.get("gps_coords") or ""))
 
@@ -3952,6 +3979,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     st.caption("بعد الاعتماد تُفتح لوحة توقيع المُبلّغ المتنازل، ولوحة الطرف المتسبب عند حضوره، بجانب ضابط الخفر ووحدة الحوادث.")
             else:
                 render_field_grid([fld for fld in form_def["fields"] if not fld.get("visible_if")])
+
+            for fld in form_def["fields"]:
+                key = fld.get("key")
+                if key and key in current_values and fld.get("normalize_digits"):
+                    current_values[key] = normalize_western_digits(current_values.get(key) or "")
 
             if fid == "decl_hit_run":
                 if st.button("🔄 الانتقال لإقرار تنازل عن بلاغ صدم وهروب", use_container_width=True):
