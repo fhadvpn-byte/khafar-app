@@ -831,7 +831,7 @@ def render_backup_controls(month_key: str) -> None:
         conf1 = st.checkbox("أؤكد أن الإرسال الشهري تم", key=f"clr_c1_{month_key}")
         conf2 = st.checkbox("أؤكد حذف بيانات هذا الشهر نهائياً", key=f"clr_c2_{month_key}")
         if st.button("🗑️ تصفير بيانات الشهر بعد الإرسال", type="secondary", use_container_width=True, key=f"clr_btn_{month_key}"):
-            if code.strip() != "حوادث-العارضة" or not conf1 or not conf2:
+            if code.strip().translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")) != "1404" or not conf1 or not conf2:
                 st.error("رمز غير صحيح أو التأكيد غير مكتمل.")
             else:
                 clear_month_data(month_key)
