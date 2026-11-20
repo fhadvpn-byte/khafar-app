@@ -884,6 +884,61 @@ def _flee_is_present(values: dict) -> bool:
     return "حضور" in str((values or {}).get("waiver_status") or "")
 
 
+def _animal_owner_present(values: dict) -> bool:
+    return "حضور مالك" in str((values or {}).get("legal_mode") or "")
+
+
+def _animal_type_text(values: dict) -> str:
+    kind = str((values or {}).get("animal_type") or "").strip()
+    if "أخرى" in kind:
+        custom = str((values or {}).get("animal_type_other") or "").strip()
+        return custom or kind
+    return kind or "-"
+
+
+def _animal_hit_legal(values: dict) -> str:
+    animal = _animal_type_text(values)
+    count = _val(values, "animal_count")
+    damages = _val(values, "vehicle_damage")
+    health = _val(values, "health_status")
+    animal_state = _val(values, "animal_state")
+    mode = str(values.get("legal_mode") or "")
+    harm_line = f"{damages} — الحالة الصحية: {health}"
+    if "مجهول المالك" in mode or "سائب" in mode:
+        return (
+            f"أقر أنا السائق الموضح اسمي وهويتي أعلاه، وأنا بكامل أهليتي المعتبرة شرعاً ونظاماً، "
+            f"بأنه أثناء قيادتي للمركبة المذكورة في الموقع والتاريخ المحددين أعلاه وقع لي حادث صدم حيوان من نوع "
+            f"({animal} - العدد: {count}) خرج فجأة إلى نهر الطريق، ونتج عن الحادث ({harm_line}) "
+            f"وحالة الحيوان ({animal_state}). كما أقر بعد المعاينة عدم وجود وسم ظاهر أو معرفة بمالك للحيوان في حينه، "
+            f"ولا أتهم أحداً بالتسبب العمد، وأطلب استكمال الإجراءات النظامية ومنحي إذن إصلاح للمركبة، "
+            f"مع احتفاظي بحقي النظامي في حال ظهور مالك للحيوان يثبت تفريطه وفق نظام المرور ولائحته التنفيذية، "
+            f"وعلى ذلك أقر وأوقع."
+        )
+    if "صلح" in mode and "تنازل" in mode:
+        return (
+            f"نقر نحن الطرفين الموقعين أدناه: السائق المقر ({_val(values, 'party_name')}) هوية رقم ({_val(values, 'party_id')}) "
+            f"جوال ({_val(values, 'party_phone')}) قائد المركبة ({_val(values, 'vehicle_desc')}) لوحة ({_val(values, 'plate_no')})، "
+            f"ومالك الحيوان ({_val(values, 'owner_name')}) هوية رقم ({_val(values, 'owner_id')}) جوال ({_val(values, 'owner_phone')})، "
+            f"بوقوع حادث صدم حيوان من نوع ({animal} - العدد: {count}) في البلاغ رقم ({_val(values, 'incident_no')}) "
+            f"بتاريخ ({_val(values, 'incident_datetime')}) بموقع ({_val(values, 'incident_loc')}) وحالة الطريق ({_val(values, 'road_condition')})، "
+            f"وحالة الحيوان ({animal_state}) ووسمه/شريحته ({_val(values, 'tag_status')} — {_val(values, 'tag_detail')})، "
+            f"ونتج عن الحادث ({harm_line}). وقد تصالحنا تصالحاً تاماً بـ ({_val(values, 'settlement_detail')})، "
+            f"وتنازل كل طرف عن الآخر تنازلاً نهائياً مبرئاً للذمة في الحق الخاص المتعلق بالمركبة والحيوان، "
+            f"دون الإخلال بما تقضي به التعليمات النظامية بشأن الحق العام، وعلى ذلك نقر ونوقع."
+        )
+    return (
+        f"جري إثبات واقعة صدم حيوان رسمياً بين السائق المقر ({_val(values, 'party_name')}) هوية رقم ({_val(values, 'party_id')}) "
+        f"جوال ({_val(values, 'party_phone')}) قائد المركبة ({_val(values, 'vehicle_desc')}) لوحة ({_val(values, 'plate_no')})، "
+        f"ومالك الحيوان ({_val(values, 'owner_name')}) هوية رقم ({_val(values, 'owner_id')}) جوال ({_val(values, 'owner_phone')})، "
+        f"وذلك في البلاغ رقم ({_val(values, 'incident_no')}) بتاريخ ({_val(values, 'incident_datetime')}) "
+        f"بموقع ({_val(values, 'incident_loc')}) وحالة الطريق ({_val(values, 'road_condition')})، "
+        f"ونوع الحيوان ({animal} - العدد: {count}) وحالته ({animal_state}) ووسمه/شريحته "
+        f"({_val(values, 'tag_status')} — {_val(values, 'tag_detail')})، وما نتج عن الحادث ({harm_line}). "
+        f"وأقوال الطرفين وتفاصيل المطالبة بالحق الخاص: ({_val(values, 'settlement_detail')}). "
+        f"ويُوثَّق ذلك لاستكمال إجراءات الفصل في الحق الخاص وفق نظام المرور ولائحته التنفيذية، دون إخلال بالحق العام."
+    )
+
+
 def _flee_waiver_legal(values: dict) -> str:
     capacity = str(values.get("signer_capacity") or "")
     if "وكيل" in capacity:
@@ -953,6 +1008,27 @@ def _waiver_signers(form_id: str, fields_map: dict) -> list[dict]:
                 "role": "الطرف المتسبب الحاضر",
                 "pad_title": "لوحة توقيع: الطرف المتسبب",
                 "sub": cause_name or "الطرف المتسبب",
+            })
+        return signers
+    if form_id == "decl_animal_hit":
+        driver = str(fields_map.get("party_name") or "").strip()
+        signers = [{
+            "pad": "p1",
+            "header": "توقيع وبصمة السائق المقر",
+            "name": driver,
+            "role": "السائق المقر",
+            "pad_title": "لوحة توقيع: السائق المقر",
+            "sub": driver or "السائق المقر",
+        }]
+        if _animal_owner_present(fields_map):
+            owner = str(fields_map.get("owner_name") or "").strip()
+            signers.append({
+                "pad": "p2",
+                "header": "توقيع وبصمة مالك الحيوان",
+                "name": owner,
+                "role": "مالك الحيوان",
+                "pad_title": "لوحة توقيع: مالك الحيوان",
+                "sub": owner or "مالك الحيوان",
             })
         return signers
     return []
@@ -1107,7 +1183,7 @@ def _minutes_form_from_template(src: dict) -> dict:
 
 
 TRAFFIC_FORMS = {
-    # ==================== أولاً: قائمة الإقرارات الميدانية (6) ====================
+    # ==================== أولاً: قائمة الإقرارات الميدانية ====================
     "decl_handover": {
         "title": "إقرار تسليم مركبة في الموقع",
         "icon": "🚗",
@@ -1308,6 +1384,98 @@ TRAFFIC_FORMS = {
              "visible_if": {"key": "waiver_status", "contains_any": ["إقفال"]}},
         ],
         "legal_fn": _flee_waiver_legal,
+    },
+
+    "decl_animal_hit": {
+        "title": "نموذج وإقرار صدم حيوان",
+        "icon": "🐪",
+        "subtitle": "توثيق صدم حيوان سائب أو مملوك مع الصلح الميداني أو إثبات الواقعة وإذن الإصلاح",
+        "category": "إقرار",
+        "allow_absence": False,
+        "require_image": False,
+        "fields": [
+            {"key": "incident_no", "label": "رقم الحادث / البلاغ", "type": "text", "sample": "460991250",
+             "a4_keep_pair": True, "a4_label": "رقم الحادث / البلاغ وتاريخه",
+             "a4_compose": {"keys": ["incident_datetime"], "fmt": "{value} — {incident_datetime}"}},
+            {"key": "incident_datetime", "label": "تاريخ ووقت الحادث / البلاغ", "type": "text",
+             "sample": "2026/11/20 - 19:30", "prefill_now": True, "a4_hidden": True},
+            {"key": "incident_loc", "label": "موقع الحادث واسم الطريق", "type": "text",
+             "sample": "الطريق العام جنوب العارضة باتجاه أحد المسارحة", "prefill_shift_gps": True, "a4_keep_pair": True},
+            {"key": "road_condition", "label": "وقت الحادث وحالة الطريق", "type": "select", "options": [
+                "ليلي - طريق عام خارج النطاق العمراني",
+                "نهاري - طريق عام خارج النطاق العمراني",
+                "ليلي - داخل النطاق العمراني",
+                "نهاري - داخل النطاق العمراني",
+            ], "sample": "ليلي - طريق عام خارج النطاق العمراني", "a4_keep_pair": True},
+            {"key": "animal_type", "label": "نوع الحيوان", "type": "select", "options": [
+                "إبل (جمل / ناقة)",
+                "حمار",
+                "بقرة",
+                "أغنام (ضأن / ماعز)",
+                "خيل / فرس",
+                "كلب",
+                "قط",
+                "حيوان بري / قردة",
+                "أخرى (تحديد يدوي)",
+            ], "sample": "إبل (جمل / ناقة)", "a4_keep_pair": True,
+             "a4_compose": {"fmt": "{value}", "append_if": "animal_type_other", "append_fmt": " — {extra}"}},
+            {"key": "animal_type_other", "label": "اكتب نوع الحيوان", "type": "text",
+             "sample": "ظبي بري", "placeholder": "اكتب نوع الحيوان بدقة",
+             "visible_if": {"key": "animal_type", "contains_any": ["أخرى"]}, "a4_hidden": True},
+            {"key": "animal_count", "label": "عدد الحيوانات المصطدمة", "type": "text", "sample": "1",
+             "prefill_sample": True, "a4_keep_pair": True},
+            {"key": "animal_state", "label": "حالة الحيوان بعد الصدم", "type": "select", "options": [
+                "نفوق في الموقع",
+                "مصاب في الموقع",
+                "هروب الحيوان بعد الصدم",
+            ], "sample": "نفوق في الموقع", "a4_keep_pair": True},
+            {"key": "tag_status", "label": "حالة الوسم أو الشريحة الإلكترونية", "type": "select", "options": [
+                "لا يوجد وسم ولا شريحة (مجهول المالك)",
+                "يوجد وسم / شريحة (موضح بالبيان)",
+                "حيوان غير مملوك بطبيعته (كلب / قط / بري)",
+            ], "sample": "لا يوجد وسم ولا شريحة (مجهول المالك)", "a4_keep_pair": True},
+            {"key": "legal_mode", "label": "الوضع النظامي للإقرار", "type": "select", "options": [
+                "حيوان سائب مجهول المالك — طلب إذن إصلاح وإنهاء إجراء",
+                "حضور مالك الحيوان — صلح وتنازل ميداني عن الحق الخاص",
+                "حضور مالك الحيوان — إثبات واقعة مع بقاء المطالبة بالحق الخاص",
+            ], "sample": "حيوان سائب مجهول المالك — طلب إذن إصلاح وإنهاء إجراء", "a4_keep_pair": True},
+            {"key": "party_name", "label": "اسم السائق المقر الرباعي", "type": "text",
+             "sample": "فهد بن سعيد بن علي القحطاني", "a4_keep_pair": True,
+             "a4_label": "السائق المقر",
+             "a4_compose": {"keys": ["party_id"], "fmt": "{value} — هوية: {party_id}"}},
+            {"key": "party_id", "label": "رقم الهوية / الإقامة للسائق", "type": "text",
+             "sample": "1099887766", "a4_hidden": True},
+            {"key": "party_phone", "label": "رقم جوال السائق", "type": "text",
+             "sample": "0551122334", "a4_keep_pair": True},
+            {"key": "party_nationality", "label": "جنسية السائق", "type": "text",
+             "sample": "سعودي", "prefill_sample": True, "a4_keep_pair": True},
+            {"key": "vehicle_desc", "label": "نوع المركبة وطرازها ولونها", "type": "text",
+             "sample": "تويوتا لاندكروزر 2022 - أبيض", "a4_keep_pair": True},
+            {"key": "plate_no", "label": "رقم اللوحة", "type": "text",
+             "sample": "أ ب ج 1234", "a4_keep_pair": True},
+            {"key": "vehicle_damage", "label": "الأضرار الظاهرة بالمركبة", "type": "textarea",
+             "sample": "كسر بالصدام الأمامي وتشوه بغطاء المحرك دون تسرب سوائل ظاهر"},
+            {"key": "health_status", "label": "الحالة الصحية للسائق والركاب", "type": "text",
+             "sample": "سليم ولله الحمد ولا توجد إصابات", "prefill_sample": True, "a4_keep_pair": True},
+            {"key": "owner_name", "label": "اسم مالك الحيوان الرباعي", "type": "text",
+             "sample": "سعيد بن محمد بن أحمد المالكي",
+             "visible_if": {"key": "legal_mode", "contains_any": ["حضور مالك"]},
+             "a4_keep_pair": True, "a4_label": "مالك الحيوان",
+             "a4_compose": {"keys": ["owner_id"], "fmt": "{value} — هوية: {owner_id}"}},
+            {"key": "owner_id", "label": "رقم هوية / إقامة مالك الحيوان", "type": "text",
+             "sample": "1044556677",
+             "visible_if": {"key": "legal_mode", "contains_any": ["حضور مالك"]}, "a4_hidden": True},
+            {"key": "owner_phone", "label": "رقم جوال مالك الحيوان", "type": "text",
+             "sample": "0509988776",
+             "visible_if": {"key": "legal_mode", "contains_any": ["حضور مالك"]}, "a4_keep_pair": True},
+            {"key": "tag_detail", "label": "وصف الوسم / الشريحة الإلكترونية", "type": "text",
+             "sample": "وسم أذن أيمن برقم عارضة-4821",
+             "visible_if": {"key": "legal_mode", "contains_any": ["حضور مالك"]}, "a4_keep_pair": True},
+            {"key": "settlement_detail", "label": "تفاصيل الصلح أو المطالبة بالحق الخاص", "type": "textarea",
+             "sample": "تصالح الطرفان على تحمل كل طرف تلفياته دون مطالبة مالية إضافية.",
+             "visible_if": {"key": "legal_mode", "contains_any": ["حضور مالك"]}},
+        ],
+        "legal_fn": _animal_hit_legal,
     },
 
     # ==================== ثانياً: قائمة المحاضر الرسمية (5 محاضر نظامية) ====================
@@ -3307,11 +3475,17 @@ NAV_ALIASES = {
     "مناوبة الخفر": "الإعدادات والبصمة",
     "بصمة الشحن OTG": "الإعدادات والبصمة",
 }
+_DECL_FORM_COUNT = sum(1 for _f in TRAFFIC_FORMS.values() if _f.get("category") == "إقرار")
+_DECL_TAB_LABEL = f"✍️ الإقرارات الميدانية ({_DECL_FORM_COUNT})"
 CATEGORY_TAB_MAP = {
-    "✍️ الإقرارات الميدانية (6)": "إقرار",
+    _DECL_TAB_LABEL: "إقرار",
     "🚓 المحاضر النظامية (5)": "محضر",
     "🚑 الطبية والجنائية (3)": "إحالة طبية",
     "📊 التكميل (4)": "تكميل",
+}
+CATEGORY_TAB_ALIASES = {
+    "✍️ الإقرارات الميدانية (6)": _DECL_TAB_LABEL,
+    "✍️ الإقرارات الميدانية (7)": _DECL_TAB_LABEL,
 }
 
 if "nav_tab" not in st.session_state:
@@ -3321,6 +3495,11 @@ if st.session_state.nav_tab in NAV_ALIASES:
     st.session_state.nav_tab = NAV_ALIASES[st.session_state.nav_tab]
 if st.session_state.nav_tab not in VALID_NAV_TABS:
     st.session_state.nav_tab = "النماذج الميدانية"
+# توافق عنوان تبويب الإقرارات بعد زيادة العدد من (6) إلى (7)
+if st.session_state.get("forms_category_tab") in CATEGORY_TAB_ALIASES:
+    st.session_state.forms_category_tab = CATEGORY_TAB_ALIASES[st.session_state.forms_category_tab]
+if st.session_state.get("active_category_tab") in CATEGORY_TAB_ALIASES:
+    st.session_state.active_category_tab = CATEGORY_TAB_ALIASES[st.session_state.active_category_tab]
 if "opened_form_id" not in st.session_state:
     st.session_state.opened_form_id = None
 # إزالة فلتر «جميع النماذج» القديم إن وُجد في الجلسة
@@ -3694,6 +3873,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 locked = st.session_state.citizen_locked
                 if fld.get("prefill_sample") and wkey not in st.session_state:
                     st.session_state[wkey] = fld.get("sample", "")
+                if fld.get("prefill_now") and wkey not in st.session_state:
+                    st.session_state[wkey] = now_ksa.strftime("%Y/%m/%d - %H:%M")
+                if fld.get("prefill_shift_gps") and wkey not in st.session_state:
+                    gps_seed = str((shift or {}).get("default_gps") or "").strip()
+                    st.session_state[wkey] = gps_seed or fld.get("sample", "")
                 if fld["type"] == "select":
                     opts = fld["options"]
                     default_idx = opts.index(st.session_state[wkey]) if (wkey in st.session_state and st.session_state[wkey] in opts) else 0
@@ -3737,7 +3921,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 else:
                     render_field_grid([by_key["party_name"], by_key["party_id"]])
                 render_field_grid([by_key[key] for key in ("party_phone", "vehicle_desc", "plate_no", "vehicle_state")])
-            elif fid in {"decl_settlement", "decl_flee_waiver"}:
+            elif fid in {"decl_settlement", "decl_flee_waiver", "decl_animal_hit"}:
                 pair_slot = 0
                 pair_cols = None
                 for fld in form_def["fields"]:
@@ -3747,6 +3931,9 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     if fid == "decl_settlement" and fld["key"].endswith("_name") and party_match[1:2].isdigit():
                         ordinal = _PARTY_ORDINALS[int(fld["key"][1])]
                         st.markdown(f"**الطرف {ordinal}**")
+                        pair_slot = 0
+                    if fid == "decl_animal_hit" and fld["key"] == "owner_name":
+                        st.markdown("**بيانات مالك الحيوان والتسوية**")
                         pair_slot = 0
                     if fld["type"] == "textarea" or fld.get("stack_under"):
                         current_values[fld["key"]] = render_field(fld)
@@ -3759,6 +3946,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     pair_slot += 1
                 if fid == "decl_settlement":
                     st.caption("بعد اعتماد الوثيقة تظهر لوحة توقيع حي مستقلة لكل طرف مشمول، مع ضابط الخفر ووحدة الحوادث، داخل صفحة A4 واحدة.")
+                elif fid == "decl_animal_hit":
+                    st.caption("مجهول المالك: 3 خانات توقيع (السائق + ضابط الخفر + وحدة الحوادث). حضور المالك: 4 خانات بإضافة مالك الحيوان ولوحة توقيع حي.")
                 else:
                     st.caption("بعد الاعتماد تُفتح لوحة توقيع المُبلّغ المتنازل، ولوحة الطرف المتسبب عند حضوره، بجانب ضابط الخفر ووحدة الحوادث.")
             else:
