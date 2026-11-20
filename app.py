@@ -39,13 +39,27 @@ def safe_rerun():
 
 
 def get_traffic_logo_b64() -> str:
-    """قراءة شعار المرور تلقائياً من مجلد المشروع"""
+    """قراءة شعار المرور تلقائياً من مجلد المشروع، مع شعار احتياطي مضمّن إن لم يوجد الملف."""
     base_dir = Path(__file__).resolve().parent
-    for fname in ("traffic_logo.png", "traffic_logo.PNG", "traffic_logo.jpg", "traffic_logo.jpeg"):
+    for fname in (
+        "traffic_logo.png", "traffic_logo.PNG", "traffic_logo.jpg", "traffic_logo.jpeg",
+        "logo.png", "logo.PNG", "passer_logo.png", "moi_logo.png",
+    ):
         fpath = base_dir / fname
         if fpath.exists():
             return base64.b64encode(fpath.read_bytes()).decode("utf-8")
-    return ""
+    # شعار احتياطي مرسوم محلياً ليظهر دائماً في المعاينة والطباعة كـ data URI
+    try:
+        img = Image.new("RGBA", (180, 180), (255, 255, 255, 0))
+        draw = ImageDraw.Draw(img)
+        draw.ellipse((8, 8, 172, 172), fill=(15, 61, 46, 255), outline=(212, 168, 83, 255), width=6)
+        draw.ellipse((28, 28, 152, 152), outline=(255, 255, 255, 230), width=3)
+        draw.text((52, 68), "المرور", fill=(255, 255, 255, 255))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG", optimize=True)
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+    except Exception:
+        return ""
 
 
 def format_entity(role_label: str, optional_name: str) -> str:
@@ -813,9 +827,23 @@ iframe[data-testid="stIFrame"],
 # =====================================================================
 # 2. تعريف النماذج الـ 12 والصيغ النظامية المحكمة
 # =====================================================================
+def _rtl_isolate(text: str, *, as_html: bool = True) -> str:
+    """عزل القيم المختلطة (لوحة/هوية) لمنع انعكاس الأقواس في PDF."""
+    v = str(text or "").strip()
+    if not v:
+        return "...................."
+    if not as_html:
+        return "\u200f" + v + "\u200f"
+    return (
+        '<span dir="rtl" style="unicode-bidi:isolate; white-space:nowrap;">'
+        + html.escape(v)
+        + "</span>"
+    )
+
+
 def _val(values: dict, key: str) -> str:
     v = str(values.get(key, "")).strip()
-    return ("\u200f" + v + "\u200f") if v else "...................."
+    return _rtl_isolate(v, as_html=True) if v else "...................."
 
 
 _ARABIC_INDIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
@@ -2632,12 +2660,21 @@ def _settlement_party_merged_cells(index: int, fields_map: dict) -> str:
 
 
 def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool, form_id: str = "") -> str:
-    def pair_cells(label: str, value: str, wide: bool) -> str:
+    def pair_cells(label: str, value: str, wide: bool, *, isolate: bool = False) -> str:
         safe_label = html.escape(label)
-        safe_value = html.escape(value)
+        if isolate:
+            safe_value = (
+                '<span class="rtl-iso" dir="rtl" style="unicode-bidi:isolate; white-space:nowrap; '
+                'display:inline-block; max-width:100%;">'
+                + html.escape(value)
+                + "</span>"
+            )
+        else:
+            safe_value = html.escape(value)
+        val_cls = "val plate-val" if isolate else "val"
         if wide:
-            return f"<td class='lbl'>{safe_label}</td><td class='val span3' colspan='3'>{safe_value}</td>"
-        return f"<td class='lbl half'>{safe_label}</td><td class='val half'>{safe_value}</td>"
+            return f"<td class='lbl'>{safe_label}</td><td class='{val_cls} span3' colspan='3'>{safe_value}</td>"
+        return f"<td class='lbl half'>{safe_label}</td><td class='{val_cls} half'>{safe_value}</td>"
 
     if not form_def:
         rows = []
@@ -2685,30 +2722,29 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool, form_
             if extra and compose.get("append_fmt"):
                 shown += str(compose["append_fmt"]).replace("{extra}", extra)
         field = {**field, "label": label}
+        isolate = key in {"plate_no", "party_id", "awtar_no"} or "لوحة" in label or "plate" in key.lower()
         wide = dense and _field_is_wide(field, shown)
         if not dense or wide:
             if pending:
-                rows.append(f"<tr>{pair_cells(pending[0], pending[1], True)}</tr>")
+                rows.append(f"<tr>{pair_cells(pending[0], pending[1], True, isolate=pending[2])}</tr>")
                 pending = None
             if dense and wide:
-                rows.append(f"<tr>{pair_cells(field['label'], shown, True)}</tr>")
+                rows.append(f"<tr>{pair_cells(field['label'], shown, True, isolate=isolate)}</tr>")
             else:
-                safe_label = html.escape(str(field["label"]))
-                safe_value = html.escape(shown)
-                rows.append(f"<tr><td class='lbl'>{safe_label}</td><td class='val'>{safe_value}</td></tr>")
+                rows.append(f"<tr>{pair_cells(field['label'], shown, True, isolate=isolate)}</tr>")
         elif pending is None:
-            pending = (field["label"], shown)
+            pending = (field["label"], shown, isolate)
         else:
             rows.append(
                 "<tr>"
-                + pair_cells(pending[0], pending[1], False)
-                + pair_cells(field["label"], shown, False)
+                + pair_cells(pending[0], pending[1], False, isolate=pending[2])
+                + pair_cells(field["label"], shown, False, isolate=isolate)
                 + "</tr>"
             )
             pending = None
         if compact_settlement and key == "party_count" and not parties_emitted:
             if pending:
-                rows.append(f"<tr>{pair_cells(pending[0], pending[1], True)}</tr>")
+                rows.append(f"<tr>{pair_cells(pending[0], pending[1], True, isolate=pending[2])}</tr>")
                 pending = None
             for index in range(1, party_count + 1):
                 rows.append(f"<tr>{_settlement_party_merged_cells(index, fields_map)}</tr>")
@@ -2723,7 +2759,7 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool, form_
             )
             parties_emitted = True
     if pending:
-        rows.append(f"<tr>{pair_cells(pending[0], pending[1], True)}</tr>")
+        rows.append(f"<tr>{pair_cells(pending[0], pending[1], True, isolate=pending[2])}</tr>")
     return "".join(rows)
 
 
@@ -2751,10 +2787,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         qr_payload += f"|AWTAR:{awtar_qr}"
     qr_b64 = generate_qr_png_b64(qr_payload)
 
+    _logo = (logo_b64 or "").strip() or get_traffic_logo_b64()
     center_logo_html = (
-        f"<img src='data:image/png;base64,{logo_b64}' style='height:58px; width:auto; object-fit:contain;' alt='شعار المرور' />"
-        if logo_b64
-        else "<div style='font-size:14px; font-weight:800; color:#000000;'>الإدارة العامة للمرور</div>"
+        f"<img class='hdr-logo' src='data:image/png;base64,{_logo}' "
+        f"style='height:58px;width:auto;max-width:120px;object-fit:contain;"
+        f"-webkit-print-color-adjust:exact;print-color-adjust:exact;' "
+        f"alt='شعار المرور' />"
+        if _logo
+        else "<div style='font-size:14px;font-weight:800;color:#000000;'>الإدارة العامة للمرور</div>"
     )
 
     is_medical = rec.get("category") == "إحالة طبية"
@@ -3219,13 +3259,13 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             direction: rtl !important;
             width: 794px !important;
             height: auto !important;
-            min-height: 296mm !important;
+            min-height: 1123px !important;
             max-height: none !important;
             box-sizing: border-box !important;
             margin: 0 auto;
             background: #ffffff !important;
             color: #000000 !important;
-            padding: 12mm 13mm !important;
+            padding: 36px 42px !important;
             border: 2px solid #000000;
             overflow: visible !important;
             display: flex !important;
@@ -3233,6 +3273,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             justify-content: flex-start !important;
             box-shadow: 0 12px 32px rgba(0,0,0,0.45);
             transform-origin: top right !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
         }}
         .a4-fit {{
             justify-content: flex-start !important;
@@ -3245,7 +3288,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             color: #000000 !important;
             opacity: 1 !important;
         }}
-        .a4-sheet .doc-banner, .a4-paper .doc-banner {{ color: #ffffff !important; }}
+        .a4-sheet .doc-banner, .a4-paper .doc-banner,
+        .a4-sheet .doc-banner *, .a4-paper .doc-banner * {{
+            color: #ffffff !important;
+            background-color: #0f3d2e !important;
+        }}
     }}
     @media only screen and (max-width: 820px) {{
         .a4-preview-viewport {{
@@ -3285,15 +3332,24 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }}
     table.data-tbl {{ width: 100%; border-collapse: collapse; margin-bottom: 20px !important; }}
+    .a4-paper, .a4-paper * {{
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+    }}
     table.data-tbl td {{ border: 1.4px solid #000000 !important; padding: 10px 12px !important; font-size: 14px !important; line-height: 1.7 !important; vertical-align: top; direction: rtl; text-align: right; color: #000000 !important; font-weight: 700 !important; }}
-    table.data-tbl td.lbl {{ width: 21%; background: #f4f7f6; font-weight: 800 !important; color: #000000 !important; }}
-    table.data-tbl td.val {{ width: 29%; color: #000000 !important; font-weight: 700 !important; white-space: pre-line; font-size: 14px !important; }}
+    table.data-tbl td.lbl {{ width: 21%; background: #f4f7f6 !important; font-weight: 800 !important; color: #000000 !important; }}
+    table.data-tbl td.val {{ width: 29%; color: #000000 !important; font-weight: 700 !important; white-space: pre-line; font-size: 14px !important; overflow-wrap: anywhere; }}
+    table.data-tbl td.val.plate-val, table.data-tbl td.plate-val {{
+        white-space: nowrap !important; overflow: visible !important; word-break: keep-all !important;
+    }}
+    table.data-tbl .rtl-iso {{ unicode-bidi: isolate; white-space: nowrap; }}
     table.data-tbl.cols-4 td.lbl.half {{ width: 21%; }}
     table.data-tbl.cols-4 td.val.half {{ width: 29%; }}
     table.data-tbl.cols-4 td.lbl {{ width: 21%; }}
     table.data-tbl.cols-4 td.val.span3 {{ width: auto; }}
     .legal-box {{
-        background: #f8fafc; border: 1.4px solid #000000; border-right: 5px solid #000000;
+        background: #f8fafc !important; border: 1.4px solid #0f3d2e; border-right: 5px solid #0f3d2e !important;
         border-radius: 6px; padding: 16px 20px !important; margin-bottom: 22px !important;
         font-size: 14px !important; line-height: 2.0 !important; text-align: justify; color: #000000 !important; font-weight: 700 !important;
     }}
@@ -3368,7 +3424,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-compact .footer-qr {{ padding: 4px 8px !important; }}
     .a4-compact .footer-qr img {{ width: 32px !important; height: 32px !important; }}
     @media print {{
-        @page {{ size: A4 portrait; margin: 4mm !important; }}
+        @page {{ size: A4 portrait; margin: 0mm !important; }}
         html, body, .a4-preview-viewport, .a4-preview-wrapper {{
             direction: rtl !important;
             text-align: right !important;
@@ -3403,12 +3459,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             direction: rtl !important;
             transform: none !important;
             zoom: 1 !important;
-            width: 100% !important;
-            max-width: 202mm !important;
+            width: 210mm !important;
+            max-width: 210mm !important;
             height: auto !important;
-            min-height: 0 !important;
-            max-height: none !important;
-            padding: 3.5mm 5mm !important;
+            min-height: 297mm !important;
+            max-height: 297mm !important;
+            padding: 36px 42px !important;
             margin: 0 auto !important;
             display: flex !important;
             flex-direction: column !important;
@@ -3418,7 +3474,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             break-inside: avoid !important;
             break-after: avoid !important;
             box-shadow: none !important;
+            border: none !important;
             overflow: visible !important;
+            background: #ffffff !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
         }}
         .a4-fit {{
             justify-content: flex-start !important;
@@ -3426,102 +3487,39 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             height: auto !important;
             zoom: 1 !important;
             transform: none !important;
-            margin-bottom: 0 !important;
-            padding-bottom: 0 !important;
         }}
-        .a4-paper .hdr {{
-            margin-bottom: 5px !important;
-            padding-bottom: 4px !important;
-            line-height: 1.3 !important;
+        .a4-paper, .a4-paper * {{
+            color: #000000 !important; opacity: 1 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
         }}
-        .a4-paper .hdr-right p, .a4-paper .hdr-left p {{
-            line-height: 1.3 !important;
+        .a4-paper .doc-banner, .a4-paper .doc-banner * {{
+            color: #ffffff !important;
+            background-color: #0f3d2e !important;
         }}
-        .a4-paper .doc-banner {{
-            margin-bottom: 5px !important;
-            padding: 4px 8px !important;
-            line-height: 1.3 !important;
-        }}
-        .a4-paper table.data-tbl {{
-            margin-bottom: 5px !important;
-        }}
-        .a4-paper table.data-tbl th,
-        .a4-paper table.data-tbl td {{
-            padding: 3px 6px !important;
-            font-size: 11px !important;
-            line-height: 1.28 !important;
-            color: #000000 !important;
-            font-weight: 700 !important;
-            border-color: #000000 !important;
-        }}
+        .a4-paper table.data-tbl td.lbl {{ background: #f4f7f6 !important; }}
         .a4-paper .legal-box {{
-            padding: 5px 8px !important;
-            margin-bottom: 5px !important;
-            font-size: 11px !important;
-            line-height: 1.35 !important;
+            background: #f8fafc !important;
+            border-right: 5px solid #0f3d2e !important;
             color: #000000 !important;
-            font-weight: 700 !important;
         }}
-        .a4-paper .legal-box div {{
-            font-size: 11px !important;
-            line-height: 1.35 !important;
-            color: #000000 !important;
-            font-weight: 700 !important;
-        }}
-        .a4-paper table.sig-tbl {{
-            margin-top: 4px !important;
-            table-layout: fixed !important;
-            width: 100% !important;
-        }}
-        .a4-paper .sig-head,
-        .a4-paper table.sig-tbl th,
-        .a4-paper table.sig-tbl td,
-        .a4-paper .sig-cell {{
-            padding: 3px 4px !important;
-            min-height: 44px !important;
-            max-height: 52px !important;
-            height: auto !important;
-        }}
-        .a4-paper .sig-slot-img {{
-            height: 32px !important;
-            max-height: 32px !important;
-        }}
-        .a4-paper .footer-qr {{
-            margin-top: 4px !important;
-            padding-top: 3px !important;
-            margin-bottom: 0 !important;
-            padding-bottom: 0 !important;
-        }}
-        .a4-paper > *:last-child,
-        .a4-fit > *:last-child,
-        .sig-footer > *:last-child {{
-            margin-bottom: 0 !important;
-            padding-bottom: 0 !important;
+        .a4-paper table.sig-tbl th, .a4-paper .sig-head {{ background: #f1f5f3 !important; }}
+        .a4-paper table.data-tbl td.val.plate-val, .a4-paper .rtl-iso {{
+            white-space: nowrap !important;
+            unicode-bidi: isolate;
         }}
         .sig-footer, table.sig-tbl, .sig-grid, .footer-qr, .attachment-section {{
             page-break-inside: avoid !important; break-inside: avoid !important;
         }}
-        .att-card img,
-        .attachment-grid.atts-single .att-card img,
-        .attachment-grid.atts-multi .att-card img {{
-            max-height: 70px !important;
-        }}
         a, a[href^="tel"] {{
             color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
         }}
-        .a4-paper, .a4-paper * {{ color: #000000 !important; opacity: 1 !important; }}
-        .a4-paper .doc-banner, .a4-paper .doc-banner * {{ color: #ffffff !important; }}
         div.a4-paper.a4-dense-print {{
-            width: 100% !important;
-            max-width: 202mm !important;
-            height: auto !important;
-            min-height: 0 !important;
-            padding: 3.5mm 5mm !important;
+            width: 210mm !important;
+            max-width: 210mm !important;
+            padding: 28px 32px !important;
             margin: 0 auto !important;
-        }}
-        div.a4-paper.a4-dense-print .footer-qr {{
-            margin-top: 4px !important;
-            padding-top: 3px !important;
         }}
         div.a4-paper.a4-dense-print table.sig-multi.cols-4 > tbody > tr:first-child > td {{
             width: 25% !important;
@@ -3732,51 +3730,135 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }});
     }});
 
-    function prepareA4Print() {{
-        const viewport = document.getElementById("a4PreviewViewport");
-        const paper = document.getElementById("a4Sheet");
-        if (viewport) {{
-            viewport.style.height = "auto";
-            viewport.style.overflow = "visible";
-        }}
-        if (!paper) return;
-        paper.style.zoom = "1";
-        paper.style.setProperty("transform", "none", "important");
-        paper.style.removeProperty("width");
-        paper.style.margin = "0 auto";
+    function syncAllLivePads() {{
+        try {{
+            (LIVE_PADS || []).forEach(function(padId) {{ syncPadToSlot(padId); }});
+        }} catch (e) {{}}
     }}
 
-    function restoreA4Preview() {{
-        const viewport = document.getElementById("a4PreviewViewport");
-        const paper = document.getElementById("a4Sheet");
-        if (viewport) {{
-            viewport.style.height = "";
-            viewport.style.overflow = "auto";
+    function collectPreviewStyles() {{
+        var chunks = [];
+        try {{
+            document.querySelectorAll('style').forEach(function(node) {{
+                chunks.push(node.outerHTML);
+            }});
+            document.querySelectorAll('link[rel="stylesheet"]').forEach(function(node) {{
+                chunks.push(node.outerHTML);
+            }});
+        }} catch (e) {{}}
+        var lock = [];
+        lock.push('<style id="wysiwyg-print-lock">');
+        lock.push('@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap");');
+        lock.push('@page{{size:A4 portrait;margin:0mm!important;}}');
+        lock.push('html,body{{margin:0!important;padding:0!important;background:#fff!important;}}');
+        lock.push('.toolbar,.no-print,.zoom-bar,.live-sig-dock{{display:none!important;}}');
+        lock.push('.a4-preview-viewport{{overflow:visible!important;height:auto!important;width:100%!important;}}');
+        lock.push('.a4-sheet,.a4-paper{{transform:none!important;zoom:1!important;width:210mm!important;min-height:297mm!important;max-height:297mm!important;margin:0 auto!important;box-shadow:none!important;border:none!important;padding:36px 42px!important;box-sizing:border-box!important;background:#fff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}}');
+        lock.push('.a4-paper,.a4-paper *{{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}}');
+        lock.push('.a4-paper .doc-banner,.a4-paper .doc-banner *{{background-color:#0f3d2e!important;color:#fff!important;}}');
+        lock.push('.a4-paper table.data-tbl td.lbl{{background:#f4f7f6!important;}}');
+        lock.push('.a4-paper .legal-box{{background:#f8fafc!important;border-right:5px solid #0f3d2e!important;}}');
+        lock.push('.a4-paper table.data-tbl td.val.plate-val,.a4-paper .rtl-iso{{white-space:nowrap!important;unicode-bidi:isolate;}}');
+        lock.push('</style>');
+        chunks.push(lock.join(""));
+        return chunks.join("\\n");
+    }}
+
+    function waitImages(root) {{
+        var imgs = Array.prototype.slice.call((root && root.querySelectorAll) ? root.querySelectorAll('img') : []);
+        return Promise.all(imgs.map(function(img) {{
+            return new Promise(function(resolve) {{
+                if (img.complete) return resolve();
+                img.onload = function() {{ resolve(); }};
+                img.onerror = function() {{ resolve(); }};
+            }});
+        }}));
+    }}
+
+    function printA4Wysiwyg() {{
+        syncAllLivePads();
+        var paper = document.getElementById('a4Sheet');
+        if (!paper) return;
+        var clone = paper.cloneNode(true);
+        clone.id = 'a4PrintClone';
+        clone.classList.add('a4-print-clone');
+        clone.style.transform = 'none';
+        clone.style.zoom = '1';
+        clone.style.boxShadow = 'none';
+        clone.style.border = 'none';
+        clone.style.margin = '0 auto';
+        clone.style.width = '794px';
+        clone.style.minHeight = '1123px';
+        clone.style.padding = '36px 42px';
+        // قياس الارتفاع الفعلي ثم تصغير تناسبي طفيف إن تجاوز صفحة واحدة
+        var measureHost = document.createElement('div');
+        measureHost.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;visibility:hidden;';
+        measureHost.appendChild(clone);
+        document.body.appendChild(measureHost);
+        var contentH = Math.max(clone.scrollHeight || 0, clone.offsetHeight || 0);
+        if (contentH > 1122) {{
+            var scale = Math.max(0.82, Math.min(1, 1122 / contentH));
+            clone.style.transformOrigin = 'top center';
+            clone.style.transform = 'scale(' + scale + ')';
         }}
-        if (paper) {{
-            paper.style.zoom = "";
-            paper.style.removeProperty("transform");
-            paper.style.margin = "";
-            paper.style.width = "";
-            paper.style.removeProperty("height");
-            paper.style.removeProperty("max-height");
-            paper.style.overflow = "";
+        var wrap = document.createElement('div');
+        wrap.setAttribute('class', 'a4-print-wrap');
+        wrap.style.cssText = 'width:210mm;height:297mm;overflow:hidden;margin:0 auto;background:#fff;';
+        wrap.appendChild(clone);
+        var htmlOut = '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">'
+            + '<title>طباعة مطابقة للمعاينة</title>'
+            + collectPreviewStyles()
+            + '</head><body>'
+            + wrap.outerHTML
+            + '</body></html>';
+        document.body.removeChild(measureHost);
+        var win = window.open('', '_blank', 'noopener,noreferrer,width=900,height=1200');
+        if (!win) {{
+            // إن حُظر فتح نافذة: اطبع داخل إطار مخفي بنفس النسخة المستنسخة
+            var frame = document.getElementById('a4PrintFrame');
+            if (!frame) {{
+                frame = document.createElement('iframe');
+                frame.id = 'a4PrintFrame';
+                frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+                document.body.appendChild(frame);
+            }}
+            var doc = frame.contentDocument || frame.contentWindow.document;
+            doc.open(); doc.write(htmlOut); doc.close();
+            var runPrint = function() {{
+                try {{ frame.contentWindow.focus(); frame.contentWindow.print(); }} catch (e) {{}}
+            }};
+            Promise.resolve()
+                .then(function() {{ return (doc.fonts && doc.fonts.ready) ? doc.fonts.ready : null; }})
+                .then(function() {{ return waitImages(doc); }})
+                .then(function() {{ setTimeout(runPrint, 250); }});
+            return;
         }}
-        scheduleA4Fit();
+        win.document.open();
+        win.document.write(htmlOut);
+        win.document.close();
+        Promise.resolve()
+            .then(function() {{ return (win.document.fonts && win.document.fonts.ready) ? win.document.fonts.ready : null; }})
+            .then(function() {{ return waitImages(win.document); }})
+            .then(function() {{
+                setTimeout(function() {{
+                    try {{ win.focus(); win.print(); }} catch (e) {{}}
+                }}, 250);
+            }});
     }}
 
     var printBtn = document.getElementById("printOfficialBtn");
     if (printBtn) {{
         printBtn.addEventListener("click", function(ev) {{
-            prepareA4Print();
-            setTimeout(function() {{ window.print(); }}, 40);
             ev.preventDefault();
+            printA4Wysiwyg();
         }});
     }}
-
-    window.onbeforeprint = prepareA4Print;
-    window.addEventListener("beforeprint", prepareA4Print);
-    window.addEventListener("afterprint", restoreA4Preview);
+    window.addEventListener('keydown', function(ev) {{
+        if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'p' || ev.key === 'P')) {{
+            ev.preventDefault();
+            printA4Wysiwyg();
+        }}
+    }});
     function scheduleA4Fit() {{
         fitA4Preview();
     }}
