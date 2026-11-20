@@ -534,104 +534,285 @@ th{{background:#e8f5ef;color:#0f3d2e;font-weight:800;-webkit-print-color-adjust:
 </body></html>"""
 
 
-def build_daily_incidents_a4(payload: dict, logo_b64: str) -> str:
-    d = payload.get("dates") or date_bundle()
-    title = (
-        f"الوقوعات اليومية لقسم مرور محافظة العارضة ليوم {d.get('weekday_ar')} "
-        f"الموافق {d.get('g_display')} م - {d.get('h_display')} هـ"
-    )
-    p = payload
+def _waqoat_cell(v) -> str:
+    return html.escape(str(v if v is not None and str(v) != "" else "0"))
 
-    def cell(v):
-        return html.escape(str(v if v is not None else 0))
 
-    causes = "".join(
-        f"<tr><td class='lbl'>{html.escape(label)}</td><td>{cell(p.get('causes', {}).get(key, 0))}</td></tr>"
-        for key, label in CAUSE_KEYS
-    )
-    injured_rows = ""
-    for item in p.get("injured") or []:
-        injured_rows += (
+def _waqoat_person_rows(items: list[dict], min_rows: int = 5) -> str:
+    rows = []
+    count = max(min_rows, len(items or []))
+    for index in range(count):
+        item = (items or [])[index] if index < len(items or []) else {}
+        rows.append(
             "<tr>"
-            f"<td>{html.escape(str(item.get('name') or ''))}</td>"
-            f"<td>{html.escape(str(item.get('incident_no') or ''))}</td>"
-            f"<td>{html.escape(str(item.get('place') or ''))}</td>"
-            f"<td>{html.escape(str(item.get('registry_no') or ''))}</td>"
-            f"<td style='color:#b91c1c;font-weight:800'>{html.escape(str(item.get('coverage') or ''))}</td>"
-            f"<td>ذ {_i(item.get('male'))} / أ {_i(item.get('female'))}</td>"
-            "</tr>"
-        )
-    if not injured_rows:
-        injured_rows = "<tr><td colspan='6'>—</td></tr>"
-    dead_rows = ""
-    for item in p.get("dead") or []:
-        dead_rows += (
-            "<tr>"
-            f"<td>{html.escape(str(item.get('name') or ''))}</td>"
-            f"<td>{html.escape(str(item.get('incident_no') or ''))}</td>"
-            f"<td>{html.escape(str(item.get('place') or ''))}</td>"
+            f"<td colspan='2'>{html.escape(str(item.get('name') or ''))}</td>"
+            f"<td colspan='2'>{html.escape(str(item.get('incident_no') or ''))}</td>"
+            f"<td colspan='2'>{html.escape(str(item.get('place') or ''))}</td>"
             f"<td>{html.escape(str(item.get('registry_no') or ''))}</td>"
             f"<td>{html.escape(str(item.get('coverage') or ''))}</td>"
-            f"<td>ذ {_i(item.get('male'))} / أ {_i(item.get('female'))}</td>"
+            f"<td>{html.escape(str(item.get('male') if item.get('male') not in (None, '') else ''))}</td>"
+            f"<td>{html.escape(str(item.get('female') if item.get('female') not in (None, '') else ''))}</td>"
             "</tr>"
         )
-    if not dead_rows:
-        dead_rows = "<tr><td colspan='6'>—</td></tr>"
+    return "".join(rows)
+
+
+def _waqoat_age_vals(ages: dict) -> tuple[list[int], int]:
+    vals = [_i((ages or {}).get(k)) for k in AGE_KEYS]
+    return vals, sum(vals)
+
+
+def build_daily_incidents_a4(payload: dict, logo_b64: str) -> str:
+    d = payload.get("dates") or date_bundle()
+    day_name = d.get("weekday_ar") or "...."
+    g_date = d.get("g_display") or "YYYY/MM/DD"
+    h_date = d.get("h_display") or "YYYY/MM/DD"
+    title = (
+        f"الوقوعات اليومية لقسم مرور محافظة العارضة ليوم ({day_name}) "
+        f"الموافق {g_date} م - {h_date} هـ"
+    )
+    p = payload
+    c = p.get("causes") or {}
+    age_drv, age_drv_sum = _waqoat_age_vals(p.get("age_drv") or {})
+    age_inj, age_inj_sum = _waqoat_age_vals(p.get("age_inj") or {})
+    age_dead, age_dead_sum = _waqoat_age_vals(p.get("age_dead") or {})
+
+    acc_in, acc_out = _i(p.get("acc_in")), _i(p.get("acc_out"))
+    inj_in, inj_out = _i(p.get("inj_in")), _i(p.get("inj_out"))
+    dead_in, dead_out = _i(p.get("dead_in")), _i(p.get("dead_out"))
+    viol_m, viol_f = _i(p.get("viol_m")), _i(p.get("viol_f"))
+    detain_sa, detain_ns = _i(p.get("detain_sa")), _i(p.get("detain_ns"))
+
+    sev_dmg_in, sev_dmg_out = _i(p.get("sev_dmg_in")), _i(p.get("sev_dmg_out"))
+    sev_inj_in, sev_inj_out = _i(p.get("sev_inj_in")), _i(p.get("sev_inj_out"))
+    sev_dead_in, sev_dead_out = _i(p.get("sev_dead_in")), _i(p.get("sev_dead_out"))
+
+    drv_m, drv_f = _i(p.get("drv_m")), _i(p.get("drv_f"))
+    p_inj_m, p_inj_f = _i(p.get("p_inj_m")), _i(p.get("p_inj_f"))
+    p_dead_m, p_dead_f = _i(p.get("p_dead_m")), _i(p.get("p_dead_f"))
+    drv_sa, drv_ns = _i(p.get("drv_sa")), _i(p.get("drv_ns"))
+    p_inj_sa, p_inj_ns = _i(p.get("p_inj_sa")), _i(p.get("p_inj_ns"))
+    p_dead_sa, p_dead_ns = _i(p.get("p_dead_sa")), _i(p.get("p_dead_ns"))
+
+    cause_cells = "".join(
+        f"<td>{_waqoat_cell(c.get(key, 0))}</td>" for key, _label in CAUSE_KEYS
+    )
+    prepared = html.escape(str(p.get("prepared_by") or ".........."))
+    phone = html.escape(str(p.get("phone") or "................."))
+    logo_r = _logo_img(logo_b64, 40)
+    logo_l = _logo_img(logo_b64, 40)
 
     body = f"""
-    <div class="hdr">
-      <div style="text-align:center">{_logo_img(logo_b64)}</div>
-      <div class="hdr-title">{html.escape(title)}</div>
-      <div style="text-align:center">{_logo_img(logo_b64)}</div>
-    </div>
-    <table>
-      <tr><th colspan="2">عدد الحوادث</th><th colspan="2">المصابون</th><th colspan="2">المتوفون</th><th colspan="2">المخالفات</th><th colspan="2">المواقيف</th></tr>
-      <tr><td class="lbl">داخل</td><td>{cell(p.get('acc_in'))}</td><td class="lbl">داخل</td><td>{cell(p.get('inj_in'))}</td>
-          <td class="lbl">داخل</td><td>{cell(p.get('dead_in'))}</td><td class="lbl">ذكور</td><td>{cell(p.get('viol_m'))}</td>
-          <td class="lbl">سعودي</td><td>{cell(p.get('detain_sa'))}</td></tr>
-      <tr><td class="lbl">خارج</td><td>{cell(p.get('acc_out'))}</td><td class="lbl">خارج</td><td>{cell(p.get('inj_out'))}</td>
-          <td class="lbl">خارج</td><td>{cell(p.get('dead_out'))}</td><td class="lbl">إناث</td><td>{cell(p.get('viol_f'))}</td>
-          <td class="lbl">غير سعودي</td><td>{cell(p.get('detain_ns'))}</td></tr>
-    </table>
-    <table>
-      <tr><th></th><th>داخل</th><th>خارج</th><th>المجموع</th></tr>
-      <tr><td class="lbl">تلفيات</td><td>{cell(p.get('sev_dmg_in'))}</td><td>{cell(p.get('sev_dmg_out'))}</td><td>{cell(_i(p.get('sev_dmg_in'))+_i(p.get('sev_dmg_out')))}</td></tr>
-      <tr><td class="lbl">إصابات</td><td>{cell(p.get('sev_inj_in'))}</td><td>{cell(p.get('sev_inj_out'))}</td><td>{cell(_i(p.get('sev_inj_in'))+_i(p.get('sev_inj_out')))}</td></tr>
-      <tr><td class="lbl">وفيات</td><td>{cell(p.get('sev_dead_in'))}</td><td>{cell(p.get('sev_dead_out'))}</td><td>{cell(_i(p.get('sev_dead_in'))+_i(p.get('sev_dead_out')))}</td></tr>
-    </table>
-    <table>
-      <tr><th></th><th>ذكور</th><th>إناث</th><th>المجموع</th><th>سعودي</th><th>غير سعودي</th><th>المجموع</th></tr>
-      <tr><td class="lbl">سائقون</td><td>{cell(p.get('drv_m'))}</td><td>{cell(p.get('drv_f'))}</td><td>{cell(_i(p.get('drv_m'))+_i(p.get('drv_f')))}</td>
-          <td>{cell(p.get('drv_sa'))}</td><td>{cell(p.get('drv_ns'))}</td><td>{cell(_i(p.get('drv_sa'))+_i(p.get('drv_ns')))}</td></tr>
-      <tr><td class="lbl">مصابون</td><td>{cell(p.get('p_inj_m'))}</td><td>{cell(p.get('p_inj_f'))}</td><td>{cell(_i(p.get('p_inj_m'))+_i(p.get('p_inj_f')))}</td>
-          <td>{cell(p.get('p_inj_sa'))}</td><td>{cell(p.get('p_inj_ns'))}</td><td>{cell(_i(p.get('p_inj_sa'))+_i(p.get('p_inj_ns')))}</td></tr>
-      <tr><td class="lbl">متوفون</td><td>{cell(p.get('p_dead_m'))}</td><td>{cell(p.get('p_dead_f'))}</td><td>{cell(_i(p.get('p_dead_m'))+_i(p.get('p_dead_f')))}</td>
-          <td>{cell(p.get('p_dead_sa'))}</td><td>{cell(p.get('p_dead_ns'))}</td><td>{cell(_i(p.get('p_dead_sa'))+_i(p.get('p_dead_ns')))}</td></tr>
-    </table>
-    <table>
-      <tr><th>البيان</th><th>18-</th><th>18+</th><th>30+</th><th>40+</th><th>50+</th><th>المجموع</th></tr>
-      {_age_row('سائقون', p.get('age_drv') or {})}
-      {_age_row('مصابون', p.get('age_inj') or {})}
-      {_age_row('متوفون', p.get('age_dead') or {})}
-    </table>
-    <table><tr><th colspan="2">أسباب الحوادث المرورية</th></tr>{causes}</table>
-    <table>
-      <tr><th>الاسم</th><th>رقم الحادث</th><th>مكان الحادث</th><th>رقم السجل</th><th>جهة التغطية</th><th>ذكور/إناث</th></tr>
-      <tr><th colspan="6">أسماء الأشخاص المصابين</th></tr>{injured_rows}
-      <tr><th colspan="6">أسماء الأشخاص المتوفين</th></tr>{dead_rows}
-    </table>
-    <div class="note-red">ملاحظة / جهة التغطية (المرور - أمن الطرق - الشرطة - الدوريات أو جهات أخرى)</div>
-    <div class="foot"><span>معد البيان / {html.escape(str(p.get('prepared_by') or '..........'))}</span>
-    <span>رقم الجوال ({html.escape(str(p.get('phone') or '..........'))})</span></div>
-    """
-    return _print_shell(title, body, logo_b64)
-
-
-def _age_row(label: str, ages: dict) -> str:
-    vals = [_i(ages.get(k)) for k in AGE_KEYS]
-    total = sum(vals)
-    cells = "".join(f"<td>{v}</td>" for v in vals)
-    return f"<tr><td class='lbl'>{html.escape(label)}</td>{cells}<td>{total}</td></tr>"
+<table class="waqoat-grid">
+  <colgroup>
+    <col style="width:11.5%">
+    <col style="width:11.5%">
+    <col style="width:8.5%">
+    <col style="width:8.5%">
+    <col style="width:8.5%">
+    <col style="width:8.5%">
+    <col style="width:15.0%">
+    <col style="width:9.0%">
+    <col style="width:9.5%">
+    <col style="width:9.5%">
+  </colgroup>
+  <tr>
+    <td colspan="10" style="height:48px;padding:4px 14px;background:#fff;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;direction:rtl;">
+        <div style="flex:0 0 auto;">{logo_r}</div>
+        <div style="flex:1 1 auto;text-align:center;font-weight:800;font-size:13px;line-height:1.35;color:#000;">
+          {html.escape(title)}
+        </div>
+        <div style="flex:0 0 auto;">{logo_l}</div>
+      </div>
+    </td>
+  </tr>
+  <tr class="bg-green">
+    <th colspan="2">عدد الحوادث المرورية</th>
+    <th colspan="2">عدد الأشخاص المصابين</th>
+    <th colspan="2">عدد الأشخاص المتوفين</th>
+    <th colspan="2">عدد المخالفات</th>
+    <th colspan="2">عدد المواقيف</th>
+  </tr>
+  <tr class="bg-blue">
+    <th>داخل المدينه</th><th>خارج المدينه</th>
+    <th>داخل المدينه</th><th>خارج المدينه</th>
+    <th>داخل المدينه</th><th>خارج المدينه</th>
+    <th>ذكور</th><th>اناث</th>
+    <th>سعودي</th><th>غير سعودي</th>
+  </tr>
+  <tr>
+    <td>{_waqoat_cell(acc_in)}</td><td>{_waqoat_cell(acc_out)}</td>
+    <td>{_waqoat_cell(inj_in)}</td><td>{_waqoat_cell(inj_out)}</td>
+    <td>{_waqoat_cell(dead_in)}</td><td>{_waqoat_cell(dead_out)}</td>
+    <td>{_waqoat_cell(viol_m)}</td><td>{_waqoat_cell(viol_f)}</td>
+    <td>{_waqoat_cell(detain_sa)}</td><td>{_waqoat_cell(detain_ns)}</td>
+  </tr>
+  <tr>
+    <td colspan="2">{_waqoat_cell(acc_in + acc_out)}</td>
+    <td colspan="2">{_waqoat_cell(inj_in + inj_out)}</td>
+    <td colspan="2">{_waqoat_cell(dead_in + dead_out)}</td>
+    <td colspan="2">{_waqoat_cell(viol_m + viol_f)}</td>
+    <td colspan="2">{_waqoat_cell(detain_sa + detain_ns)}</td>
+  </tr>
+  <tr class="bg-green"><th colspan="10">اجمالي الحوادث حسب الجسامه</th></tr>
+  <tr class="bg-green">
+    <th colspan="3">عدد حوادث التلفيات</th>
+    <th colspan="3">عدد حوادث الإصابات</th>
+    <th colspan="4">عدد حوادث الوفيات</th>
+  </tr>
+  <tr class="bg-blue">
+    <th>داخل المدينة</th><th>خارج المدينه</th><th>المجموع</th>
+    <th>داخل المدينة</th><th>خارج المدينه</th><th>المجموع</th>
+    <th>داخل المدينة</th><th>خارج المدينه</th><th colspan="2">المجموع</th>
+  </tr>
+  <tr>
+    <td>{_waqoat_cell(sev_dmg_in)}</td><td>{_waqoat_cell(sev_dmg_out)}</td><td>{_waqoat_cell(sev_dmg_in + sev_dmg_out)}</td>
+    <td>{_waqoat_cell(sev_inj_in)}</td><td>{_waqoat_cell(sev_inj_out)}</td><td>{_waqoat_cell(sev_inj_in + sev_inj_out)}</td>
+    <td>{_waqoat_cell(sev_dead_in)}</td><td>{_waqoat_cell(sev_dead_out)}</td><td colspan="2">{_waqoat_cell(sev_dead_in + sev_dead_out)}</td>
+  </tr>
+  <tr><td colspan="10" class="sep-row"></td></tr>
+  <tr class="bg-green"><th colspan="10">اجمالي عدد السائقين المشتركين في الحوادث المرورية والاشخاص المصابين والمتوفين ( حسب الجسامه)</th></tr>
+  <tr class="bg-green">
+    <th colspan="3">عدد السائقين المشتركين في الحوادث</th>
+    <th colspan="3">عدد الأشخاص المصابين</th>
+    <th colspan="4">عدد الأشخاص المتوفين</th>
+  </tr>
+  <tr class="bg-blue">
+    <th>ذكور</th><th>اناث</th><th>المجموع</th>
+    <th>ذكور</th><th>اناث</th><th>المجموع</th>
+    <th>ذكور</th><th>اناث</th><th colspan="2">المجموع</th>
+  </tr>
+  <tr>
+    <td>{_waqoat_cell(drv_m)}</td><td>{_waqoat_cell(drv_f)}</td><td>{_waqoat_cell(drv_m + drv_f)}</td>
+    <td>{_waqoat_cell(p_inj_m)}</td><td>{_waqoat_cell(p_inj_f)}</td><td>{_waqoat_cell(p_inj_m + p_inj_f)}</td>
+    <td>{_waqoat_cell(p_dead_m)}</td><td>{_waqoat_cell(p_dead_f)}</td><td colspan="2">{_waqoat_cell(p_dead_m + p_dead_f)}</td>
+  </tr>
+  <tr><td colspan="10" class="sep-row"></td></tr>
+  <tr class="bg-green"><th colspan="10">اجمالي عدد السائقين المشتركين في الحوادث المرورية والاشخاص المصابين والمتوفين ( حسب الجنسية)</th></tr>
+  <tr class="bg-green">
+    <th colspan="3">عدد السائقين المشتركين في الحوادث</th>
+    <th colspan="3">عدد الأشخاص المصابين</th>
+    <th colspan="4">عدد الأشخاص المتوفين</th>
+  </tr>
+  <tr class="bg-blue">
+    <th>سعودي</th><th>غير سعودي</th><th>المجموع</th>
+    <th>سعودي</th><th>غير سعودي</th><th>المجموع</th>
+    <th>سعودي</th><th>غير سعودي</th><th colspan="2">المجموع</th>
+  </tr>
+  <tr>
+    <td>{_waqoat_cell(drv_sa)}</td><td>{_waqoat_cell(drv_ns)}</td><td>{_waqoat_cell(drv_sa + drv_ns)}</td>
+    <td>{_waqoat_cell(p_inj_sa)}</td><td>{_waqoat_cell(p_inj_ns)}</td><td>{_waqoat_cell(p_inj_sa + p_inj_ns)}</td>
+    <td>{_waqoat_cell(p_dead_sa)}</td><td>{_waqoat_cell(p_dead_ns)}</td><td colspan="2">{_waqoat_cell(p_dead_sa + p_dead_ns)}</td>
+  </tr>
+  <tr><td colspan="10" class="sep-row"></td></tr>
+  <tr class="bg-green"><th colspan="10">الفئة العمرية للسائقين ( تلفيات - اصابات - وفيات )</th></tr>
+  <tr class="bg-green">
+    <th colspan="3">الفئة العمرية</th>
+    <th>18-</th><th>18+</th><th>30+</th><th>40+</th><th>50+</th><th colspan="2">المجموع</th>
+  </tr>
+  <tr>
+    <td colspan="3" style="font-weight:700;">عدد السائقين المشتركين في الحوادث</td>
+    <td>{_waqoat_cell(age_drv[0])}</td><td>{_waqoat_cell(age_drv[1])}</td><td>{_waqoat_cell(age_drv[2])}</td>
+    <td>{_waqoat_cell(age_drv[3])}</td><td>{_waqoat_cell(age_drv[4])}</td><td colspan="2">{_waqoat_cell(age_drv_sum)}</td>
+  </tr>
+  <tr>
+    <td colspan="3" style="font-weight:700;">عدد الاشخاص المصابين</td>
+    <td>{_waqoat_cell(age_inj[0])}</td><td>{_waqoat_cell(age_inj[1])}</td><td>{_waqoat_cell(age_inj[2])}</td>
+    <td>{_waqoat_cell(age_inj[3])}</td><td>{_waqoat_cell(age_inj[4])}</td><td colspan="2">{_waqoat_cell(age_inj_sum)}</td>
+  </tr>
+  <tr>
+    <td colspan="3" style="font-weight:700;">عدد الأشخاص المتوفين</td>
+    <td>{_waqoat_cell(age_dead[0])}</td><td>{_waqoat_cell(age_dead[1])}</td><td>{_waqoat_cell(age_dead[2])}</td>
+    <td>{_waqoat_cell(age_dead[3])}</td><td>{_waqoat_cell(age_dead[4])}</td><td colspan="2">{_waqoat_cell(age_dead_sum)}</td>
+  </tr>
+  <tr>
+    <th colspan="3" class="bg-white">أسباب الحوادث المرورية</th>
+    <th class="bg-peach">انحراف مفاجىء</th>
+    <th class="bg-peach">دوران غير نظامي</th>
+    <th class="bg-peach">تجاوز غير نظامي</th>
+    <th class="bg-peach">عدم التقيد بالإشارة</th>
+    <th class="bg-peach">السرعة الزائدة</th>
+    <th class="bg-peach">السائق تحت تاثير المخدر</th>
+    <th class="bg-peach">أخرى</th>
+  </tr>
+  <tr>
+    <td colspan="3"></td>
+    {cause_cells}
+  </tr>
+  <tr class="bg-blue"><th colspan="10">أسماء الأشخاص المصابين</th></tr>
+  <tr>
+    <th colspan="2" rowspan="2" class="bg-blue">الاسم</th>
+    <th colspan="2" rowspan="2" class="bg-blue">رقم الحادث</th>
+    <th colspan="2" rowspan="2" class="bg-blue">مكان الحادث</th>
+    <th rowspan="2" class="bg-blue">رقم السجل</th>
+    <th rowspan="2" class="bg-blue txt-red">جهة التغطية</th>
+    <th colspan="2" class="bg-blue">عدد المصابين</th>
+  </tr>
+  <tr>
+    <th class="bg-white">ذكور</th><th class="bg-white">اناث</th>
+  </tr>
+  {_waqoat_person_rows(p.get("injured") or [], 5)}
+  <tr class="bg-blue"><th colspan="10">أسماء الأشخاص المتوفي</th></tr>
+  <tr>
+    <th colspan="2" rowspan="2" class="bg-blue">الاسم</th>
+    <th colspan="2" rowspan="2" class="bg-blue">رقم الحادث</th>
+    <th colspan="2" rowspan="2" class="bg-blue">مكان الحادث</th>
+    <th rowspan="2" class="bg-blue">رقم السجل</th>
+    <th rowspan="2" class="bg-blue txt-red">جهة التغطية</th>
+    <th colspan="2" class="bg-blue">عدد المتوفين</th>
+  </tr>
+  <tr>
+    <th class="bg-white">ذكور</th><th class="bg-white">اناث</th>
+  </tr>
+  {_waqoat_person_rows(p.get("dead") or [], 5)}
+</table>
+<div class="waqoat-note txt-red">ملاحظة / جهة التغطية ( المرور - امن الطرق - الشرطة - الدوريات او جهات أخرى )</div>
+<div class="waqoat-foot">
+  <span>معد البيان/ {prepared}</span>
+  <span>رقم الجوال ( {phone} )</span>
+</div>
+"""
+    return f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+<meta name="format-detection" content="telephone=no">
+<title>{html.escape(title)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+*{{box-sizing:border-box}}
+html,body{{direction:rtl;margin:0;padding:10px;background:#0d1316;color:#e2e8f0}}
+.toolbar{{max-width:210mm;margin:0 auto 10px;text-align:center}}
+.print-btn{{background:linear-gradient(135deg,#d4a853,#a37a2c);color:#fff;border:none;padding:8px 20px;border-radius:8px;font-weight:800;cursor:pointer}}
+.a4{{width:794px;margin:0 auto;background:#fff;color:#000;border:1px solid #cbd5e1;padding:5mm 6mm;direction:rtl}}
+table.waqoat-grid{{
+  width:100%;border-collapse:collapse;table-layout:fixed;direction:rtl;
+  border:1.5px solid #000;font-family:"Traditional Arabic","Tajawal",Arial,sans-serif;
+}}
+table.waqoat-grid th,table.waqoat-grid td{{
+  border:1px solid #000;padding:1.5px 3px;text-align:center;vertical-align:middle;
+  font-size:10.5px;line-height:1.22;color:#000;height:18px;
+}}
+.bg-green{{background-color:#d9ead3!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.bg-blue{{background-color:#dce6f1!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.bg-peach{{background-color:#fbe4d5!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.bg-white{{background-color:#ffffff!important;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.txt-red{{color:#c00000!important;font-weight:700}}
+.sep-row{{height:7px!important;padding:0!important;background:#ffffff!important;border-left:1px solid #000;border-right:1px solid #000}}
+.logo-img{{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+.waqoat-note{{text-align:center;margin-top:6px;font-size:11px;font-weight:700}}
+.waqoat-foot{{display:flex;justify-content:space-between;margin-top:6px;font-size:12px;font-weight:800;direction:rtl}}
+@media print{{
+  @page{{size:A4 portrait;margin:6mm!important}}
+  html,body{{background:#fff!important;padding:0!important;margin:0!important}}
+  .toolbar,.no-print{{display:none!important}}
+  .a4{{width:100%!important;max-width:198mm!important;margin:0 auto!important;border:none!important;padding:0!important;box-shadow:none!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important}}
+  table.waqoat-grid{{page-break-inside:avoid!important}}
+  .logo-img{{display:inline-block!important;visibility:visible!important}}
+}}
+</style></head><body>
+<div class="toolbar no-print"><button class="print-btn" onclick="window.print()">🖨️ طباعة / حفظ PDF (1/1)</button></div>
+<div class="a4" id="a4Sheet">{body}</div>
+</body></html>"""
 
 
 def build_accidents_a4(rows: list[dict], dates: dict, prepared_by: str, phone: str, logo_b64: str) -> str:
@@ -1041,7 +1222,7 @@ def render_daily_incidents(logo_b64: str, shift: dict) -> None:
         st.success("تم الحفظ التراكمي وترحيل المصابين إلى التكميل الشهري.")
 
     st.markdown("#### معاينة وطباعة A4")
-    components.html(build_daily_incidents_a4(payload, logo_b64), height=1100, scrolling=True)
+    components.html(build_daily_incidents_a4(payload, logo_b64), height=1280, scrolling=True)
     render_backup_controls(dates["month_key"])
 
 
