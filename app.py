@@ -3780,104 +3780,54 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }} catch (e) {{}}
     }}
 
-    function getParentPrintCtx() {{
-        var pwin = window;
-        var pdoc = document;
-        try {{
-            if (window.parent && window.parent !== window && window.parent.document) {{
-                pwin = window.parent;
-                pdoc = window.parent.document;
-            }}
-        }} catch (e) {{}}
-        return {{ win: pwin, doc: pdoc }};
-    }}
-
-    function ensureParentPrintInfra(pdoc) {{
-        var style = pdoc.getElementById('khafar-print-style');
-        if (!style) {{
-            style = pdoc.createElement('style');
-            style.id = 'khafar-print-style';
-            style.textContent = [
-                '@import url("https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap");',
-                '#khafar-print-root{{display:none!important;}}',
-                '@page{{size:A4 portrait;margin:6mm!important;}}',
-                '@media print{{',
-                '  #root,[data-testid="stAppViewContainer"],[data-testid="stHeader"],header,footer,.stApp,.main,.block-container{{display:none!important;visibility:hidden!important;}}',
-                '  body>*:not(#khafar-print-root){{display:none!important;visibility:hidden!important;}}',
-                '  #khafar-print-root{{display:block!important;visibility:visible!important;width:100%!important;max-width:100%!important;padding:0!important;margin:0!important;background:#fff!important;color:#000!important;direction:rtl!important;text-align:right!important;font-family:"Cairo","Tajawal","Segoe UI",Tahoma,Arial,sans-serif!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}',
-                '  #khafar-print-root,#khafar-print-root *{{visibility:visible!important;color:#000!important;font-family:"Cairo","Tajawal","Segoe UI",Tahoma,Arial,sans-serif!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}}',
-                '  #khafar-print-root .a4-sheet,#khafar-print-root .a4-paper{{transform:none!important;zoom:1!important;width:100%!important;max-width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;padding:4mm 8mm!important;box-shadow:none!important;border:none!important;background:#fff!important;direction:rtl!important;}}',
-                '  #khafar-print-root .toolbar,#khafar-print-root .no-print,#khafar-print-root .zoom-bar,#khafar-print-root .live-sig-dock,#khafar-print-root .clear-sig-btn,#khafar-print-root .live-pad-canvas,#khafar-print-root .sig-guide-hint,#khafar-print-root .sig-mode-note{{display:none!important;}}',
-                '  #khafar-print-root .hdr{{display:grid!important;grid-template-columns:1fr auto 1fr!important;align-items:center!important;gap:12px!important;padding:2px 0 8px 0!important;margin-bottom:6px!important;border-bottom:2px solid #0f5132!important;}}',
-                '  #khafar-print-root .hdr-right p{{margin:0!important;padding:0!important;font-size:12.5px!important;font-weight:800!important;line-height:1.28!important;color:#000!important;}}',
-                '  #khafar-print-root .hdr-left p{{margin:0!important;padding:0!important;font-size:11.5px!important;font-weight:700!important;line-height:1.32!important;color:#000!important;}}',
-                '  #khafar-print-root .hdr-left p.hdr-nowrap{{white-space:nowrap!important;}}',
-                '  #khafar-print-root .hdr-center{{width:88px!important;height:88px!important;min-width:88px!important;min-height:88px!important;padding:0!important;background:transparent!important;border:none!important;box-shadow:none!important;}}',
-                '  #khafar-print-root .hdr-center img,#khafar-print-root .hdr-logo{{width:88px!important;height:88px!important;max-width:88px!important;max-height:88px!important;object-fit:contain!important;}}',
-                '  #khafar-print-root .doc-banner{{background-color:#0f3d2e!important;color:#fff!important;text-align:center!important;border-radius:6px!important;font-weight:800!important;margin-bottom:8px!important;padding:6px 10px!important;}}',
-                '  #khafar-print-root .doc-banner,#khafar-print-root .doc-banner *{{background-color:#0f3d2e!important;color:#fff!important;}}',
-                '  #khafar-print-root table.data-tbl{{width:100%!important;border-collapse:collapse!important;margin-bottom:8px!important;}}',
-                '  #khafar-print-root table.data-tbl td{{border:1.4px solid #000!important;padding:5px 7px!important;line-height:1.4!important;vertical-align:top!important;text-align:right!important;font-weight:700!important;}}',
-                '  #khafar-print-root table.data-tbl td.lbl{{background:#f4f7f6!important;font-weight:800!important;}}',
-                '  #khafar-print-root .legal-box{{background:#f8fafc!important;border:1.4px solid #0f3d2e!important;border-right:5px solid #0f3d2e!important;border-radius:6px!important;text-align:right!important;line-height:1.55!important;word-spacing:normal!important;direction:rtl!important;padding:8px 10px!important;margin-bottom:8px!important;font-weight:700!important;}}',
-                '  #khafar-print-root table.sig-tbl{{width:100%!important;border-collapse:collapse!important;}}',
-                '  #khafar-print-root table.sig-tbl th,#khafar-print-root table.sig-tbl td,#khafar-print-root .sig-cell,#khafar-print-root .sig-head{{border:1.4px solid #000!important;text-align:center!important;}}',
-                '  #khafar-print-root table.sig-tbl th,#khafar-print-root .sig-head{{background:#f1f5f3!important;font-weight:800!important;}}',
-                '  #khafar-print-root table.sig-tbl td,#khafar-print-root .sig-cell{{min-height:52px!important;padding:6px!important;}}',
-                '  #khafar-print-root .footer-qr{{margin-top:6px!important;padding:6px 8px!important;border:1.4px solid #000!important;}}',
-                '  #khafar-print-root img{{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}',
-                '}}'
-            ].join('\\n');
-            (pdoc.head || pdoc.documentElement).appendChild(style);
-        }}
-        var root = pdoc.getElementById('khafar-print-root');
-        if (!root) {{
-            root = pdoc.createElement('div');
-            root.id = 'khafar-print-root';
-            pdoc.body.appendChild(root);
-        }}
-        return root;
-    }}
-
-    function printA4Sync() {{
+    function prepareA4Print() {{
         syncAllLivePads();
-        var paper = document.getElementById('a4Sheet');
+        const viewport = document.getElementById("a4PreviewViewport");
+        const paper = document.getElementById("a4Sheet");
+        if (viewport) {{
+            viewport.style.height = "auto";
+            viewport.style.overflow = "visible";
+        }}
         if (!paper) return;
-        var ctx = getParentPrintCtx();
-        var root = ensureParentPrintInfra(ctx.doc);
-        var clone = paper.cloneNode(true);
-        clone.id = 'a4PrintClone';
-        clone.style.cssText = 'transform:none!important;zoom:1!important;width:100%!important;max-width:100%!important;min-height:0!important;height:auto!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;box-shadow:none!important;border:none!important;padding:4mm 8mm!important;background:#fff!important;';
-        while (root.firstChild) root.removeChild(root.firstChild);
-        try {{
-            root.appendChild(ctx.doc.importNode(clone, true));
-        }} catch (e) {{
-            root.appendChild(clone);
+        paper.style.zoom = "1";
+        paper.style.setProperty("transform", "none", "important");
+        paper.style.removeProperty("width");
+        paper.style.margin = "0 auto";
+        paper.style.maxHeight = "none";
+        paper.style.overflow = "visible";
+    }}
+
+    function restoreA4Preview() {{
+        const viewport = document.getElementById("a4PreviewViewport");
+        const paper = document.getElementById("a4Sheet");
+        if (viewport) {{
+            viewport.style.height = "";
+            viewport.style.overflow = "auto";
         }}
-        var cleanup = function() {{
-            try {{ while (root.firstChild) root.removeChild(root.firstChild); }} catch (e) {{}}
-        }};
-        try {{ ctx.win.addEventListener('afterprint', cleanup, {{ once: true }}); }} catch (e) {{}}
-        try {{
-            ctx.win.print();
-        }} catch (e1) {{
-            try {{ window.print(); }} catch (e2) {{}}
+        if (paper) {{
+            paper.style.zoom = "";
+            paper.style.removeProperty("transform");
+            paper.style.margin = "";
+            paper.style.width = "";
+            paper.style.removeProperty("height");
+            paper.style.removeProperty("max-height");
+            paper.style.overflow = "";
         }}
+        scheduleA4Fit();
     }}
 
     var printBtn = document.getElementById("printOfficialBtn");
     if (printBtn) {{
         printBtn.addEventListener("click", function(ev) {{
+            prepareA4Print();
+            setTimeout(function() {{ window.print(); }}, 40);
             ev.preventDefault();
-            printA4Sync();
         }});
     }}
-    window.addEventListener('keydown', function(ev) {{
-        if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'p' || ev.key === 'P')) {{
-            ev.preventDefault();
-            printA4Sync();
-        }}
-    }});
+
+    window.onbeforeprint = prepareA4Print;
+    window.addEventListener("beforeprint", prepareA4Print);
+    window.addEventListener("afterprint", restoreA4Preview);
     function scheduleA4Fit() {{
         fitA4Preview();
     }}
