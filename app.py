@@ -2592,8 +2592,44 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     else:
         officer_box_inner = _sig_slot_img("", "slot_officer")
 
+    form_id_now = str(rec.get("form_id") or "")
+    form_title_now = str(rec.get("form_title") or "") + " " + str((form_def or {}).get("title") or "")
+    is_toxicology = form_id_now == "med_toxicology" or "تحليل سموم" in form_title_now
+
     # --- Duty cell ---
-    if rec.get("duty_stamp_b64"):
+    if is_toxicology:
+        # خطاب تحليل السموم فقط: ختم إدارة مرور منطقة جازان + توثيق نصي لضابط الخفر بدون خانة توقيع
+        tox_officer_line = (
+            '<div style="margin-top:8px;font-size:12px;font-weight:800;color:#000000 !important;'
+            'line-height:1.45;text-align:center;">'
+            f"توثيق ضابط الخفر: {html.escape(str(rec.get('officer_full') or '').strip() or '—')}"
+            "</div>"
+        )
+        if rec.get("duty_stamp_b64"):
+            duty_box_inner = _sig_slot_img(rec["duty_stamp_b64"], "slot_duty") + tox_officer_line
+        elif needs_duty_pad:
+            duty_box_inner = (
+                "<div class='sig-guide'>"
+                + _sig_slot_img("", "slot_duty")
+                + guide_hint
+                + "</div>"
+                + tox_officer_line
+            )
+        elif "ختم" in duty_mode or not duty_mode:
+            duty_box_inner = (
+                '<div style="display:inline-block; border:1.5px solid #000000; color:#000000; '
+                'padding:6px 12px; border-radius:5px; font-size:12px; font-weight:800; '
+                'line-height:1.45; max-width:96%;">'
+                "ختم المصادقة النظامي لإدارة مرور منطقة جازان"
+                "</div>"
+                + tox_officer_line
+            )
+        else:
+            duty_box_inner = _sig_slot_img("", "slot_duty") + tox_officer_line
+        # لا تُعرض لوحة/خانة توقيع لضابط الخفر في هذا الخطاب
+        needs_officer_pad = False
+        officer_box_inner = ""
+    elif rec.get("duty_stamp_b64"):
         duty_box_inner = _sig_slot_img(rec["duty_stamp_b64"], "slot_duty")
     elif needs_duty_pad:
         duty_box_inner = (
@@ -2612,8 +2648,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         duty_box_inner = _sig_slot_img("", "slot_duty")
 
     # جدول التوقيعات ثابت بـ 3 أعمدة للنماذج العادية، وشبكة مضغوطة لنماذج التنازل متعددة الأطراف
-    col_width = "33.3%"
-    form_id_now = str(rec.get("form_id") or "")
+    # (تحليل السموم: عمودان فقط — جهة الاستلام + مصادقة إدارة مرور منطقة جازان)
+    col_width = "50%" if is_toxicology else "33.3%"
     party_signers = _waiver_signers(form_id_now, fields_map)
     multi_sig = bool(party_signers)
     needs_party_live = multi_sig and interactive_sig and ("توقيع حي" in citizen_mode) and not rec.get("citizen_stamp_b64")
@@ -2649,8 +2685,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             else:
                 inner = _sig_slot_img("", f"slot_{signer['pad']}")
             sig_slots.append((signer["header"], signer["name"], signer["role"], inner))
-        sig_slots.append(("ضابط الخفر", str(rec.get("officer_full") or ""), "", officer_box_inner))
-        sig_slots.append(("وحدة الحوادث", str(rec.get("duty_full") or ""), "", duty_box_inner))
+        if not is_toxicology:
+            sig_slots.append(("ضابط الخفر", str(rec.get("officer_full") or ""), "", officer_box_inner))
+            sig_slots.append(("وحدة الحوادث", str(rec.get("duty_full") or ""), "", duty_box_inner))
+        else:
+            sig_slots.append(("مصادقة إدارة مرور منطقة جازان", "", "", duty_box_inner))
         grid_cols = 3 if len(sig_slots) <= 3 else 4
         sig_rows = []
         for start in range(0, len(sig_slots), grid_cols):
@@ -2674,6 +2713,29 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + "".join(sig_rows)
             + "</tbody></table>"
         )
+    elif is_toxicology:
+        sig_table_html = f"""
+            <table class="sig-tbl">
+                <thead>
+                    <tr>
+                        <th style="width:50%;">{html.escape(col1_header)}</th>
+                        <th style="width:50%;">مصادقة إدارة مرور منطقة جازان</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="width:50%;">
+                            {col1_name_html}
+                            {col1_role_html}
+                            {citizen_box_inner}
+                        </td>
+                        <td style="width:50%;">
+                            {duty_box_inner}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        """
     else:
         sig_table_html = f"""
             <table class="sig-tbl">
@@ -2713,12 +2775,22 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     elif needs_citizen_pad:
         live_pad_ids.append("citizen")
         dock_cards.append(_live_pad_card("citizen", citizen_pad_title, citizen_pad_sub))
-    if needs_officer_pad:
+    if needs_officer_pad and not is_toxicology:
         live_pad_ids.append("officer")
         dock_cards.append(_live_pad_card("officer", "لوحة توقيع: ضابط الخفر المناوب", rec.get("officer_full", "")))
     if needs_duty_pad:
         live_pad_ids.append("duty")
-        dock_cards.append(_live_pad_card("duty", "لوحة توقيع: مصادقة وحدة الحوادث", rec.get("duty_full", "")))
+        duty_pad_title = (
+            "لوحة توقيع: مصادقة إدارة مرور منطقة جازان"
+            if is_toxicology
+            else "لوحة توقيع: مصادقة وحدة الحوادث"
+        )
+        duty_pad_sub = (
+            "إدارة مرور منطقة جازان"
+            if is_toxicology
+            else rec.get("duty_full", "")
+        )
+        dock_cards.append(_live_pad_card("duty", duty_pad_title, duty_pad_sub))
 
     live_dock_html = ""
     if dock_cards:
@@ -4208,8 +4280,13 @@ if st.session_state.nav_tab == "النماذج الميدانية":
 
             with s2_col:
                 st.markdown("<div class='auth-panel'>", unsafe_allow_html=True)
-                st.markdown("#### 2️⃣ توثيق ضابط الخفر ومصادقة وحدة الحوادث")
-                st.caption(f"الإعدادات الافتراضية: {unit_display}  •  {duty_display}")
+                is_toxicology_form = fid == "med_toxicology" or "تحليل سموم" in str(form_def.get("title") or "")
+                if is_toxicology_form:
+                    st.markdown("#### 2️⃣ مصادقة إدارة مرور منطقة جازان وتوثيق ضابط الخفر")
+                    st.caption(f"التوثيق النصي لضابط الخفر: {unit_display}")
+                else:
+                    st.markdown("#### 2️⃣ توثيق ضابط الخفر ومصادقة وحدة الحوادث")
+                    st.caption(f"الإعدادات الافتراضية: {unit_display}  •  {duty_display}")
 
                 officer_name_key = f"officer_full_input_{st.session_state.doc_no}"
                 if officer_name_key not in st.session_state:
@@ -4222,57 +4299,90 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     placeholder="مثال: الملازم فهد بن ...",
                 )
 
-                officer_auth_opts = [
-                    "توقيع حي على الشاشة بالإصبع (لضابط الخفر)",
-                    "بصمة رقمية (منفذ الشحن Type-C) لضابط الخفر",
-                ]
-                officer_default_idx = 0
-                if "بصمة" in (st.session_state.officer_auth_mode or ""):
-                    officer_default_idx = 1
-                chosen_officer_auth = st.radio(
-                    "وسيلة توثيق ضابط الخفر:",
-                    officer_auth_opts,
-                    index=officer_default_idx,
-                    key=f"officer_auth_radio_{st.session_state.doc_no}",
-                    disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
-                )
+                chosen_officer_auth = st.session_state.officer_auth_mode or "توقيع حي على الشاشة بالإصبع (لضابط الخفر)"
+                if not is_toxicology_form:
+                    officer_auth_opts = [
+                        "توقيع حي على الشاشة بالإصبع (لضابط الخفر)",
+                        "بصمة رقمية (منفذ الشحن Type-C) لضابط الخفر",
+                    ]
+                    officer_default_idx = 0
+                    if "بصمة" in (st.session_state.officer_auth_mode or ""):
+                        officer_default_idx = 1
+                    chosen_officer_auth = st.radio(
+                        "وسيلة توثيق ضابط الخفر:",
+                        officer_auth_opts,
+                        index=officer_default_idx,
+                        key=f"officer_auth_radio_{st.session_state.doc_no}",
+                        disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
+                    )
 
-                duty_auth_opts = [
-                    "ختم المصادقة النظامي لوحدة الحوادث",
-                    "توقيع حي على الشاشة لمصادقة وحدة الحوادث",
-                ]
-                if is_letter_form or "توقيع حي" in (st.session_state.duty_auth_mode or ""):
-                    duty_default_idx = 1
+                if is_toxicology_form:
+                    duty_auth_opts = [
+                        "ختم المصادقة النظامي لإدارة مرور منطقة جازان",
+                        "توقيع حي على الشاشة لمصادقة إدارة مرور منطقة جازان",
+                    ]
+                    if "توقيع حي" in (st.session_state.duty_auth_mode or "") and "جازان" in (st.session_state.duty_auth_mode or ""):
+                        duty_default_idx = 1
+                    elif "توقيع حي" in (st.session_state.duty_auth_mode or "") and "وحدة الحوادث" in (st.session_state.duty_auth_mode or ""):
+                        # ترحيل خيار قديم محفوظ في الجلسة إلى الخيار المكافئ الجديد
+                        duty_default_idx = 1
+                    else:
+                        duty_default_idx = 0
+                    chosen_duty_auth = st.radio(
+                        "وسيلة مصادقة إدارة مرور منطقة جازان:",
+                        duty_auth_opts,
+                        index=duty_default_idx,
+                        key=f"duty_auth_radio_tox_{st.session_state.doc_no}",
+                        disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
+                    )
                 else:
-                    duty_default_idx = 0
-                chosen_duty_auth = st.radio(
-                    "وسيلة مصادقة وحدة الحوادث:",
-                    duty_auth_opts,
-                    index=duty_default_idx,
-                    key=f"duty_auth_radio_{st.session_state.doc_no}",
-                    disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
-                )
+                    duty_auth_opts = [
+                        "ختم المصادقة النظامي لوحدة الحوادث",
+                        "توقيع حي على الشاشة لمصادقة وحدة الحوادث",
+                    ]
+                    if is_letter_form or "توقيع حي" in (st.session_state.duty_auth_mode or ""):
+                        duty_default_idx = 1
+                    else:
+                        duty_default_idx = 0
+                    chosen_duty_auth = st.radio(
+                        "وسيلة مصادقة وحدة الحوادث:",
+                        duty_auth_opts,
+                        index=duty_default_idx,
+                        key=f"duty_auth_radio_{st.session_state.doc_no}",
+                        disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
+                    )
 
                 if not st.session_state.officer_approved:
                     if st.button("🛡️ اعتماد الوثيقة وإصدار رمز التحقق QR", type="primary", use_container_width=True, disabled=not st.session_state.citizen_locked):
                         officer_label = (st.session_state.get(officer_name_key) or "").strip() or unit_display
                         st.session_state.officer_full_override = officer_label
-                        st.session_state.officer_auth_mode = chosen_officer_auth
                         st.session_state.duty_auth_mode = chosen_duty_auth
-                        if "بصمة" in chosen_officer_auth:
-                            seed_off = f"{st.session_state.doc_no}_{officer_label}_OFFICER"
-                            st.session_state.officer_stamp_b64 = generate_fingerprint_png_b64(seed_off, ink_rgb=(15, 61, 46))
-                        else:
-                            st.session_state.officer_stamp_b64 = ""
                         st.session_state.duty_stamp_b64 = ""
+                        if is_toxicology_form:
+                            # تحليل السموم فقط: لا يُشترط توقيع/بصمة ضابط الخفر
+                            st.session_state.officer_auth_mode = "توثيق نصي لضابط الخفر (بدون توقيع)"
+                            st.session_state.officer_stamp_b64 = ""
+                        else:
+                            st.session_state.officer_auth_mode = chosen_officer_auth
+                            if "بصمة" in chosen_officer_auth:
+                                seed_off = f"{st.session_state.doc_no}_{officer_label}_OFFICER"
+                                st.session_state.officer_stamp_b64 = generate_fingerprint_png_b64(seed_off, ink_rgb=(15, 61, 46))
+                            else:
+                                st.session_state.officer_stamp_b64 = ""
                         st.session_state.officer_approved = True
                         safe_rerun()
                 else:
-                    st.success(
-                        f"تم التوثيق: ضابط الخفر ({st.session_state.officer_auth_mode}) • "
-                        f"وحدة الحوادث ({st.session_state.duty_auth_mode})"
-                    )
-                    if st.session_state.officer_stamp_b64:
+                    if is_toxicology_form:
+                        st.success(
+                            f"تم الاعتماد: مصادقة إدارة مرور منطقة جازان ({st.session_state.duty_auth_mode}) • "
+                            f"توثيق ضابط الخفر نصياً بدون توقيع"
+                        )
+                    else:
+                        st.success(
+                            f"تم التوثيق: ضابط الخفر ({st.session_state.officer_auth_mode}) • "
+                            f"وحدة الحوادث ({st.session_state.duty_auth_mode})"
+                        )
+                    if st.session_state.officer_stamp_b64 and not is_toxicology_form:
                         st.image(base64.b64decode(st.session_state.officer_stamp_b64), caption="ختم التوثيق المعتمد", width=105)
                 st.markdown("</div>", unsafe_allow_html=True)
 
