@@ -13,6 +13,7 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from PIL import Image, ImageDraw, ImageOps
 from abu_arish_impound import ABU_ARISH_IMPOUND_TEMPLATE
+from takmeel import TAKMEEL_FORMS, init_takmeel_db, render_takmeel_form
 
 try:
     import qrcode
@@ -428,6 +429,15 @@ section[data-testid="stSidebar"] { display: none !important; }
     padding: 2px 11px;
     border-radius: 20px;
 }
+.badge-tak {
+    background: rgba(167, 139, 250, 0.14);
+    border: 1px solid rgba(167, 139, 250, 0.5);
+    color: #c4b5fd;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 11px;
+    border-radius: 20px;
+}
 
 .form-item-card {
     background: linear-gradient(180deg, #162024 0%, #12191c 100%);
@@ -456,7 +466,7 @@ div[data-testid="stHorizontalBlock"] div.stButton > button {
 div[data-baseweb="tab-list"],
 [data-testid="stTabs"] [role="tablist"] {
     display: grid !important;
-    grid-template-columns: repeat(3, 1fr) !important;
+    grid-template-columns: repeat(4, 1fr) !important;
     gap: 12px !important;
     width: 100% !important;
     background: rgba(8, 24, 21, 0.75) !important;
@@ -531,6 +541,17 @@ div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(3)[aria-select
     border: 2px solid #fde68a !important;
     color: #ffffff !important;
     box-shadow: 0 0 0 1px rgba(253, 230, 138, 0.5), 0 8px 22px rgba(225, 29, 72, 0.45) !important;
+}
+div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(4),
+[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(4) {
+    border: 1.5px solid rgba(167, 139, 250, 0.65) !important;
+}
+div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(4)[aria-selected="true"],
+[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(4)[aria-selected="true"] {
+    background: linear-gradient(145deg, #6d28d9, #8b5cf6) !important;
+    border: 2px solid #fde68a !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 0 1px rgba(253, 230, 138, 0.5), 0 8px 22px rgba(139, 92, 246, 0.45) !important;
 }
 div[data-baseweb="tab-list"] button[data-baseweb="tab"][aria-selected="true"] p,
 [data-testid="stTabs"] [data-testid="stTab"][aria-selected="true"] p {
@@ -1522,6 +1543,7 @@ TRAFFIC_FORMS = {
 
 # المحضر الخامس داخل قائمة المحاضر الرسمية — البيانات من ABU_ARISH_IMPOUND_TEMPLATE
 TRAFFIC_FORMS[ABU_ARISH_IMPOUND_TEMPLATE["id"]] = _minutes_form_from_template(ABU_ARISH_IMPOUND_TEMPLATE)
+TRAFFIC_FORMS.update(TAKMEEL_FORMS)
 
 
 # =====================================================================
@@ -3127,6 +3149,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 # 6. إدارة حالة الجلسة والتنقل
 # =====================================================================
 init_db()
+init_takmeel_db()
 _device_uid = read_device_uid()
 DEVICE_HASH = device_hash_for(_device_uid) if _device_uid else ""
 _wipe_shift = bool(st.session_state.get("wipe_device_shift"))
@@ -3155,6 +3178,7 @@ CATEGORY_TAB_MAP = {
     "✍️ الإقرارات الميدانية (6)": "إقرار",
     "🚓 المحاضر النظامية (5)": "محضر",
     "🚑 الطبية والجنائية (3)": "إحالة طبية",
+    "📊 التكميل (4)": "تكميل",
 }
 
 if "nav_tab" not in st.session_state:
@@ -3371,525 +3395,541 @@ for idx, (tab_key, tab_label) in enumerate(nav_items):
             safe_rerun()
 
 # =====================================================================
-# القسم الأول: النماذج الميدانية (14 نموذجاً)
+# القسم الأول: النماذج الميدانية (18 نموذجاً)
 # =====================================================================
 if st.session_state.nav_tab == "النماذج الميدانية":
 
     if st.session_state.opened_form_id is None:
-        tab_decl, tab_min, tab_med = st.tabs(list(CATEGORY_TAB_MAP.keys()))
+        tab_decl, tab_min, tab_med, tab_tak = st.tabs(list(CATEGORY_TAB_MAP.keys()))
         with tab_decl:
             render_compact_form_buttons("إقرار", primary=False)
         with tab_min:
             render_compact_form_buttons("محضر", primary=False)
         with tab_med:
             render_compact_form_buttons("إحالة طبية", primary=False)
+        with tab_tak:
+            render_compact_form_buttons("تكميل", primary=False)
 
     else:
         fid = st.session_state.opened_form_id
         form_def = TRAFFIC_FORMS[fid]
-        pending_prefill = st.session_state.pop("pending_form_prefill", None)
-        if pending_prefill and pending_prefill.get("form_id") == fid:
-            prefix = f"inp_{fid}_"
-            for state_key in list(st.session_state.keys()):
-                if str(state_key).startswith(prefix):
-                    del st.session_state[state_key]
-            for key, value in (pending_prefill.get("values") or {}).items():
-                if value:
-                    st.session_state[f"inp_{fid}_{key}"] = value
-        cat_badge_cls = {"إقرار": "green", "محضر": "gold", "إحالة طبية": "med"}.get(form_def["category"], "green")
+        if form_def.get("category") == "تكميل":
+            top_bar1, top_bar2 = st.columns([1.2, 2.8])
+            with top_bar1:
+                if st.button("↩️ العودة للنماذج", use_container_width=True, key="tak_back"):
+                    st.session_state.opened_form_id = None
+                    safe_rerun()
+            with top_bar2:
+                st.markdown(
+                    f"<div class='badge-tak' style='display:inline-block;margin-top:8px'>"
+                    f"📊 التكميل · {html.escape(form_def['title'])}</div>",
+                    unsafe_allow_html=True,
+                )
+            render_takmeel_form(fid, logo_b64_global, shift)
+        else:
+            pending_prefill = st.session_state.pop("pending_form_prefill", None)
+            if pending_prefill and pending_prefill.get("form_id") == fid:
+                prefix = f"inp_{fid}_"
+                for state_key in list(st.session_state.keys()):
+                    if str(state_key).startswith(prefix):
+                        del st.session_state[state_key]
+                for key, value in (pending_prefill.get("values") or {}).items():
+                    if value:
+                        st.session_state[f"inp_{fid}_{key}"] = value
+            cat_badge_cls = {"إقرار": "green", "محضر": "gold", "إحالة طبية": "med", "تكميل": "tak"}.get(form_def["category"], "green")
 
-        top_bar1, top_bar2, top_bar3 = st.columns([1.3, 1.3, 1.4])
-        with top_bar1:
-            if st.button("↩️ العودة للنماذج", use_container_width=True):
-                st.session_state.opened_form_id = None
-                safe_rerun()
-        with top_bar2:
-            if st.button("⚡ تعبئة بيانات تجريبية فورية", type="primary", use_container_width=True, disabled=st.session_state.citizen_locked):
-                for fld in form_def["fields"]:
-                    st.session_state[f"inp_{fid}_{fld['key']}"] = fld["sample"]
-                safe_rerun()
-        with top_bar3:
-            if st.button("🆕 تفريغ وبدء سجل جديد", use_container_width=True):
-                for fld in form_def["fields"]:
-                    wkey = f"inp_{fid}_{fld['key']}"
-                    if wkey in st.session_state:
-                        del st.session_state[wkey]
-                reset_doc_state()
-                safe_rerun()
+            top_bar1, top_bar2, top_bar3 = st.columns([1.3, 1.3, 1.4])
+            with top_bar1:
+                if st.button("↩️ العودة للنماذج", use_container_width=True):
+                    st.session_state.opened_form_id = None
+                    safe_rerun()
+            with top_bar2:
+                if st.button("⚡ تعبئة بيانات تجريبية فورية", type="primary", use_container_width=True, disabled=st.session_state.citizen_locked):
+                    for fld in form_def["fields"]:
+                        st.session_state[f"inp_{fid}_{fld['key']}"] = fld["sample"]
+                    safe_rerun()
+            with top_bar3:
+                if st.button("🆕 تفريغ وبدء سجل جديد", use_container_width=True):
+                    for fld in form_def["fields"]:
+                        wkey = f"inp_{fid}_{fld['key']}"
+                        if wkey in st.session_state:
+                            del st.session_state[wkey]
+                    reset_doc_state()
+                    safe_rerun()
 
-        st.markdown(f"""
-        <div class="hero-shift-card" style="padding:16px 20px; margin-top:8px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
-                <div>
-                    <span class="badge-{cat_badge_cls}">قسم مرور العارضة</span>
-                    <h3 style="margin:6px 0 2px 0; color:#ffffff; font-size:20px;">{form_def['icon']} {form_def['title']}</h3>
-                    <div style="font-size:13px; color:#f3cc7a; font-weight:700;">{form_def.get('official_title', '')}</div>
-                </div>
-                <div style="font-size:12.5px; color:#d4a853; font-weight:700;">
-                    الرقم المرجعي: {st.session_state.doc_no}  |  {st.session_state.doc_time}
+            st.markdown(f"""
+            <div class="hero-shift-card" style="padding:16px 20px; margin-top:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
+                    <div>
+                        <span class="badge-{cat_badge_cls}">قسم مرور العارضة</span>
+                        <h3 style="margin:6px 0 2px 0; color:#ffffff; font-size:20px;">{form_def['icon']} {form_def['title']}</h3>
+                        <div style="font-size:13px; color:#f3cc7a; font-weight:700;">{form_def.get('official_title', '')}</div>
+                    </div>
+                    <div style="font-size:12.5px; color:#d4a853; font-weight:700;">
+                        الرقم المرجعي: {st.session_state.doc_no}  |  {st.session_state.doc_time}
+                    </div>
                 </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
-        if st.session_state.citizen_locked:
-            lk1, lk2 = st.columns([3.8, 1.2])
-            with lk1:
-                st.markdown("""
-                <div class="lock-emerald-banner">
-                    🔒 تم قفل جميع الحقول النصية نهائياً لمنع أي تعديل لاحق على الوثيقة الرسمية.
-                </div>
-                """, unsafe_allow_html=True)
-            with lk2:
-                if st.button("🔓 فك القفل (يمسح البصمة)", use_container_width=True):
-                    st.session_state.citizen_locked = False
-                    st.session_state.citizen_stamp_b64 = ""
-                    st.session_state.officer_approved = False
-                    st.session_state.officer_stamp_b64 = ""
-                    st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لضابط الخفر)"
-                    st.session_state.duty_auth_mode = "ختم المصادقة النظامي لوحدة الحوادث"
-                    st.session_state.duty_stamp_b64 = ""
-                    safe_rerun()
+            if st.session_state.citizen_locked:
+                lk1, lk2 = st.columns([3.8, 1.2])
+                with lk1:
+                    st.markdown("""
+                    <div class="lock-emerald-banner">
+                        🔒 تم قفل جميع الحقول النصية نهائياً لمنع أي تعديل لاحق على الوثيقة الرسمية.
+                    </div>
+                    """, unsafe_allow_html=True)
+                with lk2:
+                    if st.button("🔓 فك القفل (يمسح البصمة)", use_container_width=True):
+                        st.session_state.citizen_locked = False
+                        st.session_state.citizen_stamp_b64 = ""
+                        st.session_state.officer_approved = False
+                        st.session_state.officer_stamp_b64 = ""
+                        st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لضابط الخفر)"
+                        st.session_state.duty_auth_mode = "ختم المصادقة النظامي لوحدة الحوادث"
+                        st.session_state.duty_stamp_b64 = ""
+                        safe_rerun()
 
-        def render_field(fld):
-            wkey = f"inp_{fid}_{fld['key']}"
-            locked = st.session_state.citizen_locked
-            if fld.get("prefill_sample") and wkey not in st.session_state:
-                st.session_state[wkey] = fld.get("sample", "")
-            if fld["type"] == "select":
-                opts = fld["options"]
-                default_idx = opts.index(st.session_state[wkey]) if (wkey in st.session_state and st.session_state[wkey] in opts) else 0
-                return st.selectbox(fld["label"], options=opts, index=default_idx, key=wkey, disabled=locked)
-            if fld["type"] == "textarea":
-                return st.text_area(fld["label"], key=wkey, height=88, disabled=locked)
-            return st.text_input(
-                fld["label"],
-                key=wkey,
-                disabled=locked,
-                placeholder=fld.get("placeholder") or "",
+            def render_field(fld):
+                wkey = f"inp_{fid}_{fld['key']}"
+                locked = st.session_state.citizen_locked
+                if fld.get("prefill_sample") and wkey not in st.session_state:
+                    st.session_state[wkey] = fld.get("sample", "")
+                if fld["type"] == "select":
+                    opts = fld["options"]
+                    default_idx = opts.index(st.session_state[wkey]) if (wkey in st.session_state and st.session_state[wkey] in opts) else 0
+                    return st.selectbox(fld["label"], options=opts, index=default_idx, key=wkey, disabled=locked)
+                if fld["type"] == "textarea":
+                    return st.text_area(fld["label"], key=wkey, height=88, disabled=locked)
+                return st.text_input(
+                    fld["label"],
+                    key=wkey,
+                    disabled=locked,
+                    placeholder=fld.get("placeholder") or "",
+                )
+
+            def render_field_grid(fields):
+                if not fields:
+                    return
+                columns = st.columns(2)
+                for idx, fld in enumerate(fields):
+                    target = st.container() if fld["type"] == "textarea" else columns[idx % 2]
+                    with target:
+                        current_values[fld["key"]] = render_field(fld)
+
+            current_values = {}
+            if fid == "decl_handover":
+                by_key = {fld["key"]: fld for fld in form_def["fields"]}
+                head = st.columns(2)
+                with head[0]:
+                    current_values["incident_no"] = render_field(by_key["incident_no"])
+                with head[1]:
+                    current_values["receiver_role"] = render_field(by_key["receiver_role"])
+                if _is_agent_role(current_values.get("receiver_role")):
+                    for pair in (
+                        ("agent_name", "agent_id"),
+                        ("principal_name", "principal_id"),
+                        ("wakala_no", "wakala_date"),
+                    ):
+                        pair_cols = st.columns(2)
+                        for col, key in zip(pair_cols, pair):
+                            with col:
+                                current_values[key] = render_field(by_key[key])
+                else:
+                    render_field_grid([by_key["party_name"], by_key["party_id"]])
+                render_field_grid([by_key[key] for key in ("party_phone", "vehicle_desc", "plate_no", "vehicle_state")])
+            elif fid in {"decl_settlement", "decl_flee_waiver"}:
+                pair_slot = 0
+                pair_cols = None
+                for fld in form_def["fields"]:
+                    if not _field_is_visible(fld, current_values):
+                        continue
+                    party_match = fld["key"][:2] if fld["key"].startswith("p") else ""
+                    if fid == "decl_settlement" and fld["key"].endswith("_name") and party_match[1:2].isdigit():
+                        ordinal = _PARTY_ORDINALS[int(fld["key"][1])]
+                        st.markdown(f"**الطرف {ordinal}**")
+                        pair_slot = 0
+                    if fld["type"] == "textarea" or fld.get("stack_under"):
+                        current_values[fld["key"]] = render_field(fld)
+                        pair_slot = 0
+                        continue
+                    if pair_slot % 2 == 0:
+                        pair_cols = st.columns(2)
+                    with pair_cols[pair_slot % 2]:
+                        current_values[fld["key"]] = render_field(fld)
+                    pair_slot += 1
+                if fid == "decl_settlement":
+                    st.caption("بعد اعتماد الوثيقة تظهر لوحة توقيع حي مستقلة لكل طرف مشمول، مع ضابط الخفر ووحدة الحوادث، داخل صفحة A4 واحدة.")
+                else:
+                    st.caption("بعد الاعتماد تُفتح لوحة توقيع المُبلّغ المتنازل، ولوحة الطرف المتسبب عند حضوره، بجانب ضابط الخفر ووحدة الحوادث.")
+            else:
+                render_field_grid([fld for fld in form_def["fields"] if not fld.get("visible_if")])
+
+            if fid == "decl_hit_run":
+                if st.button("🔄 الانتقال لإقرار تنازل عن بلاغ صدم وهروب", use_container_width=True):
+                    st.session_state.pending_form_prefill = {
+                        "form_id": "decl_flee_waiver",
+                        "values": {
+                            key: current_values.get(key) or ""
+                            for key in ("incident_no", "party_name", "party_id", "party_phone", "plate_no")
+                        },
+                    }
+                    open_form_from_catalog("decl_flee_waiver")
+
+            att_label = (
+                "📸 إرفاق صورة إشعار المخالفة (مطلوب لحوكمة الإلغاء بالهيئة المرورية)"
+                if form_def["require_image"]
+                else "📎 إرفاق صورة الهوية / التقرير الأولي أو مرفق داعم (اختياري)"
+            )
+            if "att_upload_nonce" not in st.session_state:
+                st.session_state.att_upload_nonce = 0
+            # خارج أي st.form حتى تظهر المعاينة فوراً على الجوال دون انتظار زر إرسال
+            uploaded_files = st.file_uploader(
+                att_label,
+                type=ATTACH_TYPES,
+                accept_multiple_files=True,
+                disabled=st.session_state.citizen_locked,
+                key=f"att_{st.session_state.doc_no}_{st.session_state.att_upload_nonce}",
+                help="الصيغ المدعومة: PNG / JPG / JPEG / WEBP / PDF — تُصحَّح اتجاه كاميرا الجوال تلقائياً وتُصغَّر للرفع السريع.",
+            )
+            if uploaded_files and not st.session_state.citizen_locked:
+                existing = list(st.session_state.get("attachments") or [])
+                known = {attachment_fingerprint(a) for a in existing}
+                added = 0
+                for uf in uploaded_files:
+                    item = process_uploaded_attachment(uf)
+                    if not item:
+                        st.warning(f"تعذّر معالجة المرفق: {getattr(uf, 'name', 'ملف')}")
+                        continue
+                    fp = attachment_fingerprint(item)
+                    if fp in known:
+                        continue
+                    existing.append(item)
+                    known.add(fp)
+                    added += 1
+                if added:
+                    st.session_state.attachments = existing
+                    sync_attachments_to_session()
+                    st.session_state.att_upload_nonce = int(st.session_state.att_upload_nonce) + 1
+                    st.toast(f"تم حفظ {added} مرفق في الجلسة", icon="📎")
+                    st.rerun()
+
+            st.checkbox(
+                "إظهار المرفق المصور في التقرير المطبوع",
+                key="show_attachments_in_print",
+                help="عند التفعيل تُدرج الصور المرفوعة داخل ورقة A4 ونسخة الطباعة/PDF.",
             )
 
-        def render_field_grid(fields):
-            if not fields:
-                return
-            columns = st.columns(2)
-            for idx, fld in enumerate(fields):
-                target = st.container() if fld["type"] == "textarea" else columns[idx % 2]
-                with target:
-                    current_values[fld["key"]] = render_field(fld)
+            persisted_atts = list(st.session_state.get("attachments") or [])
+            if not persisted_atts and st.session_state.get("attachment_b64"):
+                persisted_atts = parse_attachments(st.session_state.attachment_b64)
+                st.session_state.attachments = persisted_atts
 
-        current_values = {}
-        if fid == "decl_handover":
-            by_key = {fld["key"]: fld for fld in form_def["fields"]}
-            head = st.columns(2)
-            with head[0]:
-                current_values["incident_no"] = render_field(by_key["incident_no"])
-            with head[1]:
-                current_values["receiver_role"] = render_field(by_key["receiver_role"])
-            if _is_agent_role(current_values.get("receiver_role")):
-                for pair in (
-                    ("agent_name", "agent_id"),
-                    ("principal_name", "principal_id"),
-                    ("wakala_no", "wakala_date"),
-                ):
-                    pair_cols = st.columns(2)
-                    for col, key in zip(pair_cols, pair):
-                        with col:
-                            current_values[key] = render_field(by_key[key])
-            else:
-                render_field_grid([by_key["party_name"], by_key["party_id"]])
-            render_field_grid([by_key[key] for key in ("party_phone", "vehicle_desc", "plate_no", "vehicle_state")])
-        elif fid in {"decl_settlement", "decl_flee_waiver"}:
-            pair_slot = 0
-            pair_cols = None
-            for fld in form_def["fields"]:
-                if not _field_is_visible(fld, current_values):
-                    continue
-                party_match = fld["key"][:2] if fld["key"].startswith("p") else ""
-                if fid == "decl_settlement" and fld["key"].endswith("_name") and party_match[1:2].isdigit():
-                    ordinal = _PARTY_ORDINALS[int(fld["key"][1])]
-                    st.markdown(f"**الطرف {ordinal}**")
-                    pair_slot = 0
-                if fld["type"] == "textarea" or fld.get("stack_under"):
-                    current_values[fld["key"]] = render_field(fld)
-                    pair_slot = 0
-                    continue
-                if pair_slot % 2 == 0:
-                    pair_cols = st.columns(2)
-                with pair_cols[pair_slot % 2]:
-                    current_values[fld["key"]] = render_field(fld)
-                pair_slot += 1
-            if fid == "decl_settlement":
-                st.caption("بعد اعتماد الوثيقة تظهر لوحة توقيع حي مستقلة لكل طرف مشمول، مع ضابط الخفر ووحدة الحوادث، داخل صفحة A4 واحدة.")
-            else:
-                st.caption("بعد الاعتماد تُفتح لوحة توقيع المُبلّغ المتنازل، ولوحة الطرف المتسبب عند حضوره، بجانب ضابط الخفر ووحدة الحوادث.")
-        else:
-            render_field_grid([fld for fld in form_def["fields"] if not fld.get("visible_if")])
+            if persisted_atts:
+                st.markdown("##### 🖼️ معاينة المرفقات المحفوظة في الجلسة")
+                for idx, att in enumerate(persisted_atts):
+                    kind = (att.get("kind") or "image").lower()
+                    mime = att.get("mime") or ("application/pdf" if kind == "pdf" else "image/png")
+                    try:
+                        raw_bytes = base64.b64decode(att.get("b64") or "")
+                    except Exception:
+                        raw_bytes = b""
+                    c_prev, c_dl, c_del = st.columns([3, 1, 1])
+                    with c_prev:
+                        if kind == "pdf":
+                            st.info(f"📄 مستند PDF: **{att.get('name', 'مرفق.pdf')}**")
+                        elif raw_bytes:
+                            st.image(raw_bytes, caption=att.get("name") or f"مرفق {idx + 1}", use_container_width=True)
+                        else:
+                            st.warning(f"تعذّر عرض المرفق: {att.get('name') or idx + 1}")
+                    with c_dl:
+                        st.download_button(
+                            "⬇️ تحميل المرفق",
+                            data=raw_bytes,
+                            file_name=att.get("name") or f"attachment_{idx + 1}",
+                            mime=mime,
+                            key=f"dl_att_{st.session_state.doc_no}_{idx}_{attachment_fingerprint(att)[:8]}",
+                            use_container_width=True,
+                        )
+                    with c_del:
+                        if st.button(
+                            "🗑️ حذف المرفق",
+                            key=f"del_att_{st.session_state.doc_no}_{idx}_{attachment_fingerprint(att)[:8]}",
+                            disabled=st.session_state.citizen_locked,
+                            use_container_width=True,
+                        ):
+                            new_list = [a for i, a in enumerate(st.session_state.attachments) if i != idx]
+                            st.session_state.attachments = new_list
+                            sync_attachments_to_session()
+                            st.rerun()
+            elif form_def["require_image"]:
+                st.caption("⚠️ هذا النموذج يتطلب إرفاق صورة قبل اعتماد الوثيقة.")
 
-        if fid == "decl_hit_run":
-            if st.button("🔄 الانتقال لإقرار تنازل عن بلاغ صدم وهروب", use_container_width=True):
-                st.session_state.pending_form_prefill = {
-                    "form_id": "decl_flee_waiver",
-                    "values": {
-                        key: current_values.get(key) or ""
-                        for key in ("incident_no", "party_name", "party_id", "party_phone", "plate_no")
-                    },
-                }
-                open_form_from_catalog("decl_flee_waiver")
+            live_legal_text = " ".join(form_def["legal_fn"](current_values).splitlines())
+            st.markdown(
+                f'<div class="legal-dark-box" dir="rtl" style="direction:rtl !important;text-align:justify !important;text-align-last:right !important;"><div class="legal-title" dir="rtl" style="direction:rtl !important;text-align:right !important;color:#d4a853;font-weight:800;margin-bottom:8px;">⚖️ معاينة النص الرسمي المعتمد في الوثيقة:</div><div class="legal-body" dir="rtl" style="direction:rtl !important;unicode-bidi:embed !important;text-align:justify !important;text-align-last:right !important;line-height:2.0;">\u200f{live_legal_text}</div></div>',
+                unsafe_allow_html=True,
+            )
 
-        att_label = (
-            "📸 إرفاق صورة إشعار المخالفة (مطلوب لحوكمة الإلغاء بالهيئة المرورية)"
-            if form_def["require_image"]
-            else "📎 إرفاق صورة الهوية / التقرير الأولي أو مرفق داعم (اختياري)"
-        )
-        if "att_upload_nonce" not in st.session_state:
-            st.session_state.att_upload_nonce = 0
-        # خارج أي st.form حتى تظهر المعاينة فوراً على الجوال دون انتظار زر إرسال
-        uploaded_files = st.file_uploader(
-            att_label,
-            type=ATTACH_TYPES,
-            accept_multiple_files=True,
-            disabled=st.session_state.citizen_locked,
-            key=f"att_{st.session_state.doc_no}_{st.session_state.att_upload_nonce}",
-            help="الصيغ المدعومة: PNG / JPG / JPEG / WEBP / PDF — تُصحَّح اتجاه كاميرا الجوال تلقائياً وتُصغَّر للرفع السريع.",
-        )
-        if uploaded_files and not st.session_state.citizen_locked:
-            existing = list(st.session_state.get("attachments") or [])
-            known = {attachment_fingerprint(a) for a in existing}
-            added = 0
-            for uf in uploaded_files:
-                item = process_uploaded_attachment(uf)
-                if not item:
-                    st.warning(f"تعذّر معالجة المرفق: {getattr(uf, 'name', 'ملف')}")
-                    continue
-                fp = attachment_fingerprint(item)
-                if fp in known:
-                    continue
-                existing.append(item)
-                known.add(fp)
-                added += 1
-            if added:
-                st.session_state.attachments = existing
-                sync_attachments_to_session()
-                st.session_state.att_upload_nonce = int(st.session_state.att_upload_nonce) + 1
-                st.toast(f"تم حفظ {added} مرفق في الجلسة", icon="📎")
-                st.rerun()
+            is_med_form = form_def["category"] == "إحالة طبية"
+            is_letter_form = bool(form_def.get("is_official_letter"))
+            s1_col, s2_col = st.columns(2)
+            with s1_col:
+                st.markdown("<div class='auth-panel'>", unsafe_allow_html=True)
+                if is_letter_form:
+                    recipient_title = form_def.get("recipient_role_title") or "المختص المستلم بحجز مرور أبو عريش"
+                    role_options = [recipient_title]
+                    st.markdown("#### 1️⃣ توقيع حي بالإصبع — المختص المستلم بحجز مرور أبو عريش")
+                    st.caption("خانة التوقيع الحي مخصصة للمختص المستلم في حجز مرور محافظة أبو عريش.")
+                    recv_name_key = f"receiver_name_{st.session_state.doc_no}"
+                    recv_role_key = f"receiver_role_{st.session_state.doc_no}"
+                    if recv_name_key not in st.session_state:
+                        st.session_state[recv_name_key] = st.session_state.receiver_name
+                    if recv_role_key not in st.session_state or st.session_state[recv_role_key] not in role_options:
+                        st.session_state[recv_role_key] = recipient_title
+                    st.text_input(
+                        "اسم المختص المستلم بحجز مرور أبو عريش",
+                        key=recv_name_key,
+                        disabled=st.session_state.citizen_locked,
+                        placeholder="اسم المستلم في ساحة الحجز — أو يُترك فارغاً عند الحاجة",
+                    )
+                    st.selectbox(
+                        "الصفة / جهة الاستلام",
+                        options=role_options,
+                        key=recv_role_key,
+                        disabled=st.session_state.citizen_locked,
+                    )
+                    auth_opts = [
+                        "توقيع حي على الشاشة بالإصبع (للمختص المستلم بحجز مرور أبو عريش)",
+                        "بصمة منفذ الشحن (USB Type-C) للمختص المستلم",
+                    ]
+                elif is_med_form:
+                    st.markdown("#### 1️⃣ توثيق خانة الاستلام (المستشفى / الثلاجة / المختبر)")
+                    st.caption("افصل بيانات المناوب المستلم عن اسم المصاب/الحالة الظاهر في حقول النموذج أعلاه.")
+                    recv_name_key = f"receiver_name_{st.session_state.doc_no}"
+                    recv_role_key = f"receiver_role_{st.session_state.doc_no}"
+                    if recv_name_key not in st.session_state:
+                        st.session_state[recv_name_key] = st.session_state.receiver_name
+                    if recv_role_key not in st.session_state:
+                        role_default = st.session_state.receiver_role if st.session_state.receiver_role in RECEIVER_ROLE_OPTIONS else RECEIVER_ROLE_OPTIONS[0]
+                        st.session_state[recv_role_key] = role_default
+                    st.text_input(
+                        "اسم المناوب المستلم",
+                        key=recv_name_key,
+                        disabled=st.session_state.citizen_locked,
+                        placeholder="مثال: فهد بن علي الحكمي — أو يُترك فارغاً عند الحاجة",
+                    )
+                    st.selectbox(
+                        "الصفة / القسم",
+                        options=RECEIVER_ROLE_OPTIONS,
+                        key=recv_role_key,
+                        disabled=st.session_state.citizen_locked,
+                    )
+                    auth_opts = [
+                        "توقيع حي على الشاشة بالإصبع (للمختص المناوب المستلم)",
+                        "تخصيص خانة ختم وتوقيع رسمي لجهة الاستلام بالورقة",
+                        "بصمة منفذ الشحن (USB Type-C) للمرافق / المستلم",
+                    ]
+                else:
+                    st.markdown("#### 1️⃣ بصمة / توقيع الطرف المعني (يقفل التعديل)")
+                    auth_opts = [
+                        "توقيع حي بالإصبع على الشاشة",
+                        "بصمة منفذ الشحن (USB Type-C)",
+                    ]
+                    if form_def["allow_absence"]:
+                        auth_opts.append("غياب الطرف / امتناع مثبت بالمحضر")
 
-        st.checkbox(
-            "إظهار المرفق المصور في التقرير المطبوع",
-            key="show_attachments_in_print",
-            help="عند التفعيل تُدرج الصور المرفوعة داخل ورقة A4 ونسخة الطباعة/PDF.",
-        )
+                chosen_auth = st.radio("وسيلة التوثيق المعتمدة:", auth_opts, disabled=st.session_state.citizen_locked)
 
-        persisted_atts = list(st.session_state.get("attachments") or [])
-        if not persisted_atts and st.session_state.get("attachment_b64"):
-            persisted_atts = parse_attachments(st.session_state.attachment_b64)
-            st.session_state.attachments = persisted_atts
-
-        if persisted_atts:
-            st.markdown("##### 🖼️ معاينة المرفقات المحفوظة في الجلسة")
-            for idx, att in enumerate(persisted_atts):
-                kind = (att.get("kind") or "image").lower()
-                mime = att.get("mime") or ("application/pdf" if kind == "pdf" else "image/png")
-                try:
-                    raw_bytes = base64.b64decode(att.get("b64") or "")
-                except Exception:
-                    raw_bytes = b""
-                c_prev, c_dl, c_del = st.columns([3, 1, 1])
-                with c_prev:
-                    if kind == "pdf":
-                        st.info(f"📄 مستند PDF: **{att.get('name', 'مرفق.pdf')}**")
-                    elif raw_bytes:
-                        st.image(raw_bytes, caption=att.get("name") or f"مرفق {idx + 1}", use_container_width=True)
+                if not st.session_state.citizen_locked:
+                    if is_letter_form:
+                        btn_lbl = "✅ اعتماد الخطاب وقفل الحقول النصية"
+                    elif is_med_form:
+                        btn_lbl = "✅ اعتماد صيغة الإحالة وقفل الحقول النصية"
                     else:
-                        st.warning(f"تعذّر عرض المرفق: {att.get('name') or idx + 1}")
-                with c_dl:
+                        btn_lbl = "🧬 اعتماد التوثيق وقفل الحقول النصية"
+                    if st.button(btn_lbl, type="primary", use_container_width=True):
+                        sync_attachments_to_session()
+                        if form_def.get("require_image") and not (st.session_state.get("attachments") or []):
+                            st.error("هذا النموذج يتطلب إرفاق صورة قبل اعتماد التوثيق.")
+                        else:
+                            if is_med_form or is_letter_form:
+                                st.session_state.receiver_name = (st.session_state.get(f"receiver_name_{st.session_state.doc_no}") or "").strip()
+                                fallback_role = form_def.get("recipient_role_title") if is_letter_form else RECEIVER_ROLE_OPTIONS[0]
+                                st.session_state.receiver_role = st.session_state.get(f"receiver_role_{st.session_state.doc_no}") or fallback_role
+                            else:
+                                st.session_state.receiver_name = ""
+                                st.session_state.receiver_role = ""
+                            if "بصمة منفذ الشحن" in chosen_auth:
+                                signer_id = current_values.get("agent_id") or current_values.get("party_id") or current_values.get("p1_id", "")
+                                seed = f"{st.session_state.doc_no}_{signer_id}_CITIZEN"
+                                st.session_state.citizen_stamp_b64 = generate_fingerprint_png_b64(seed, ink_rgb=(13, 71, 161))
+                                st.session_state.citizen_auth_mode = "بصمة منفذ الشحن (Type-C)"
+                            elif "توقيع حي" in chosen_auth:
+                                st.session_state.citizen_stamp_b64 = ""
+                                st.session_state.citizen_auth_mode = "توقيع حي على الشاشة"
+                            elif "ختم وتوقيع" in chosen_auth:
+                                st.session_state.citizen_stamp_b64 = ""
+                                st.session_state.citizen_auth_mode = "ختم وتوقيع جهة الاستلام الرسمية"
+                            else:
+                                st.session_state.citizen_stamp_b64 = ""
+                                st.session_state.citizen_auth_mode = "غياب الطرف / امتناع مثبت بالمحضر"
+                            st.session_state.citizen_locked = True
+                            safe_rerun()
+                else:
+                    st.success(f"تم القفل والتوثيق: {st.session_state.citizen_auth_mode}")
+                    if is_med_form or is_letter_form:
+                        shown_recv = st.session_state.receiver_name or "—"
+                        recv_caption = "المختص المستلم بحجز أبو عريش" if is_letter_form else "المناوب المستلم"
+                        st.caption(f"{recv_caption}: {shown_recv} | {st.session_state.receiver_role or '—'}")
+                    if st.session_state.citizen_stamp_b64:
+                        st.image(base64.b64decode(st.session_state.citizen_stamp_b64), caption="ختم البصمة الصوري المعتمد", width=105)
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            with s2_col:
+                st.markdown("<div class='auth-panel'>", unsafe_allow_html=True)
+                st.markdown("#### 2️⃣ توثيق ضابط الخفر ومصادقة وحدة الحوادث")
+                st.caption(f"الإعدادات الافتراضية: {unit_display}  •  {duty_display}")
+
+                officer_name_key = f"officer_full_input_{st.session_state.doc_no}"
+                if officer_name_key not in st.session_state:
+                    st.session_state[officer_name_key] = st.session_state.officer_full_override or unit_display
+
+                st.text_input(
+                    "رتبة واسم ضابط الخفر المناوب",
+                    key=officer_name_key,
+                    disabled=st.session_state.officer_approved,
+                    placeholder="مثال: الملازم فهد بن ...",
+                )
+
+                officer_auth_opts = [
+                    "توقيع حي على الشاشة بالإصبع (لضابط الخفر)",
+                    "بصمة رقمية (منفذ الشحن Type-C) لضابط الخفر",
+                ]
+                officer_default_idx = 0
+                if "بصمة" in (st.session_state.officer_auth_mode or ""):
+                    officer_default_idx = 1
+                chosen_officer_auth = st.radio(
+                    "وسيلة توثيق ضابط الخفر:",
+                    officer_auth_opts,
+                    index=officer_default_idx,
+                    key=f"officer_auth_radio_{st.session_state.doc_no}",
+                    disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
+                )
+
+                duty_auth_opts = [
+                    "ختم المصادقة النظامي لوحدة الحوادث",
+                    "توقيع حي على الشاشة لمصادقة وحدة الحوادث",
+                ]
+                if is_letter_form or "توقيع حي" in (st.session_state.duty_auth_mode or ""):
+                    duty_default_idx = 1
+                else:
+                    duty_default_idx = 0
+                chosen_duty_auth = st.radio(
+                    "وسيلة مصادقة وحدة الحوادث:",
+                    duty_auth_opts,
+                    index=duty_default_idx,
+                    key=f"duty_auth_radio_{st.session_state.doc_no}",
+                    disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
+                )
+
+                if not st.session_state.officer_approved:
+                    if st.button("🛡️ اعتماد الوثيقة وإصدار رمز التحقق QR", type="primary", use_container_width=True, disabled=not st.session_state.citizen_locked):
+                        officer_label = (st.session_state.get(officer_name_key) or "").strip() or unit_display
+                        st.session_state.officer_full_override = officer_label
+                        st.session_state.officer_auth_mode = chosen_officer_auth
+                        st.session_state.duty_auth_mode = chosen_duty_auth
+                        if "بصمة" in chosen_officer_auth:
+                            seed_off = f"{st.session_state.doc_no}_{officer_label}_OFFICER"
+                            st.session_state.officer_stamp_b64 = generate_fingerprint_png_b64(seed_off, ink_rgb=(15, 61, 46))
+                        else:
+                            st.session_state.officer_stamp_b64 = ""
+                        st.session_state.duty_stamp_b64 = ""
+                        st.session_state.officer_approved = True
+                        safe_rerun()
+                else:
+                    st.success(
+                        f"تم التوثيق: ضابط الخفر ({st.session_state.officer_auth_mode}) • "
+                        f"وحدة الحوادث ({st.session_state.duty_auth_mode})"
+                    )
+                    if st.session_state.officer_stamp_b64:
+                        st.image(base64.b64decode(st.session_state.officer_stamp_b64), caption="ختم التوثيق المعتمد", width=105)
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            if st.session_state.officer_approved:
+                if fid == "decl_handover" and _is_agent_role(current_values.get("receiver_role")):
+                    party_name_final = current_values.get("agent_name") or "غير محدد"
+                    party_id_final = current_values.get("agent_id") or "-"
+                    plate_final = current_values.get("plate_no") or "-"
+                elif fid == "decl_settlement":
+                    party_name_final = current_values.get("p1_name") or "غير محدد"
+                    party_id_final = current_values.get("p1_id") or "-"
+                    plate_final = current_values.get("p1_vehicle") or "-"
+                else:
+                    party_name_final = current_values.get("party_name") or current_values.get("driver_name") or "غير محدد"
+                    party_id_final = current_values.get("party_id") or current_values.get("driver_id_nat") or "-"
+                    plate_final = current_values.get("plate_no") or current_values.get("vehicle_plate_type") or "-"
+                raw_seal = f"{st.session_state.doc_no}|{party_id_final}|{st.session_state.doc_time}"
+                verify_hash = "KHF-" + hashlib.sha256(raw_seal.encode("utf-8")).hexdigest()[:16].upper()
+                officer_full_final = (st.session_state.officer_full_override or "").strip() or unit_display
+
+                sync_attachments_to_session()
+                ready_record = {
+                    "doc_no": st.session_state.doc_no,
+                    "form_id": fid,
+                    "form_title": form_def.get("official_title") or form_def["title"],
+                    "category": form_def["category"],
+                    "party_name": party_name_final,
+                    "party_id": party_id_final,
+                    "plate_no": plate_final,
+                    "gps_coords": shift["default_gps"],
+                    "created_at": st.session_state.doc_time,
+                    "fields": current_values,
+                    "legal_text": live_legal_text,
+                    "citizen_stamp_b64": st.session_state.citizen_stamp_b64,
+                    "citizen_auth_mode": st.session_state.citizen_auth_mode,
+                    "officer_stamp_b64": st.session_state.officer_stamp_b64,
+                    "attachment_b64": st.session_state.attachment_b64,
+                    "show_attachments_in_print": bool(st.session_state.get("show_attachments_in_print", True)),
+                    "officer_full": officer_full_final,
+                    "duty_full": duty_display,
+                    "dept_name": shift["dept_name"],
+                    "verify_hash": verify_hash,
+                    "officer_auth_mode": st.session_state.officer_auth_mode,
+                    "duty_auth_mode": st.session_state.duty_auth_mode,
+                    "duty_stamp_b64": st.session_state.duty_stamp_b64,
+                    "receiver_name": st.session_state.receiver_name if (is_med_form or is_letter_form) else "",
+                    "receiver_role": st.session_state.receiver_role if (is_med_form or is_letter_form) else "",
+                }
+
+                a4_html = build_official_a4_html(ready_record, form_def, logo_b64_global, interactive_sig=True)
+                st.write("")
+                act1, act2 = st.columns(2)
+                with act1:
+                    if not DEVICE_HASH:
+                        st.warning("يُجهَّز تعريف هذا الجهاز داخل المتصفح قبل حفظ الأرشيف. أعد المحاولة بعد لحظة.")
+                    elif st.button("💾 حفظ الوثيقة نهائياً في الأرشيف المحلي", type="primary", use_container_width=True):
+                        save_record_to_db(ready_record, DEVICE_HASH)
+                        st.success(f"تم حفظ الوثيقة ({ready_record['doc_no']}) في أرشيف هذا الجهاز فقط.")
+                with act2:
                     st.download_button(
-                        "⬇️ تحميل المرفق",
-                        data=raw_bytes,
-                        file_name=att.get("name") or f"attachment_{idx + 1}",
-                        mime=mime,
-                        key=f"dl_att_{st.session_state.doc_no}_{idx}_{attachment_fingerprint(att)[:8]}",
+                        "⬇️ تنزيل الوثيقة الرسمية للطباعة والمشاركة",
+                        data=a4_html.encode("utf-8"),
+                        file_name=f"{ready_record['doc_no']}.html",
+                        mime="text/html",
                         use_container_width=True,
                     )
-                with c_del:
-                    if st.button(
-                        "🗑️ حذف المرفق",
-                        key=f"del_att_{st.session_state.doc_no}_{idx}_{attachment_fingerprint(att)[:8]}",
-                        disabled=st.session_state.citizen_locked,
-                        use_container_width=True,
-                    ):
-                        new_list = [a for i, a in enumerate(st.session_state.attachments) if i != idx]
-                        st.session_state.attachments = new_list
-                        sync_attachments_to_session()
-                        st.rerun()
-        elif form_def["require_image"]:
-            st.caption("⚠️ هذا النموذج يتطلب إرفاق صورة قبل اعتماد الوثيقة.")
 
-        live_legal_text = " ".join(form_def["legal_fn"](current_values).splitlines())
-        st.markdown(
-            f'<div class="legal-dark-box" dir="rtl" style="direction:rtl !important;text-align:justify !important;text-align-last:right !important;"><div class="legal-title" dir="rtl" style="direction:rtl !important;text-align:right !important;color:#d4a853;font-weight:800;margin-bottom:8px;">⚖️ معاينة النص الرسمي المعتمد في الوثيقة:</div><div class="legal-body" dir="rtl" style="direction:rtl !important;unicode-bidi:embed !important;text-align:justify !important;text-align-last:right !important;line-height:2.0;">\u200f{live_legal_text}</div></div>',
-            unsafe_allow_html=True,
-        )
-
-        is_med_form = form_def["category"] == "إحالة طبية"
-        is_letter_form = bool(form_def.get("is_official_letter"))
-        s1_col, s2_col = st.columns(2)
-        with s1_col:
-            st.markdown("<div class='auth-panel'>", unsafe_allow_html=True)
-            if is_letter_form:
-                recipient_title = form_def.get("recipient_role_title") or "المختص المستلم بحجز مرور أبو عريش"
-                role_options = [recipient_title]
-                st.markdown("#### 1️⃣ توقيع حي بالإصبع — المختص المستلم بحجز مرور أبو عريش")
-                st.caption("خانة التوقيع الحي مخصصة للمختص المستلم في حجز مرور محافظة أبو عريش.")
-                recv_name_key = f"receiver_name_{st.session_state.doc_no}"
-                recv_role_key = f"receiver_role_{st.session_state.doc_no}"
-                if recv_name_key not in st.session_state:
-                    st.session_state[recv_name_key] = st.session_state.receiver_name
-                if recv_role_key not in st.session_state or st.session_state[recv_role_key] not in role_options:
-                    st.session_state[recv_role_key] = recipient_title
-                st.text_input(
-                    "اسم المختص المستلم بحجز مرور أبو عريش",
-                    key=recv_name_key,
-                    disabled=st.session_state.citizen_locked,
-                    placeholder="اسم المستلم في ساحة الحجز — أو يُترك فارغاً عند الحاجة",
-                )
-                st.selectbox(
-                    "الصفة / جهة الاستلام",
-                    options=role_options,
-                    key=recv_role_key,
-                    disabled=st.session_state.citizen_locked,
-                )
-                auth_opts = [
-                    "توقيع حي على الشاشة بالإصبع (للمختص المستلم بحجز مرور أبو عريش)",
-                    "بصمة منفذ الشحن (USB Type-C) للمختص المستلم",
-                ]
-            elif is_med_form:
-                st.markdown("#### 1️⃣ توثيق خانة الاستلام (المستشفى / الثلاجة / المختبر)")
-                st.caption("افصل بيانات المناوب المستلم عن اسم المصاب/الحالة الظاهر في حقول النموذج أعلاه.")
-                recv_name_key = f"receiver_name_{st.session_state.doc_no}"
-                recv_role_key = f"receiver_role_{st.session_state.doc_no}"
-                if recv_name_key not in st.session_state:
-                    st.session_state[recv_name_key] = st.session_state.receiver_name
-                if recv_role_key not in st.session_state:
-                    role_default = st.session_state.receiver_role if st.session_state.receiver_role in RECEIVER_ROLE_OPTIONS else RECEIVER_ROLE_OPTIONS[0]
-                    st.session_state[recv_role_key] = role_default
-                st.text_input(
-                    "اسم المناوب المستلم",
-                    key=recv_name_key,
-                    disabled=st.session_state.citizen_locked,
-                    placeholder="مثال: فهد بن علي الحكمي — أو يُترك فارغاً عند الحاجة",
-                )
-                st.selectbox(
-                    "الصفة / القسم",
-                    options=RECEIVER_ROLE_OPTIONS,
-                    key=recv_role_key,
-                    disabled=st.session_state.citizen_locked,
-                )
-                auth_opts = [
-                    "توقيع حي على الشاشة بالإصبع (للمختص المناوب المستلم)",
-                    "تخصيص خانة ختم وتوقيع رسمي لجهة الاستلام بالورقة",
-                    "بصمة منفذ الشحن (USB Type-C) للمرافق / المستلم",
-                ]
-            else:
-                st.markdown("#### 1️⃣ بصمة / توقيع الطرف المعني (يقفل التعديل)")
-                auth_opts = [
-                    "توقيع حي بالإصبع على الشاشة",
-                    "بصمة منفذ الشحن (USB Type-C)",
-                ]
-                if form_def["allow_absence"]:
-                    auth_opts.append("غياب الطرف / امتناع مثبت بالمحضر")
-
-            chosen_auth = st.radio("وسيلة التوثيق المعتمدة:", auth_opts, disabled=st.session_state.citizen_locked)
-
-            if not st.session_state.citizen_locked:
-                if is_letter_form:
-                    btn_lbl = "✅ اعتماد الخطاب وقفل الحقول النصية"
-                elif is_med_form:
-                    btn_lbl = "✅ اعتماد صيغة الإحالة وقفل الحقول النصية"
-                else:
-                    btn_lbl = "🧬 اعتماد التوثيق وقفل الحقول النصية"
-                if st.button(btn_lbl, type="primary", use_container_width=True):
-                    sync_attachments_to_session()
-                    if form_def.get("require_image") and not (st.session_state.get("attachments") or []):
-                        st.error("هذا النموذج يتطلب إرفاق صورة قبل اعتماد التوثيق.")
-                    else:
-                        if is_med_form or is_letter_form:
-                            st.session_state.receiver_name = (st.session_state.get(f"receiver_name_{st.session_state.doc_no}") or "").strip()
-                            fallback_role = form_def.get("recipient_role_title") if is_letter_form else RECEIVER_ROLE_OPTIONS[0]
-                            st.session_state.receiver_role = st.session_state.get(f"receiver_role_{st.session_state.doc_no}") or fallback_role
-                        else:
-                            st.session_state.receiver_name = ""
-                            st.session_state.receiver_role = ""
-                        if "بصمة منفذ الشحن" in chosen_auth:
-                            signer_id = current_values.get("agent_id") or current_values.get("party_id") or current_values.get("p1_id", "")
-                            seed = f"{st.session_state.doc_no}_{signer_id}_CITIZEN"
-                            st.session_state.citizen_stamp_b64 = generate_fingerprint_png_b64(seed, ink_rgb=(13, 71, 161))
-                            st.session_state.citizen_auth_mode = "بصمة منفذ الشحن (Type-C)"
-                        elif "توقيع حي" in chosen_auth:
-                            st.session_state.citizen_stamp_b64 = ""
-                            st.session_state.citizen_auth_mode = "توقيع حي على الشاشة"
-                        elif "ختم وتوقيع" in chosen_auth:
-                            st.session_state.citizen_stamp_b64 = ""
-                            st.session_state.citizen_auth_mode = "ختم وتوقيع جهة الاستلام الرسمية"
-                        else:
-                            st.session_state.citizen_stamp_b64 = ""
-                            st.session_state.citizen_auth_mode = "غياب الطرف / امتناع مثبت بالمحضر"
-                        st.session_state.citizen_locked = True
-                        safe_rerun()
-            else:
-                st.success(f"تم القفل والتوثيق: {st.session_state.citizen_auth_mode}")
-                if is_med_form or is_letter_form:
-                    shown_recv = st.session_state.receiver_name or "—"
-                    recv_caption = "المختص المستلم بحجز أبو عريش" if is_letter_form else "المناوب المستلم"
-                    st.caption(f"{recv_caption}: {shown_recv} | {st.session_state.receiver_role or '—'}")
-                if st.session_state.citizen_stamp_b64:
-                    st.image(base64.b64decode(st.session_state.citizen_stamp_b64), caption="ختم البصمة الصوري المعتمد", width=105)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        with s2_col:
-            st.markdown("<div class='auth-panel'>", unsafe_allow_html=True)
-            st.markdown("#### 2️⃣ توثيق ضابط الخفر ومصادقة وحدة الحوادث")
-            st.caption(f"الإعدادات الافتراضية: {unit_display}  •  {duty_display}")
-
-            officer_name_key = f"officer_full_input_{st.session_state.doc_no}"
-            if officer_name_key not in st.session_state:
-                st.session_state[officer_name_key] = st.session_state.officer_full_override or unit_display
-
-            st.text_input(
-                "رتبة واسم ضابط الخفر المناوب",
-                key=officer_name_key,
-                disabled=st.session_state.officer_approved,
-                placeholder="مثال: الملازم فهد بن ...",
-            )
-
-            officer_auth_opts = [
-                "توقيع حي على الشاشة بالإصبع (لضابط الخفر)",
-                "بصمة رقمية (منفذ الشحن Type-C) لضابط الخفر",
-            ]
-            officer_default_idx = 0
-            if "بصمة" in (st.session_state.officer_auth_mode or ""):
-                officer_default_idx = 1
-            chosen_officer_auth = st.radio(
-                "وسيلة توثيق ضابط الخفر:",
-                officer_auth_opts,
-                index=officer_default_idx,
-                key=f"officer_auth_radio_{st.session_state.doc_no}",
-                disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
-            )
-
-            duty_auth_opts = [
-                "ختم المصادقة النظامي لوحدة الحوادث",
-                "توقيع حي على الشاشة لمصادقة وحدة الحوادث",
-            ]
-            if is_letter_form or "توقيع حي" in (st.session_state.duty_auth_mode or ""):
-                duty_default_idx = 1
-            else:
-                duty_default_idx = 0
-            chosen_duty_auth = st.radio(
-                "وسيلة مصادقة وحدة الحوادث:",
-                duty_auth_opts,
-                index=duty_default_idx,
-                key=f"duty_auth_radio_{st.session_state.doc_no}",
-                disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
-            )
-
-            if not st.session_state.officer_approved:
-                if st.button("🛡️ اعتماد الوثيقة وإصدار رمز التحقق QR", type="primary", use_container_width=True, disabled=not st.session_state.citizen_locked):
-                    officer_label = (st.session_state.get(officer_name_key) or "").strip() or unit_display
-                    st.session_state.officer_full_override = officer_label
-                    st.session_state.officer_auth_mode = chosen_officer_auth
-                    st.session_state.duty_auth_mode = chosen_duty_auth
-                    if "بصمة" in chosen_officer_auth:
-                        seed_off = f"{st.session_state.doc_no}_{officer_label}_OFFICER"
-                        st.session_state.officer_stamp_b64 = generate_fingerprint_png_b64(seed_off, ink_rgb=(15, 61, 46))
-                    else:
-                        st.session_state.officer_stamp_b64 = ""
-                    st.session_state.duty_stamp_b64 = ""
-                    st.session_state.officer_approved = True
-                    safe_rerun()
-            else:
-                st.success(
-                    f"تم التوثيق: ضابط الخفر ({st.session_state.officer_auth_mode}) • "
-                    f"وحدة الحوادث ({st.session_state.duty_auth_mode})"
-                )
-                if st.session_state.officer_stamp_b64:
-                    st.image(base64.b64decode(st.session_state.officer_stamp_b64), caption="ختم التوثيق المعتمد", width=105)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        if st.session_state.officer_approved:
-            if fid == "decl_handover" and _is_agent_role(current_values.get("receiver_role")):
-                party_name_final = current_values.get("agent_name") or "غير محدد"
-                party_id_final = current_values.get("agent_id") or "-"
-                plate_final = current_values.get("plate_no") or "-"
-            elif fid == "decl_settlement":
-                party_name_final = current_values.get("p1_name") or "غير محدد"
-                party_id_final = current_values.get("p1_id") or "-"
-                plate_final = current_values.get("p1_vehicle") or "-"
-            else:
-                party_name_final = current_values.get("party_name") or current_values.get("driver_name") or "غير محدد"
-                party_id_final = current_values.get("party_id") or current_values.get("driver_id_nat") or "-"
-                plate_final = current_values.get("plate_no") or current_values.get("vehicle_plate_type") or "-"
-            raw_seal = f"{st.session_state.doc_no}|{party_id_final}|{st.session_state.doc_time}"
-            verify_hash = "KHF-" + hashlib.sha256(raw_seal.encode("utf-8")).hexdigest()[:16].upper()
-            officer_full_final = (st.session_state.officer_full_override or "").strip() or unit_display
-
-            sync_attachments_to_session()
-            ready_record = {
-                "doc_no": st.session_state.doc_no,
-                "form_id": fid,
-                "form_title": form_def.get("official_title") or form_def["title"],
-                "category": form_def["category"],
-                "party_name": party_name_final,
-                "party_id": party_id_final,
-                "plate_no": plate_final,
-                "gps_coords": shift["default_gps"],
-                "created_at": st.session_state.doc_time,
-                "fields": current_values,
-                "legal_text": live_legal_text,
-                "citizen_stamp_b64": st.session_state.citizen_stamp_b64,
-                "citizen_auth_mode": st.session_state.citizen_auth_mode,
-                "officer_stamp_b64": st.session_state.officer_stamp_b64,
-                "attachment_b64": st.session_state.attachment_b64,
-                "show_attachments_in_print": bool(st.session_state.get("show_attachments_in_print", True)),
-                "officer_full": officer_full_final,
-                "duty_full": duty_display,
-                "dept_name": shift["dept_name"],
-                "verify_hash": verify_hash,
-                "officer_auth_mode": st.session_state.officer_auth_mode,
-                "duty_auth_mode": st.session_state.duty_auth_mode,
-                "duty_stamp_b64": st.session_state.duty_stamp_b64,
-                "receiver_name": st.session_state.receiver_name if (is_med_form or is_letter_form) else "",
-                "receiver_role": st.session_state.receiver_role if (is_med_form or is_letter_form) else "",
-            }
-
-            a4_html = build_official_a4_html(ready_record, form_def, logo_b64_global, interactive_sig=True)
-            st.write("")
-            act1, act2 = st.columns(2)
-            with act1:
-                if not DEVICE_HASH:
-                    st.warning("يُجهَّز تعريف هذا الجهاز داخل المتصفح قبل حفظ الأرشيف. أعد المحاولة بعد لحظة.")
-                elif st.button("💾 حفظ الوثيقة نهائياً في الأرشيف المحلي", type="primary", use_container_width=True):
-                    save_record_to_db(ready_record, DEVICE_HASH)
-                    st.success(f"تم حفظ الوثيقة ({ready_record['doc_no']}) في أرشيف هذا الجهاز فقط.")
-            with act2:
-                st.download_button(
-                    "⬇️ تنزيل الوثيقة الرسمية للطباعة والمشاركة",
-                    data=a4_html.encode("utf-8"),
-                    file_name=f"{ready_record['doc_no']}.html",
-                    mime="text/html",
-                    use_container_width=True,
-                )
-
-            st.markdown("#### 📄 المعاينة الرسمية مقاس A4 (جاهزة للطباعة أو الحفظ كـ PDF)")
-            preview_h = 1480 if (
-                ("توقيع حي" in ready_record.get("citizen_auth_mode", ""))
-                or ("توقيع حي" in ready_record.get("officer_auth_mode", ""))
-                or ("توقيع حي" in ready_record.get("duty_auth_mode", ""))
-            ) else 1160
-            if ready_record.get("show_attachments_in_print") and parse_attachments(ready_record.get("attachment_b64")):
-                preview_h += 220
-            components.html(a4_html, height=preview_h, scrolling=True)
+                st.markdown("#### 📄 المعاينة الرسمية مقاس A4 (جاهزة للطباعة أو الحفظ كـ PDF)")
+                preview_h = 1480 if (
+                    ("توقيع حي" in ready_record.get("citizen_auth_mode", ""))
+                    or ("توقيع حي" in ready_record.get("officer_auth_mode", ""))
+                    or ("توقيع حي" in ready_record.get("duty_auth_mode", ""))
+                ) else 1160
+                if ready_record.get("show_attachments_in_print") and parse_attachments(ready_record.get("attachment_b64")):
+                    preview_h += 220
+                components.html(a4_html, height=preview_h, scrolling=True)
 
 
 # =====================================================================
