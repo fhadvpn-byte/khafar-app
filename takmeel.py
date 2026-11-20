@@ -7,7 +7,7 @@ import io
 import json
 import re
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import streamlit as st
@@ -15,6 +15,7 @@ import streamlit.components.v1 as components
 
 TAKMEEL_DB = Path(__file__).resolve().parent / "takmeel_records.db"
 BACKUP_DIR = Path(__file__).resolve().parent
+KSA_TZ = timezone(timedelta(hours=3))
 
 AR_DAYS = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
 AR_MONTHS = [
@@ -23,6 +24,13 @@ AR_MONTHS = [
 ]
 AGE_BUCKETS = ["أقل من 18", "من 19 إلى 30", "من 31 إلى 40", "من 41 إلى 50", "من 51 وأكثر"]
 AGE_KEYS = ["u18", "a19_30", "a31_40", "a41_50", "a51"]
+AGE_LABELS = {
+    "u18": "18- أقل من 18",
+    "a19_30": "18+ من 19-30",
+    "a31_40": "30+ من 31-40",
+    "a41_50": "40+ من 41-50",
+    "a51": "50+ من 51 فأكثر",
+}
 CAUSE_KEYS = [
     ("sudden_swerve", "انحراف مفاجئ"),
     ("illegal_turn", "دوران غير نظامي"),
@@ -83,6 +91,14 @@ TAKMEEL_FORMS = {
 
 
 # ---------- تواريخ ----------
+def _today_ksa() -> date:
+    return datetime.now(KSA_TZ).date()
+
+
+def _now_ksa() -> datetime:
+    return datetime.now(KSA_TZ)
+
+
 def _kuwaiti_hijri(g: date) -> tuple[int, int, int]:
     """تحويل تقريبي إلى هجري (خوارزمية كويتية شائعة)."""
     jd = (
@@ -104,7 +120,7 @@ def _kuwaiti_hijri(g: date) -> tuple[int, int, int]:
 
 
 def date_bundle(d: date | None = None) -> dict:
-    d = d or date.today()
+    d = d or _today_ksa()
     hy, hm, hd = _kuwaiti_hijri(d)
     return {
         "g_iso": d.isoformat(),
@@ -182,7 +198,7 @@ def init_takmeel_db() -> None:
 
 
 def _now() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return _now_ksa().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def save_daily_summary(g_date: str, payload: dict) -> None:
@@ -267,20 +283,24 @@ def delete_violation(row_id: int) -> None:
 
 def upsert_injured_from_daily(month_key: str, source_day: str, injured_list: list[dict]) -> None:
     conn = sqlite3.connect(TAKMEEL_DB)
+    keep_keys: set[tuple[str, str]] = set()
     for item in injured_list:
         if not item.get("name"):
             continue
         status = item.get("hospital_status") or HOSPITAL_STATUS[0]
         if item.get("hospitalize_24"):
             status = HOSPITAL_STATUS[1]
+        inc_no = str(item.get("incident_no", "") or "")
+        name = str(item.get("name", "") or "")
+        keep_keys.add((inc_no, name))
         existing = conn.execute(
             "SELECT id FROM injured_cases WHERE month_key=? AND incident_no=? AND name=? AND source_day=?",
-            (month_key, item.get("incident_no", ""), item.get("name", ""), source_day),
+            (month_key, inc_no, name, source_day),
         ).fetchone()
         payload = (
             month_key,
-            item.get("incident_no", ""),
-            item.get("name", ""),
+            inc_no,
+            name,
             item.get("accident_date", source_day),
             item.get("place", ""),
             item.get("place_type", "داخل المدينة"),
@@ -312,6 +332,16 @@ def upsert_injured_from_daily(month_key: str, source_day: str, injured_list: lis
                     gender, nationality, age_group, coverage, hospital_status, source_day, active, updated_at
                 ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 payload,
+            )
+    stale = conn.execute(
+        "SELECT id, incident_no, name FROM injured_cases WHERE month_key=? AND source_day=? AND active=1",
+        (month_key, source_day),
+    ).fetchall()
+    for row_id, inc_no, name in stale:
+        if (str(inc_no or ""), str(name or "")) not in keep_keys:
+            conn.execute(
+                "UPDATE injured_cases SET active=0, updated_at=? WHERE id=?",
+                (_now(), row_id),
             )
     conn.commit()
     conn.close()
@@ -388,9 +418,13 @@ def load_monthly_meta(month_key: str) -> dict:
 
 
 def clear_month_data(month_key: str) -> None:
+    prefix = f"{month_key}%"
     conn = sqlite3.connect(TAKMEEL_DB)
     conn.execute("UPDATE injured_cases SET active=0, updated_at=? WHERE month_key=?", (_now(), month_key))
     conn.execute("DELETE FROM monthly_meta WHERE month_key=?", (month_key,))
+    conn.execute("DELETE FROM daily_summary WHERE g_date LIKE ?", (prefix,))
+    conn.execute("DELETE FROM accidents_daily WHERE g_date LIKE ?", (prefix,))
+    conn.execute("DELETE FROM violations_daily WHERE g_date LIKE ?", (prefix,))
     conn.commit()
     conn.close()
 
@@ -424,16 +458,29 @@ def import_month_backup(data: dict) -> None:
     month_key = data.get("month_key") or ""
     if not month_key:
         raise ValueError("النسخة الاحتياطية بلا مفتاح شهر")
+    prefix = f"{month_key}%"
+    conn = sqlite3.connect(TAKMEEL_DB)
+    conn.execute("DELETE FROM accidents_daily WHERE g_date LIKE ?", (prefix,))
+    conn.execute("DELETE FROM violations_daily WHERE g_date LIKE ?", (prefix,))
+    conn.execute("DELETE FROM injured_cases WHERE month_key=?", (month_key,))
+    conn.execute("DELETE FROM daily_summary WHERE g_date LIKE ?", (prefix,))
+    conn.execute("DELETE FROM monthly_meta WHERE month_key=?", (month_key,))
+    conn.commit()
+    conn.close()
     for g_date, payload in (data.get("daily_summary") or {}).items():
         save_daily_summary(g_date, payload)
     for row in data.get("accidents") or []:
+        row = dict(row)
         g_date = row.pop("g_date", None)
         row.pop("_id", None)
+        row.pop("id", None)
         if g_date:
             add_accident(g_date, row)
     for row in data.get("violations") or []:
+        row = dict(row)
         g_date = row.pop("g_date", None)
         row.pop("_id", None)
+        row.pop("id", None)
         if g_date:
             add_violation(g_date, row)
     for item in data.get("injured_cases") or []:
@@ -568,10 +615,11 @@ def _zoom_script() -> str:
   var printBtn=document.querySelector('.print-btn');
   if(printBtn){
     printBtn.addEventListener('click', function(ev){
+      ev.preventDefault();
       clearForPrint();
       forceOpenEmptyCells(sheet);
-      setTimeout(function(){ window.print(); }, 30);
-      ev.preventDefault();
+      try { window.focus(); } catch(e) {}
+      window.print();
     });
   }
   apply();
@@ -675,11 +723,22 @@ def _cell_text(v) -> str:
     return html.escape(s)
 
 
+def _person_row_blank(item: dict | None) -> bool:
+    item = item or {}
+    return not any(
+        str(item.get(k) or "").strip()
+        for k in ("name", "incident_no", "registry_no", "place")
+    )
+
+
 def _waqoat_person_rows(items: list[dict], min_rows: int = 5) -> str:
     rows = []
     count = max(min_rows, len(items or []))
     for index in range(count):
         item = (items or [])[index] if index < len(items or []) else {}
+        blank = _person_row_blank(item)
+        male_txt = "" if blank else _cell_text(item.get("male") if item.get("male") not in (None, "") else "")
+        female_txt = "" if blank else _cell_text(item.get("female") if item.get("female") not in (None, "") else "")
         rows.append(
             '<tr class="person-row">'
             f"<td colspan='2'>{_cell_text(item.get('name'))}</td>"
@@ -687,8 +746,8 @@ def _waqoat_person_rows(items: list[dict], min_rows: int = 5) -> str:
             f"<td colspan='2'>{_cell_text(item.get('place'))}</td>"
             f"<td>{_cell_text(item.get('registry_no'))}</td>"
             f"<td>{_cell_text(item.get('coverage'))}</td>"
-            f"<td>{_cell_text(item.get('male') if item.get('male') not in (None, '') else '')}</td>"
-            f"<td>{_cell_text(item.get('female') if item.get('female') not in (None, '') else '')}</td>"
+            f"<td>{male_txt}</td>"
+            f"<td>{female_txt}</td>"
             "</tr>"
         )
     return "".join(rows)
@@ -965,6 +1024,10 @@ td.sep-row,.sep-row{{
     border:1.4px solid #000000!important;
   }}
   table.waqoat-grid th{{font-size:12.5px!important;background:#d9ead3!important}}
+  table.waqoat-grid tr.bg-blue th,table.waqoat-grid th.bg-blue{{background:#dce6f1!important}}
+  table.waqoat-grid tr.bg-peach th,table.waqoat-grid th.bg-peach{{background:#fbe4d5!important}}
+  table.waqoat-grid tr.bg-white th,table.waqoat-grid th.bg-white{{background:#ffffff!important}}
+  table.waqoat-grid th.txt-red{{color:#c00000!important}}
   table.waqoat-grid tr.person-row td{{
     padding:2px 4px!important;line-height:1.3!important;font-size:11.5px!important;
   }}
@@ -993,8 +1056,8 @@ def build_accidents_a4(rows: list[dict], dates: dict, prepared_by: str, phone: s
         f"الموافق {dates.get('g_display')} م - {dates.get('h_display')} هـ"
     )
     lines = []
-    for i in range(12):
-        r = rows[i] if i < len(rows) else {}
+    for i in range(max(12, len(rows or []))):
+        r = rows[i] if i < len(rows or []) else {}
         lines.append(
             "<tr>"
             + "".join(
@@ -1029,8 +1092,8 @@ def build_violations_a4(rows: list[dict], dates: dict, prepared_by: str, phone: 
         f"الموافق {dates.get('h_display')} هـ"
     )
     lines = []
-    for i in range(16):
-        r = rows[i] if i < len(rows) else {}
+    for i in range(max(16, len(rows or []))):
+        r = rows[i] if i < len(rows or []) else {}
         lines.append(
             "<tr>"
             f"<td>{_cell_text(i + 1 if r else '')}</td>"
@@ -1196,34 +1259,64 @@ def _auto_fill_from_day(g_date: str, payload: dict) -> dict:
     accidents = list_accidents(g_date)
     viols = list_violations(g_date)
     out = dict(payload)
+    out["drv_m"] = 0
+    out["drv_f"] = 0
+    out["drv_sa"] = 0
+    out["drv_ns"] = 0
+    out["sev_dmg_in"] = 0
+    out["sev_dmg_out"] = 0
+    out["sev_inj_in"] = 0
+    out["sev_inj_out"] = 0
+    out["sev_dead_in"] = 0
+    out["sev_dead_out"] = 0
+    causes = {key: 0 for key, _label in CAUSE_KEYS}
     out["acc_in"] = sum(1 for r in accidents if r.get("place_type") != "خارج المدينة")
     out["acc_out"] = sum(1 for r in accidents if r.get("place_type") == "خارج المدينة")
     if not out["acc_in"] and not out["acc_out"] and accidents:
         out["acc_in"] = len(accidents)
-    sev = {"تلفيات": 0, "إصابة": 0, "إصابات": 0, "وفاة": 0, "وفيات": 0}
     for r in accidents:
+        is_out = str(r.get("place_type") or "") == "خارج المدينة"
         g = str(r.get("severity") or r.get("accident_type") or "")
-        for k in sev:
-            if k in g:
-                sev[k] += 1
+        if "وفاة" in g or "وفيات" in g:
+            if is_out:
+                out["sev_dead_out"] += 1
+            else:
+                out["sev_dead_in"] += 1
+        elif "إصاب" in g:
+            if is_out:
+                out["sev_inj_out"] += 1
+            else:
+                out["sev_inj_in"] += 1
+        elif "تلفيات" in g or "تلف" in g:
+            if is_out:
+                out["sev_dmg_out"] += 1
+            else:
+                out["sev_dmg_in"] += 1
         if r.get("gender") == "أنثى":
-            out["drv_f"] = _i(out.get("drv_f")) + 1
+            out["drv_f"] += 1
         else:
-            out["drv_m"] = _i(out.get("drv_m")) + 1
+            out["drv_m"] += 1
         if r.get("nationality") == "غير سعودي":
-            out["drv_ns"] = _i(out.get("drv_ns")) + 1
+            out["drv_ns"] += 1
         else:
-            out["drv_sa"] = _i(out.get("drv_sa")) + 1
-    out["sev_dmg_in"] = sev["تلفيات"]
-    out["sev_inj_in"] = sev["إصابة"] + sev["إصابات"]
-    out["sev_dead_in"] = sev["وفاة"] + sev["وفيات"]
+            out["drv_sa"] += 1
+        cause = str(r.get("cause") or "").strip()
+        matched = False
+        for key, label in CAUSE_KEYS:
+            if cause == label or label in cause or key in cause:
+                causes[key] += 1
+                matched = True
+                break
+        if cause and not matched:
+            causes["other"] += 1
+    out["causes"] = causes
     out["viol_m"] = len(viols)
     return out
 
 
 def render_daily_incidents(logo_b64: str, shift: dict) -> None:
     st.subheader("📋 تكميل الوقوعات اليومية")
-    day = st.date_input("تاريخ البيان", value=date.today(), key="tak_day_inc")
+    day = st.date_input("تاريخ البيان", value=_today_ksa(), key="tak_day_inc")
     dates = date_bundle(day)
     g_date = dates["g_iso"]
     saved = load_daily_summary(g_date)
@@ -1232,13 +1325,15 @@ def render_daily_incidents(logo_b64: str, shift: dict) -> None:
         saved = {**saved, **flash}
         for key, value in flash.items():
             if isinstance(value, (int, float)):
-                st.session_state[key] = int(value)
+                st.session_state[f"{key}_{g_date}"] = int(value)
             elif isinstance(value, dict):
                 for sub_key, sub_val in value.items():
-                    if key.startswith("age_") or key == "causes":
-                        widget_key = f"{key}_{sub_key}" if key.startswith("age_") else f"cause_{sub_key}"
-                        if isinstance(sub_val, (int, float)):
-                            st.session_state[widget_key] = int(sub_val)
+                    if not isinstance(sub_val, (int, float)):
+                        continue
+                    if key.startswith("age_"):
+                        st.session_state[f"{key}_{sub_key}_{g_date}"] = int(sub_val)
+                    elif key == "causes":
+                        st.session_state[f"cause_{sub_key}_{g_date}"] = int(sub_val)
     if st.button("🔄 احتساب الأرقام تلقائياً من إحصاء الحوادث والمخالفات المسجلة لهذا اليوم", use_container_width=True):
         st.session_state["_tak_daily_seed"] = _auto_fill_from_day(g_date, saved)
         st.rerun()
@@ -1247,53 +1342,53 @@ def render_daily_incidents(logo_b64: str, shift: dict) -> None:
 
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
-        acc_in = _num("حوادث داخل", "acc_in", saved.get("acc_in", 0))
-        acc_out = _num("حوادث خارج", "acc_out", saved.get("acc_out", 0))
+        acc_in = _num("حوادث داخل", f"acc_in_{g_date}", saved.get("acc_in", 0))
+        acc_out = _num("حوادث خارج", f"acc_out_{g_date}", saved.get("acc_out", 0))
     with c2:
-        inj_in = _num("مصابون داخل", "inj_in", saved.get("inj_in", 0))
-        inj_out = _num("مصابون خارج", "inj_out", saved.get("inj_out", 0))
+        inj_in = _num("مصابون داخل", f"inj_in_{g_date}", saved.get("inj_in", 0))
+        inj_out = _num("مصابون خارج", f"inj_out_{g_date}", saved.get("inj_out", 0))
     with c3:
-        dead_in = _num("متوفون داخل", "dead_in", saved.get("dead_in", 0))
-        dead_out = _num("متوفون خارج", "dead_out", saved.get("dead_out", 0))
+        dead_in = _num("متوفون داخل", f"dead_in_{g_date}", saved.get("dead_in", 0))
+        dead_out = _num("متوفون خارج", f"dead_out_{g_date}", saved.get("dead_out", 0))
     with c4:
-        viol_m = _num("مخالفات ذكور", "viol_m", saved.get("viol_m", 0))
-        viol_f = _num("مخالفات إناث", "viol_f", saved.get("viol_f", 0))
+        viol_m = _num("مخالفات ذكور", f"viol_m_{g_date}", saved.get("viol_m", 0))
+        viol_f = _num("مخالفات إناث", f"viol_f_{g_date}", saved.get("viol_f", 0))
     with c5:
-        detain_sa = _num("مواقيف سعودي", "detain_sa", saved.get("detain_sa", 0))
-        detain_ns = _num("مواقيف غير سعودي", "detain_ns", saved.get("detain_ns", 0))
+        detain_sa = _num("مواقيف سعودي", f"detain_sa_{g_date}", saved.get("detain_sa", 0))
+        detain_ns = _num("مواقيف غير سعودي", f"detain_ns_{g_date}", saved.get("detain_ns", 0))
 
     st.markdown("**إجمالي الحوادث حسب الجسامة**")
     g1, g2, g3 = st.columns(3)
     with g1:
-        sev_dmg_in = _num("تلفيات داخل", "sev_dmg_in", saved.get("sev_dmg_in", 0))
-        sev_dmg_out = _num("تلفيات خارج", "sev_dmg_out", saved.get("sev_dmg_out", 0))
+        sev_dmg_in = _num("تلفيات داخل", f"sev_dmg_in_{g_date}", saved.get("sev_dmg_in", 0))
+        sev_dmg_out = _num("تلفيات خارج", f"sev_dmg_out_{g_date}", saved.get("sev_dmg_out", 0))
         st.info(f"مجموع التلفيات: {sev_dmg_in + sev_dmg_out}")
     with g2:
-        sev_inj_in = _num("إصابات داخل", "sev_inj_in", saved.get("sev_inj_in", 0))
-        sev_inj_out = _num("إصابات خارج", "sev_inj_out", saved.get("sev_inj_out", 0))
+        sev_inj_in = _num("إصابات داخل", f"sev_inj_in_{g_date}", saved.get("sev_inj_in", 0))
+        sev_inj_out = _num("إصابات خارج", f"sev_inj_out_{g_date}", saved.get("sev_inj_out", 0))
         st.info(f"مجموع الإصابات: {sev_inj_in + sev_inj_out}")
     with g3:
-        sev_dead_in = _num("وفيات داخل", "sev_dead_in", saved.get("sev_dead_in", 0))
-        sev_dead_out = _num("وفيات خارج", "sev_dead_out", saved.get("sev_dead_out", 0))
+        sev_dead_in = _num("وفيات داخل", f"sev_dead_in_{g_date}", saved.get("sev_dead_in", 0))
+        sev_dead_out = _num("وفيات خارج", f"sev_dead_out_{g_date}", saved.get("sev_dead_out", 0))
         st.info(f"مجموع الوفيات: {sev_dead_in + sev_dead_out}")
 
     st.markdown("**السائقون / المصابون / المتوفون (جنس وجنسية)**")
     s1, s2, s3 = st.columns(3)
     with s1:
-        drv_m = _num("سائقون ذكور", "drv_m", saved.get("drv_m", 0))
-        drv_f = _num("سائقون إناث", "drv_f", saved.get("drv_f", 0))
-        drv_sa = _num("سائقون سعودي", "drv_sa", saved.get("drv_sa", 0))
-        drv_ns = _num("سائقون غير سعودي", "drv_ns", saved.get("drv_ns", 0))
+        drv_m = _num("سائقون ذكور", f"drv_m_{g_date}", saved.get("drv_m", 0))
+        drv_f = _num("سائقون إناث", f"drv_f_{g_date}", saved.get("drv_f", 0))
+        drv_sa = _num("سائقون سعودي", f"drv_sa_{g_date}", saved.get("drv_sa", 0))
+        drv_ns = _num("سائقون غير سعودي", f"drv_ns_{g_date}", saved.get("drv_ns", 0))
     with s2:
-        p_inj_m = _num("مصابون ذكور", "p_inj_m", saved.get("p_inj_m", 0))
-        p_inj_f = _num("مصابون إناث", "p_inj_f", saved.get("p_inj_f", 0))
-        p_inj_sa = _num("مصابون سعودي", "p_inj_sa", saved.get("p_inj_sa", 0))
-        p_inj_ns = _num("مصابون غير سعودي", "p_inj_ns", saved.get("p_inj_ns", 0))
+        p_inj_m = _num("مصابون ذكور", f"p_inj_m_{g_date}", saved.get("p_inj_m", 0))
+        p_inj_f = _num("مصابون إناث", f"p_inj_f_{g_date}", saved.get("p_inj_f", 0))
+        p_inj_sa = _num("مصابون سعودي", f"p_inj_sa_{g_date}", saved.get("p_inj_sa", 0))
+        p_inj_ns = _num("مصابون غير سعودي", f"p_inj_ns_{g_date}", saved.get("p_inj_ns", 0))
     with s3:
-        p_dead_m = _num("متوفون ذكور", "p_dead_m", saved.get("p_dead_m", 0))
-        p_dead_f = _num("متوفون إناث", "p_dead_f", saved.get("p_dead_f", 0))
-        p_dead_sa = _num("متوفون سعودي", "p_dead_sa", saved.get("p_dead_sa", 0))
-        p_dead_ns = _num("متوفون غير سعودي", "p_dead_ns", saved.get("p_dead_ns", 0))
+        p_dead_m = _num("متوفون ذكور", f"p_dead_m_{g_date}", saved.get("p_dead_m", 0))
+        p_dead_f = _num("متوفون إناث", f"p_dead_f_{g_date}", saved.get("p_dead_f", 0))
+        p_dead_sa = _num("متوفون سعودي", f"p_dead_sa_{g_date}", saved.get("p_dead_sa", 0))
+        p_dead_ns = _num("متوفون غير سعودي", f"p_dead_ns_{g_date}", saved.get("p_dead_ns", 0))
 
     def age_block(prefix: str, label: str, seed: dict) -> dict:
         st.markdown(f"**الفئة العمرية — {label}**")
@@ -1301,7 +1396,7 @@ def render_daily_incidents(logo_b64: str, shift: dict) -> None:
         out = {}
         for i, key in enumerate(AGE_KEYS):
             with cols[i]:
-                out[key] = _num(key, f"{prefix}_{key}", seed.get(key, 0))
+                out[key] = _num(AGE_LABELS.get(key, key), f"{prefix}_{key}_{g_date}", seed.get(key, 0))
         st.caption(f"المجموع: {sum(out.values())}")
         return out
 
@@ -1315,30 +1410,39 @@ def render_daily_incidents(logo_b64: str, shift: dict) -> None:
     seed_c = saved.get("causes") or {}
     for idx, (key, label) in enumerate(CAUSE_KEYS):
         with cause_cols[idx % 4]:
-            causes[key] = _num(label, f"cause_{key}", seed_c.get(key, 0))
+            causes[key] = _num(label, f"cause_{key}_{g_date}", seed_c.get(key, 0))
 
     st.markdown("**أسماء المصابين**")
-    inj_count = st.number_input("عدد صفوف المصابين", min_value=0, max_value=20, value=max(1, len(saved.get("injured") or [])), key="inj_rows_n")
+    inj_count = st.number_input(
+        "عدد صفوف المصابين",
+        min_value=0,
+        max_value=20,
+        value=len(saved.get("injured") or []),
+        key=f"inj_rows_n_{g_date}",
+    )
     injured = []
     seed_inj = saved.get("injured") or []
     for i in range(int(inj_count)):
         seed = seed_inj[i] if i < len(seed_inj) else {}
+        blank_seed = _person_row_blank(seed)
         with st.expander(f"مصاب #{i+1}", expanded=i == 0):
             a, b = st.columns(2)
             with a:
-                name = st.text_input("الاسم", value=seed.get("name", ""), key=f"inj_name_{i}")
-                incident_no = st.text_input("رقم الحادث", value=seed.get("incident_no", ""), key=f"inj_inc_{i}")
-                place = st.text_input("مكان الحادث", value=seed.get("place", ""), key=f"inj_place_{i}")
-                registry_no = st.text_input("رقم السجل", value=seed.get("registry_no", ""), key=f"inj_reg_{i}")
-                coverage = st.text_input("جهة التغطية", value=seed.get("coverage", ""), key=f"inj_cov_{i}")
+                name = st.text_input("الاسم", value=seed.get("name", ""), key=f"inj_name_{g_date}_{i}")
+                incident_no = st.text_input("رقم الحادث", value=seed.get("incident_no", ""), key=f"inj_inc_{g_date}_{i}")
+                place = st.text_input("مكان الحادث", value=seed.get("place", ""), key=f"inj_place_{g_date}_{i}")
+                registry_no = st.text_input("رقم السجل", value=seed.get("registry_no", ""), key=f"inj_reg_{g_date}_{i}")
+                coverage = st.text_input("جهة التغطية", value=seed.get("coverage", ""), key=f"inj_cov_{g_date}_{i}")
             with b:
-                place_type = st.selectbox("المكان", ["داخل المدينة", "خارج المدينة"], index=0 if seed.get("place_type", "داخل المدينة") != "خارج المدينة" else 1, key=f"inj_pt_{i}")
-                gender = st.selectbox("الجنس", ["ذكر", "أنثى"], index=0 if seed.get("gender", "ذكر") != "أنثى" else 1, key=f"inj_g_{i}")
-                nationality = st.selectbox("الجنسية", ["سعودي", "غير سعودي"], index=0 if seed.get("nationality", "سعودي") != "غير سعودي" else 1, key=f"inj_n_{i}")
-                age_group = st.selectbox("الفئة العمرية", AGE_BUCKETS, index=AGE_BUCKETS.index(seed.get("age_group")) if seed.get("age_group") in AGE_BUCKETS else 1, key=f"inj_age_{i}")
-                male = _num("عدد ذكور", f"inj_male_{i}", seed.get("male", 1 if gender == "ذكر" else 0))
-                female = _num("عدد إناث", f"inj_female_{i}", seed.get("female", 1 if gender == "أنثى" else 0))
-                hospitalize_24 = st.checkbox("✅ منوّم بالمستشفى لأكثر من 24 ساعة — يُدرج في التكميل الشهري", value=bool(seed.get("hospitalize_24")), key=f"inj_h24_{i}")
+                place_type = st.selectbox("المكان", ["داخل المدينة", "خارج المدينة"], index=0 if seed.get("place_type", "داخل المدينة") != "خارج المدينة" else 1, key=f"inj_pt_{g_date}_{i}")
+                gender = st.selectbox("الجنس", ["ذكر", "أنثى"], index=0 if seed.get("gender", "ذكر") != "أنثى" else 1, key=f"inj_g_{g_date}_{i}")
+                nationality = st.selectbox("الجنسية", ["سعودي", "غير سعودي"], index=0 if seed.get("nationality", "سعودي") != "غير سعودي" else 1, key=f"inj_n_{g_date}_{i}")
+                age_group = st.selectbox("الفئة العمرية", AGE_BUCKETS, index=AGE_BUCKETS.index(seed.get("age_group")) if seed.get("age_group") in AGE_BUCKETS else 1, key=f"inj_age_{g_date}_{i}")
+                male_default = 0 if blank_seed else seed.get("male", 1 if gender == "ذكر" else 0)
+                female_default = 0 if blank_seed else seed.get("female", 1 if gender == "أنثى" else 0)
+                male = _num("عدد ذكور", f"inj_male_{g_date}_{i}", male_default)
+                female = _num("عدد إناث", f"inj_female_{g_date}_{i}", female_default)
+                hospitalize_24 = st.checkbox("✅ منوّم بالمستشفى لأكثر من 24 ساعة — يُدرج في التكميل الشهري", value=bool(seed.get("hospitalize_24")), key=f"inj_h24_{g_date}_{i}")
             injured.append({
                 "name": name, "incident_no": incident_no, "place": place, "registry_no": registry_no,
                 "coverage": coverage, "place_type": place_type, "gender": gender, "nationality": nationality,
@@ -1346,31 +1450,44 @@ def render_daily_incidents(logo_b64: str, shift: dict) -> None:
                 "accident_date": g_date,
                 "hospital_status": HOSPITAL_STATUS[1] if hospitalize_24 else HOSPITAL_STATUS[0],
             })
+    injured = [row for row in injured if not _person_row_blank(row)]
 
     st.markdown("**أسماء المتوفين**")
-    dead_count = st.number_input("عدد صفوف المتوفين", min_value=0, max_value=15, value=max(0, len(saved.get("dead") or [])), key="dead_rows_n")
+    dead_count = st.number_input(
+        "عدد صفوف المتوفين",
+        min_value=0,
+        max_value=15,
+        value=len(saved.get("dead") or []),
+        key=f"dead_rows_n_{g_date}",
+    )
     dead = []
     seed_dead = saved.get("dead") or []
     for i in range(int(dead_count)):
         seed = seed_dead[i] if i < len(seed_dead) else {}
+        blank_seed = _person_row_blank(seed)
         a, b, c = st.columns(3)
         with a:
-            name = st.text_input("الاسم", value=seed.get("name", ""), key=f"dead_name_{i}")
-            incident_no = st.text_input("رقم الحادث", value=seed.get("incident_no", ""), key=f"dead_inc_{i}")
+            name = st.text_input("الاسم", value=seed.get("name", ""), key=f"dead_name_{g_date}_{i}")
+            incident_no = st.text_input("رقم الحادث", value=seed.get("incident_no", ""), key=f"dead_inc_{g_date}_{i}")
         with b:
-            place = st.text_input("مكان الحادث", value=seed.get("place", ""), key=f"dead_place_{i}")
-            registry_no = st.text_input("رقم السجل", value=seed.get("registry_no", ""), key=f"dead_reg_{i}")
+            place = st.text_input("مكان الحادث", value=seed.get("place", ""), key=f"dead_place_{g_date}_{i}")
+            registry_no = st.text_input("رقم السجل", value=seed.get("registry_no", ""), key=f"dead_reg_{g_date}_{i}")
         with c:
-            coverage = st.text_input("جهة التغطية", value=seed.get("coverage", ""), key=f"dead_cov_{i}")
-            male = _num("ذكور", f"dead_m_{i}", seed.get("male", 1))
-            female = _num("إناث", f"dead_f_{i}", seed.get("female", 0))
+            coverage = st.text_input("جهة التغطية", value=seed.get("coverage", ""), key=f"dead_cov_{g_date}_{i}")
+            male = _num("ذكور", f"dead_m_{g_date}_{i}", 0 if blank_seed else seed.get("male", 0))
+            female = _num("إناث", f"dead_f_{g_date}_{i}", 0 if blank_seed else seed.get("female", 0))
         dead.append({
             "name": name, "incident_no": incident_no, "place": place, "registry_no": registry_no,
             "coverage": coverage, "male": male, "female": female,
         })
+    dead = [row for row in dead if not _person_row_blank(row)]
 
-    prepared_by = st.text_input("معد البيان", value=saved.get("prepared_by") or shift.get("officer_name") or "", key="prep_daily")
-    phone = st.text_input("رقم الجوال", value=saved.get("phone") or "", key="phone_daily")
+    prepared_by = st.text_input(
+        "معد البيان",
+        value=saved.get("prepared_by") or shift.get("officer_name") or "",
+        key=f"prep_daily_{g_date}",
+    )
+    phone = st.text_input("رقم الجوال", value=saved.get("phone") or "", key=f"phone_daily_{g_date}")
 
     payload = {
         "dates": dates,
@@ -1400,7 +1517,7 @@ def render_daily_incidents(logo_b64: str, shift: dict) -> None:
 
 def render_accidents_daily(logo_b64: str, shift: dict) -> None:
     st.subheader("🚗 إحصاء الحوادث المرورية (يومي)")
-    day = st.date_input("تاريخ الإحصاء", value=date.today(), key="tak_day_acc")
+    day = st.date_input("تاريخ الإحصاء", value=_today_ksa(), key="tak_day_acc")
     dates = date_bundle(day)
     g_date = dates["g_iso"]
     rows = list_accidents(g_date)
@@ -1448,7 +1565,7 @@ def render_accidents_daily(logo_b64: str, shift: dict) -> None:
 
 def render_violations_daily(logo_b64: str, shift: dict) -> None:
     st.subheader("📑 إحصاء المخالفات المقترنة بالحوادث (يومي)")
-    day = st.date_input("تاريخ المخالفات", value=date.today(), key="tak_day_viol")
+    day = st.date_input("تاريخ المخالفات", value=_today_ksa(), key="tak_day_viol")
     dates = date_bundle(day)
     g_date = dates["g_iso"]
     rows = list_violations(g_date)
@@ -1486,7 +1603,7 @@ def render_violations_daily(logo_b64: str, shift: dict) -> None:
 
 def render_injured_monthly(logo_b64: str, shift: dict) -> None:
     st.subheader("🏥 تكميل المصابين المنومين (+24 ساعة) — شهري تراكمي")
-    today = date.today()
+    today = _today_ksa()
     year = st.number_input("السنة", min_value=2020, max_value=2100, value=today.year, key="tak_year")
     month = st.selectbox(
         "الشهر",
@@ -1518,51 +1635,56 @@ def render_injured_monthly(logo_b64: str, shift: dict) -> None:
     with st.expander("➕ إضافة حالة يدوية"):
         a, b = st.columns(2)
         with a:
-            name = st.text_input("اسم المصاب", key="man_name")
-            incident_no = st.text_input("رقم الحادث", key="man_inc")
-            place = st.text_input("مكان الحادث التفصيلي", key="man_place")
-            registry_no = st.text_input("رقم السجل", key="man_reg")
+            name = st.text_input("اسم المصاب", key=f"man_name_{month_key}")
+            incident_no = st.text_input("رقم الحادث", key=f"man_inc_{month_key}")
+            place = st.text_input("مكان الحادث التفصيلي", key=f"man_place_{month_key}")
+            registry_no = st.text_input("رقم السجل", key=f"man_reg_{month_key}")
         with b:
-            place_type = st.selectbox("تصنيف المكان", ["داخل المدينة", "خارج المدينة"], key="man_pt")
-            gender = st.selectbox("الجنس", ["ذكر", "أنثى"], key="man_g")
-            nationality = st.selectbox("الجنسية", ["سعودي", "غير سعودي"], key="man_n")
-            age_group = st.selectbox("الفئة العمرية", AGE_BUCKETS, key="man_age")
-            coverage = st.text_input("جهة التغطية", key="man_cov")
-            hospital_status = st.selectbox("حالة التنويم", HOSPITAL_STATUS, index=1, key="man_hs")
+            place_type = st.selectbox("تصنيف المكان", ["داخل المدينة", "خارج المدينة"], key=f"man_pt_{month_key}")
+            gender = st.selectbox("الجنس", ["ذكر", "أنثى"], key=f"man_g_{month_key}")
+            nationality = st.selectbox("الجنسية", ["سعودي", "غير سعودي"], key=f"man_n_{month_key}")
+            age_group = st.selectbox("الفئة العمرية", AGE_BUCKETS, key=f"man_age_{month_key}")
+            coverage = st.text_input("جهة التغطية", key=f"man_cov_{month_key}")
+            hospital_status = st.selectbox("حالة التنويم", HOSPITAL_STATUS, index=1, key=f"man_hs_{month_key}")
         if st.button("حفظ الحالة اليدوية", type="primary"):
             add_injured_manual(month_key, {
                 "name": name, "incident_no": incident_no, "place": place, "registry_no": registry_no,
                 "place_type": place_type, "gender": gender, "nationality": nationality,
                 "age_group": age_group, "coverage": coverage, "hospital_status": hospital_status,
-                "accident_date": date.today().isoformat(), "source_day": "manual",
+                "accident_date": _today_ksa().isoformat(), "source_day": "manual",
             })
             st.rerun()
 
     stats = compute_monthly_stats(list_injured(month_key))
     meta = load_monthly_meta(month_key)
+    mk = f"{month_key}_{stats.get('approved_count', 0)}"
     st.markdown("#### الإجماليات المحسوبة (+24 ساعة) — قابلة للتعديل")
     e1, e2, e3 = st.columns(3)
     with e1:
-        stats["accidents_in"] = _num("حوادث داخل", "m_acc_in", meta.get("accidents_in", stats["accidents_in"]))
-        stats["accidents_out"] = _num("حوادث خارج", "m_acc_out", meta.get("accidents_out", stats["accidents_out"]))
+        stats["accidents_in"] = _num("حوادث داخل", f"m_acc_in_{mk}", meta.get("accidents_in", stats["accidents_in"]))
+        stats["accidents_out"] = _num("حوادث خارج", f"m_acc_out_{mk}", meta.get("accidents_out", stats["accidents_out"]))
         stats["accidents_total"] = stats["accidents_in"] + stats["accidents_out"]
         st.info(f"مجموع الحوادث: {stats['accidents_total']}")
     with e2:
-        stats["injured_in"] = _num("مصابون داخل", "m_inj_in", meta.get("injured_in", stats["injured_in"]))
-        stats["injured_out"] = _num("مصابون خارج", "m_inj_out", meta.get("injured_out", stats["injured_out"]))
+        stats["injured_in"] = _num("مصابون داخل", f"m_inj_in_{mk}", meta.get("injured_in", stats["injured_in"]))
+        stats["injured_out"] = _num("مصابون خارج", f"m_inj_out_{mk}", meta.get("injured_out", stats["injured_out"]))
         stats["injured_total"] = stats["injured_in"] + stats["injured_out"]
-        stats["male"] = _num("ذكور", "m_male", meta.get("male", stats["male"]))
-        stats["female"] = _num("إناث", "m_female", meta.get("female", stats["female"]))
+        stats["male"] = _num("ذكور", f"m_male_{mk}", meta.get("male", stats["male"]))
+        stats["female"] = _num("إناث", f"m_female_{mk}", meta.get("female", stats["female"]))
     with e3:
-        stats["saudi"] = _num("سعودي", "m_sa", meta.get("saudi", stats["saudi"]))
-        stats["nonsaudi"] = _num("غير سعودي", "m_ns", meta.get("nonsaudi", stats["nonsaudi"]))
+        stats["saudi"] = _num("سعودي", f"m_sa_{mk}", meta.get("saudi", stats["saudi"]))
+        stats["nonsaudi"] = _num("غير سعودي", f"m_ns_{mk}", meta.get("nonsaudi", stats["nonsaudi"]))
         ages = dict(stats.get("ages") or {})
         for bucket in AGE_BUCKETS:
-            ages[bucket] = _num(bucket, f"m_age_{bucket}", meta.get("ages", {}).get(bucket, ages.get(bucket, 0)))
+            ages[bucket] = _num(bucket, f"m_age_{bucket}_{mk}", meta.get("ages", {}).get(bucket, ages.get(bucket, 0)))
         stats["ages"] = ages
 
-    prepared_by = st.text_input("معد البيان", value=meta.get("prepared_by") or shift.get("officer_name") or "", key="prep_mon")
-    phone = st.text_input("رقم الجوال", value=meta.get("phone") or "", key="phone_mon")
+    prepared_by = st.text_input(
+        "معد البيان",
+        value=meta.get("prepared_by") or shift.get("officer_name") or "",
+        key=f"prep_mon_{mk}",
+    )
+    phone = st.text_input("رقم الجوال", value=meta.get("phone") or "", key=f"phone_mon_{mk}")
     if st.button("💾 حفظ إجماليات الشهر", type="primary", use_container_width=True):
         save_monthly_meta(month_key, {**stats, "prepared_by": prepared_by, "phone": phone})
         _inject_local_backup_js(month_key, export_month_backup(month_key))
