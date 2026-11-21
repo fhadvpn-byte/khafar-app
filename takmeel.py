@@ -1056,19 +1056,22 @@ def build_accidents_a4(rows: list[dict], dates: dict, prepared_by: str, phone: s
         f"الموافق {dates.get('g_display')} م - {dates.get('h_display')} هـ"
     )
     lines = []
+    wrap_keys = {"gender", "nationality", "cause", "coverage"}
     for i in range(max(12, len(rows or []))):
         r = rows[i] if i < len(rows or []) else {}
-        lines.append(
-            "<tr>"
-            + "".join(
-                f"<td>{_cell_text(r.get(k))}</td>"
-                for k in (
-                    "incident_no", "road_name", "road_no", "severity", "accident_type",
-                    "cause", "gender", "nationality", "coverage",
+        cells = []
+        for k in (
+            "incident_no", "road_name", "road_no", "severity", "accident_type",
+            "cause", "gender", "nationality", "coverage",
+        ):
+            if k in wrap_keys:
+                cells.append(
+                    "<td style='white-space:normal;word-break:break-word;line-height:1.25;"
+                    f"vertical-align:middle;'>{_cell_text(r.get(k))}</td>"
                 )
-            )
-            + "</tr>"
-        )
+            else:
+                cells.append(f"<td>{_cell_text(r.get(k))}</td>")
+        lines.append("<tr>" + "".join(cells) + "</tr>")
     body = f"""
     <div class="hdr">
       <div style="text-align:center">{_logo_img(logo_b64)}</div>
@@ -1292,14 +1295,54 @@ def _auto_fill_from_day(g_date: str, payload: dict) -> dict:
                 out["sev_dmg_out"] += 1
             else:
                 out["sev_dmg_in"] += 1
-        if r.get("gender") == "أنثى":
-            out["drv_f"] += 1
-        else:
+        g_val = str(r.get("gender") or "")
+        n_val = str(r.get("nationality") or "")
+        has_m = "ذكر" in g_val
+        has_f = ("أنثى" in g_val) or ("انثى" in g_val)
+        has_ns = "غير سعودي" in n_val
+        has_sa = "سعودي" in n_val.replace("غير سعودي", "")
+        g_mixed = has_m and has_f
+        n_mixed = has_sa and has_ns
+        g_pure_m = has_m and not has_f and "مجهول" not in g_val
+        g_pure_f = has_f and not has_m and "مجهول" not in g_val
+        n_pure_sa = has_sa and not has_ns and "مجهول" not in n_val
+        n_pure_ns = has_ns and not has_sa and "مجهول" not in n_val
+        if g_val.strip() == "مجهول" or n_val.strip() == "مجهول":
+            pass
+        elif g_mixed and n_mixed:
             out["drv_m"] += 1
-        if r.get("nationality") == "غير سعودي":
+            out["drv_f"] += 1
+            out["drv_sa"] += 1
+            out["drv_ns"] += 1
+        elif g_mixed and (n_pure_sa or n_pure_ns):
+            out["drv_m"] += 1
+            out["drv_f"] += 1
+            if n_pure_sa:
+                out["drv_sa"] += 2
+            else:
+                out["drv_ns"] += 2
+        elif n_mixed and (g_pure_m or g_pure_f):
+            if g_pure_m:
+                out["drv_m"] += 2
+            else:
+                out["drv_f"] += 2
+            out["drv_sa"] += 1
             out["drv_ns"] += 1
         else:
-            out["drv_sa"] += 1
+            if g_mixed:
+                out["drv_m"] += 1
+                out["drv_f"] += 1
+            elif has_m and not has_f:
+                out["drv_m"] += 1
+            elif has_f and not has_m:
+                out["drv_f"] += 1
+            if n_mixed:
+                out["drv_sa"] += 1
+                out["drv_ns"] += 1
+            elif has_sa and not has_ns:
+                out["drv_sa"] += 1
+            elif has_ns and not has_sa:
+                out["drv_ns"] += 1
         cause = str(r.get("cause") or "").strip()
         matched = False
         for key, label in CAUSE_KEYS:
@@ -1534,8 +1577,14 @@ def render_accidents_daily(logo_b64: str, shift: dict) -> None:
             accident_type = st.text_input("نوع الحادث")
             cause = st.selectbox("سبب الحادث", [x[1] for x in CAUSE_KEYS])
         with c:
-            gender = st.selectbox("جنس السائق", ["ذكر", "أنثى"])
-            nationality = st.selectbox("جنسية السائق", ["سعودي", "غير سعودي"])
+            gender = st.selectbox(
+                "جنس السائق",
+                ["ذكر", "أنثى", "ذكر وأنثى", "مجهول", "ذكر ومجهول", "أنثى ومجهول"],
+            )
+            nationality = st.selectbox(
+                "جنسية السائق",
+                ["سعودي", "غير سعودي", "سعودي وغير سعودي", "مجهول", "سعودي ومجهول", "غير سعودي ومجهول"],
+            )
             coverage = st.text_input("جهة التغطية")
             place_type = st.selectbox("المكان", ["داخل المدينة", "خارج المدينة"])
         if st.form_submit_button("➕ إضافة وحفظ فوري", use_container_width=True):
@@ -1550,7 +1599,8 @@ def render_accidents_daily(logo_b64: str, shift: dict) -> None:
         cols = st.columns([8, 1])
         with cols[0]:
             st.write(
-                f"{r.get('incident_no')} | {r.get('road_name')} | {r.get('severity')} | {r.get('cause')} | {r.get('coverage')}"
+                f"{r.get('incident_no')} | {r.get('road_name')} | {r.get('severity')} | {r.get('cause')} | "
+                f"{r.get('gender')} | {r.get('nationality')} | {r.get('coverage')}"
             )
         with cols[1]:
             if st.button("🗑️", key=f"del_acc_{r['_id']}"):
