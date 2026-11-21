@@ -1577,14 +1577,8 @@ def render_accidents_daily(logo_b64: str, shift: dict) -> None:
             accident_type = st.text_input("نوع الحادث")
             cause = st.selectbox("سبب الحادث", [x[1] for x in CAUSE_KEYS])
         with c:
-            gender = st.selectbox(
-                "جنس السائق",
-                ["ذكر", "أنثى", "ذكر وأنثى", "مجهول", "ذكر ومجهول", "أنثى ومجهول"],
-            )
-            nationality = st.selectbox(
-                "جنسية السائق",
-                ["سعودي", "غير سعودي", "سعودي وغير سعودي", "مجهول", "سعودي ومجهول", "غير سعودي ومجهول"],
-            )
+            gender = st.selectbox("جنس السائق", ["ذكر", "أنثى", "ذكر وأنثى", "مجهول", "ذكر ومجهول", "أنثى ومجهول"])
+            nationality = st.selectbox("جنسية السائق", ["سعودي", "غير سعودي", "سعودي وغير سعودي", "مجهول", "سعودي ومجهول", "غير سعودي ومجهول"])
             coverage = st.text_input("جهة التغطية")
             place_type = st.selectbox("المكان", ["داخل المدينة", "خارج المدينة"])
         if st.form_submit_button("➕ إضافة وحفظ فوري", use_container_width=True):
