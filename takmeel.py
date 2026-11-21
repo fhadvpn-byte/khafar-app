@@ -1602,9 +1602,22 @@ def render_daily_incidents(logo_b64: str, shift: dict) -> None:
                         st.session_state[f"{key}_{sub_key}_{g_date}"] = int(sub_val)
                     elif key == "causes":
                         st.session_state[f"cause_{sub_key}_{g_date}"] = int(sub_val)
-    if st.button("🔄 احتساب الأرقام تلقائياً من إحصاء الحوادث والمخالفات المسجلة لهذا اليوم", use_container_width=True):
-        st.session_state["_tak_daily_seed"] = _auto_fill_from_day(g_date, saved)
-        st.rerun()
+    if st.session_state.pop("_tak_daily_fill_ok", False):
+        st.success("✅ تم سحب وتعبئة إحصائية اليوم تلقائياً (بإمكانك مراجعة الخانات أو تعديل أي رقم قبل الحفظ).")
+    if st.button(
+        "📥 تعبئة الخانات تلقائياً من الحوادث والمخالفات المسجلة اليوم",
+        use_container_width=True,
+        help="يسحب الحوادث والمخالفات التي سجلتها اليوم في الكشفين الآخرين ويعبئ الأرقام بالأسفل تلقائياً توفيراً للوقت.",
+    ):
+        if len(list_accidents(g_date)) == 0 and len(list_violations(g_date)) == 0:
+            st.warning(
+                "⚠️ لا توجد حوادث أو مخالفات مسجلة لهذا اليوم بعد في كشفي (إحصاء الحوادث) و(إحصاء المخالفات) — "
+                "سجّلها هناك أولاً لسحبها تلقائياً، أو عبّئ الخانات بالأسفل يدوياً."
+            )
+        else:
+            st.session_state["_tak_daily_seed"] = _auto_fill_from_day(g_date, saved)
+            st.session_state["_tak_daily_fill_ok"] = True
+            st.rerun()
 
     st.caption(f"{dates['weekday_ar']} | {dates['g_display']} م | {dates['h_display']} هـ")
 
