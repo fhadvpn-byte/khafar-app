@@ -865,6 +865,53 @@ def _val(values: dict, key: str) -> str:
     return _rtl_isolate(v, as_html=True) if v else "...................."
 
 
+OTHER_OPTION = "أخرى (تحديد يدوي)"
+
+
+def _sel(values: dict, key: str, other_key: str | None = None) -> str:
+    """قيمة القائمة مع اعتماد النص اليدوي عند اختيار أخرى."""
+    v = str((values or {}).get(key, "") or "").strip()
+    ok = other_key or f"{key}_other"
+    if "أخرى" in v:
+        other = str((values or {}).get(ok, "") or "").strip()
+        if other:
+            return _rtl_isolate(other, as_html=True)
+    return _rtl_isolate(v, as_html=True) if v else "...................."
+
+
+def _other_field(select_key: str, label: str = "التحديد اليدوي (أخرى)") -> dict:
+    return {
+        "key": f"{select_key}_other",
+        "label": label,
+        "type": "text",
+        "sample": "",
+        "placeholder": "اكتب التفاصيل هنا",
+        "visible_if": {"key": select_key, "contains_any": ["أخرى"]},
+        "a4_hidden": True,
+        "stack_under": True,
+    }
+
+
+def _resolve_select_display(fields_map: dict, key: str, shown: str) -> str:
+    text = str(shown or "").strip()
+    if "أخرى" in text:
+        other = str((fields_map or {}).get(f"{key}_other", "") or "").strip()
+        if other:
+            return other
+    return text or "-"
+
+
+def _should_normalize_digits(field: dict) -> bool:
+    if field.get("normalize_digits"):
+        return True
+    key = str(field.get("key") or "")
+    label = str(field.get("label") or "")
+    hints = ("_id", "phone", "incident_no", "wakala", "viol", "جوال", "هوية", "وكالة", "مخالف")
+    return any(h in key for h in ("_id", "phone", "incident_no", "wakala", "viol")) or any(
+        h in label for h in ("جوال", "هوية", "وكالة", "رقم الحادث", "رقم المخالف", "رقم البلاغ")
+    )
+
+
 _ARABIC_INDIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 
 
@@ -1192,8 +1239,37 @@ def _toxicology_legal(values: dict) -> str:
         f"استناداً إلى أحكام نظام المرور ولائحته التنفيذية وإجراءات الاستدلال في الحادث/المحضر رقم ({_val(values, 'incident_no')})"
         f"{awtar_clause}، "
         f"نبعث لسعادتكم المدعو ({_val(values, 'party_name')})، حامل الهوية رقم ({_val(values, 'party_id')})، وعلاقته بالواقعة ({_val(values, 'plate_no')})، "
-        f"وذلك بناءً على المسوغ النظامي: ({_val(values, 'suspicion_signs')}). نأمل توجيه المختصين بإجراء ({_val(values, 'sample_type')}) وفق الأصول الفنية المعتمدة "
+        f"وذلك بناءً على المسوغ النظامي: ({_sel(values, 'suspicion_signs')}). نأمل توجيه المختصين بإجراء ({_sel(values, 'sample_type')}) وفق الأصول الفنية المعتمدة "
         f"وتوثيق وقت أخذ العينة وسلسلة الحيازة النظامية، وموافاتنا بالتقرير المخبري القطعي السري في مظروف رسمي مختوم، مع مراعاة الترتيب الأمني: ({_val(values, 'escort_info')})."
+    )
+
+
+def _statement_legal(values: dict) -> str:
+    role = str((values or {}).get("speaker_role") or "")
+    name = _val(values, "party_name")
+    nid = _val(values, "party_id")
+    incident = _val(values, "incident_no")
+    statement = _val(values, "statement_text")
+    plate = str((values or {}).get("plate_no") or "").strip()
+    lane = str((values or {}).get("lane_speed") or "").strip()
+    non_driver = any(
+        token in role
+        for token in ("شاهد", "مشاة", "عابر", "مالك مركبة متوقفة", "عين متضررة", "راكب", "مرافق")
+    )
+    if non_driver:
+        plate_clause = f"، وبخصوص المركبة/العين ({_rtl_isolate(plate, as_html=True)})" if plate else ""
+        lane_clause = f"، وموضعي/ملاحظتي مرتبطة بـ ({_rtl_isolate(lane, as_html=True)})" if lane else ""
+        return (
+            f"أقر أنا ({name})، حامل الهوية رقم ({nid})، بصفتي ({_val(values, 'speaker_role')})"
+            f"{plate_clause} في الحادث رقم ({incident}){lane_clause}، "
+            f"بأن إفادتي الفورية بالموقع تتلخص في الآتي: \"{statement}\". "
+            f"وقد أدليت بهذه الأقوال طواعية وبكامل أهليتي فور مباشرة الحادث ودون إكراه لاعتمادها ضمن محاضر الاستدلال المروري."
+        )
+    lane_txt = _rtl_isolate(lane, as_html=True) if lane else "...................."
+    return (
+        f"أقر أنا ({name})، حامل الهوية رقم ({nid})، بصفتي ({_val(values, 'speaker_role')}) للمركبة ({_val(values, 'plate_no')}) "
+        f"في الحادث رقم ({incident})، بأنني كنت أسير في ({lane_txt})، وتتلخص إفادتي الفورية بالموقع في الآتي: "
+        f"\"{statement}\". وقد أدليت بهذه الأقوال طواعية وبكامل أهليتي فور مباشرة الحادث ودون إكراه لاعتمادها ضمن محاضر الاستدلال المروري."
     )
 
 
@@ -1210,7 +1286,7 @@ def _handover_legal(values: dict) -> str:
             f"بصفتي وكيلاً شرعياً عن مالك المركبة ({_val(values, 'principal_name')} - هوية رقم: {_val(values, 'principal_id')}) "
             f"بموجب الوكالة الشرعية السارية رقم ({_val(values, 'wakala_no')}) وتاريخ ({_val(values, 'wakala_date')})، "
             f"بأنني استلمت المركبة ({_val(values, 'vehicle_desc')}) التي تحمل اللوحة رقم ({_val(values, 'plate_no')}) "
-            f"في موقع الحادث بحالتها الراهنة ({_val(values, 'vehicle_state')})"
+            f"في موقع الحادث رقم ({_val(values, 'incident_no')}) بحالتها الراهنة ({_val(values, 'vehicle_state')})"
             + closing
         )
     return (
@@ -1282,7 +1358,8 @@ TRAFFIC_FORMS = {
             {"key": "receiver_role", "label": "صفة المستلم", "type": "select", "options": [
                 "مالك المركبة بموجب رخصة السير",
                 "مفوض رسمي بقيادة المركبة",
-                "وكيل شرعي بموجب وكالة سارية"
+                "وكيل شرعي بموجب وكالة سارية",
+                "مندوب جهة حكومية / شركة / مكتب تأجير بموجب تفويض رسمي",
             ], "sample": "مالك المركبة بموجب رخصة السير"},
             {"key": "party_name", "label": "اسم المستلم الرباعي", "type": "text", "sample": "عبدالرحمن بن محمد بن علي السبيعي",
              "hide_if": {"key": "receiver_role", "contains_any": ["وكيل", "وكالة"]}},
@@ -1315,7 +1392,8 @@ TRAFFIC_FORMS = {
             {"key": "vehicle_state", "label": "حالة المركبة عند التسليم بالموقع", "type": "select", "options": [
                 "أضرار سطحية لا تمنع السير الآمن",
                 "صالحة للسير دون عوائق ميكانيكية ظاهرة",
-                "غير صالحة للسير وتُنقل بسطحة خاصة بمعرفة المستلم"
+                "سليمة ظاهرياً ولا يوجد ما يوجب حجزها",
+                "غير صالحة للسير وتُنقل بسطحة خاصة بمعرفة المستلم",
             ], "sample": "أضرار سطحية لا تمنع السير الآمن"},
         ],
         "legal_fn": _handover_legal,
@@ -1342,13 +1420,24 @@ TRAFFIC_FORMS = {
                 "الدخول لطريق رئيسي دون إعطاء الأفضلية",
                 "التجاوز الخاطئ في مسار غير مسموح",
                 "الرجوع إلى الخلف دون انتباه وحذر",
-                "عدم التقيد بإشارات وتنظيمات المرور"
-            ], "sample": "الانحراف المفاجئ دون التأكد من خلو المسار"},
+                "عدم التقيد بإشارات وتنظيمات المرور",
+                "السير عكس الاتجاه",
+                "قطع الإشارة الحمراء",
+                "السرعة الزائدة وعدم السيطرة",
+                "الدوران غير النظامي",
+                "عدم إعطاء أفضلية المشاة",
+                "الوقوف الخاطئ دون تحذير",
+                "الانشغال بالجوال",
+                "لا يوجد طرف آخر - حادث مفرد",
+                OTHER_OPTION,
+            ], "sample": "الانحراف المفاجئ دون التأكد من خلو المسار",
+             "a4_compose": {"fmt": "{value}", "append_if": "fault_cause_other", "append_fmt": " — {extra}"}},
+            _other_field("fault_cause", "اكتب سبب الخطأ يدوياً"),
         ],
         "legal_fn": lambda m: (
             f"أقر أنا ({_val(m, 'party_name')})، حامل الهوية رقم ({_val(m, 'party_id')})، قائد المركبة ({_val(m, 'plate_no')})، "
             f"وأنا بكامل أهليتي المعتبرة شرعاً ونظاماً، باطلاعي وموافقتي واقتناعي التام بنسبة الخطأ المقررة عليّ وقدرها ({_val(m, 'fault_ratio')}) "
-            f"في الحادث المروري رقم ({_val(m, 'incident_no')}) الواقع مع الطرف الآخر ({_val(m, 'other_party')}) نتيجة ({_val(m, 'fault_cause')})، "
+            f"في الحادث المروري رقم ({_val(m, 'incident_no')}) الواقع مع الطرف الآخر ({_val(m, 'other_party')}) نتيجة ({_sel(m, 'fault_cause')})، "
             f"والمبنية على المعاينة الميدانية للآثار المادية وأحكام نظام المرور ولائحته التنفيذية، مع احتفاظ الأطراف بحقوقهم التأمينية والنظامية."
         ),
     },
@@ -1372,13 +1461,16 @@ TRAFFIC_FORMS = {
                 "توجد كاميرات محلات تجارية مقابلة لموقع الاصطدام مباشرة",
                 "توجد كاميرات أمنية على التقاطع الرئيسي",
                 "يوجد توثيق بكاميرا المركبة (داش كام)",
-                "لا توجد كاميرات مراقبة ظاهرة في محيط الموقع"
-            ], "sample": "توجد كاميرات محلات تجارية مقابلة لموقع الاصطدام مباشرة"},
+                "لا توجد كاميرات مراقبة ظاهرة في محيط الموقع",
+                OTHER_OPTION,
+            ], "sample": "توجد كاميرات محلات تجارية مقابلة لموقع الاصطدام مباشرة",
+             "a4_compose": {"fmt": "{value}", "append_if": "cctv_info_other", "append_fmt": " — {extra}"}},
+            _other_field("cctv_info", "اكتب تفاصيل الكاميرات يدوياً"),
         ],
         "legal_fn": lambda m: (
             f"أقر أنا المبلّغ ({_val(m, 'party_name')})، حامل الهوية رقم ({_val(m, 'party_id')})، بصحة كافة البيانات والأوصاف المدونة أعلاه "
             f"بشأن تعرض مركبتي ({_val(m, 'plate_no')}) لحادث صدم وهروب في البلاغ رقم ({_val(m, 'incident_no')}) من قِبل المركبة الموصوفة بـ ({_val(m, 'flee_desc')}) "
-            f"والتي غادرت الموقع باتجاه ({_val(m, 'flee_dir')})، وحالة الكاميرات بالمحيط: ({_val(m, 'cctv_info')}). "
+            f"والتي غادرت الموقع باتجاه ({_val(m, 'flee_dir')})، وحالة الكاميرات بالمحيط: ({_sel(m, 'cctv_info')}). "
             f"وأقر بعدم وجود خلاف سابق أو شبهة جنائية خارج نطاق الحادث المروري، وأتحمل المسؤولية النظامية الكاملة في حال ثبوت كيدية البلاغ أو خلاف ما ذُكر."
         ),
     },
@@ -1393,20 +1485,22 @@ TRAFFIC_FORMS = {
         "fields": [
             {"key": "incident_no", "label": "رقم الحادث المرجعي", "type": "text", "sample": "460983990"},
             {"key": "speaker_role", "label": "صفة المدلي بالأقوال", "type": "select", "options": [
-                "طرف أول (قائد مركبة)", "طرف ثاني (قائد مركبة)", "طرف ثالث", "شاهد عيان حاضر بالموقع"
+                "طرف أول (قائد مركبة)",
+                "طرف ثاني (قائد مركبة)",
+                "طرف ثالث",
+                "راكب / مرافق",
+                "عابر طريق - مشاة",
+                "مالك مركبة متوقفة / عين متضررة",
+                "شاهد عيان حاضر بالموقع",
             ], "sample": "طرف أول (قائد مركبة)"},
             {"key": "party_name", "label": "الاسم الرباعي للمدلي بالأقوال", "type": "text", "sample": "ياسر بن إبراهيم بن حمد الشهري"},
             {"key": "party_id", "label": "رقم الهوية / الإقامة", "type": "text", "sample": "1078899001"},
             {"key": "party_phone", "label": "رقم الجوال", "type": "text", "sample": "0567788990"},
-            {"key": "plate_no", "label": "المركبة ورقم اللوحة", "type": "text", "sample": "كيا K5 رصاصي - ع م ن 2039"},
-            {"key": "lane_speed", "label": "المسار والاتجاه والسرعة التقديرية قبل الحادث", "type": "text", "sample": "المسار الأيمن متجهاً شرقاً بسرعة تقارب 70 كم/س"},
+            {"key": "plate_no", "label": "المركبة ورقم اللوحة (إن وجدت)", "type": "text", "sample": "كيا K5 رصاصي - ع م ن 2039"},
+            {"key": "lane_speed", "label": "المسار والاتجاه والسرعة التقديرية قبل الحادث (اختياري للشاهد)", "type": "text", "sample": "المسار الأيمن متجهاً شرقاً بسرعة تقارب 70 كم/س"},
             {"key": "statement_text", "label": "نص الإفادة الميدانية الفورية", "type": "textarea", "sample": "أثناء سيري النظامي في مساري فوجئت بدخول المركبة الأخرى من الفتحة الجانبية دون توقف أو إعطاء أفضلية، وحاولت التهدئة وتلافيها إلا أن ضيق المسافة أدى لوقوع الاصطدام."},
         ],
-        "legal_fn": lambda m: (
-            f"أقر أنا ({_val(m, 'party_name')})، حامل الهوية رقم ({_val(m, 'party_id')})، بصفتي ({_val(m, 'speaker_role')}) للمركبة ({_val(m, 'plate_no')}) "
-            f"في الحادث رقم ({_val(m, 'incident_no')})، بأنني كنت أسير في ({_val(m, 'lane_speed')})، وتتلخص إفادتي الفورية بالموقع في الآتي: "
-            f"\"{_val(m, 'statement_text')}\". وقد أدليت بهذه الأقوال طواعية وبكامل أهليتي فور مباشرة الحادث ودون إكراه لاعتمادها ضمن محاضر الاستدلال المروري."
-        ),
+        "legal_fn": lambda m: _statement_legal(m),
     },
 
     "decl_settlement": {
@@ -1579,8 +1673,12 @@ TRAFFIC_FORMS = {
                 "نقل قائد المركبة للمستشفى بالهلال الأحمر إثر حادث مروري",
                 "جرد وقائي إلزامي قبل سحب المركبة لساحة الحجز",
                 "مركبة متروكة في موقع يعيق الحركة المرورية",
-                "تفتيش احترازي لوجود شبهة مرورية أو أمنية بالموقع"
-            ], "sample": "نقل قائد المركبة للمستشفى بالهلال الأحمر إثر حادث مروري"},
+                "تفتيش احترازي لوجود شبهة مرورية أو أمنية بالموقع",
+                "وفاة قائد المركبة في الحادث",
+                OTHER_OPTION,
+            ], "sample": "نقل قائد المركبة للمستشفى بالهلال الأحمر إثر حادث مروري",
+             "a4_compose": {"fmt": "{value}", "append_if": "legal_reason_other", "append_fmt": " — {extra}"}},
+            _other_field("legal_reason", "اكتب المسوغ يدوياً"),
             {"key": "plate_no", "label": "بيانات المركبة ورقم اللوحة", "type": "text", "sample": "جيب لكزس أبيض - ر س ل 5500"},
             {"key": "party_name", "label": "اسم القائد / المالك (أو الشاهد الحاضر)", "type": "text", "sample": "نايف بن عبدالله القحطاني"},
             {"key": "party_id", "label": "رقم الهوية / الإقامة", "type": "text", "sample": "1054433221"},
@@ -1589,14 +1687,21 @@ TRAFFIC_FORMS = {
             {"key": "items_action", "label": "التصرف النظامي بالمقتنيات", "type": "select", "options": [
                 "حُفظت المقتنيات الثمينة بصندوق أمانات القسم بموجب سند رسمي",
                 "سُلمت المقتنيات الشخصية كاملة للمالك أو ذويه في الموقع",
-                "لا توجد مقتنيات ثمينة وبقيت التجهيزات العادية داخل المركبة المقفلة"
-            ], "sample": "حُفظت المقتنيات الثمينة بصندوق أمانات القسم بموجب سند رسمي"},
+                "سُلمت لجهة الاختصاص بموجب محضر رسمي",
+                "لا توجد مقتنيات ثمينة وبقيت التجهيزات العادية داخل المركبة المقفلة",
+                OTHER_OPTION,
+            ], "sample": "حُفظت المقتنيات الثمينة بصندوق أمانات القسم بموجب سند رسمي",
+             "a4_compose": {"fmt": "{value}", "append_if": "items_action_other", "append_fmt": " — {extra}"}},
+            _other_field("items_action", "اكتب التصرف يدوياً"),
+            {"key": "scene_officer", "label": "رتبة واسم مباشر الواقعة / الدورية الميدانية (اختياري)", "type": "text",
+             "sample": "", "placeholder": "يُذكر عند اختلافه عن ضابط الخفر"},
         ],
         "legal_fn": lambda m: (
-            f"إنه في الزمان والمكان المثبتين آلياً بترويسة هذا المحضر، واستناداً للمسوغ النظامي ({_val(m, 'legal_reason')}) في المعاملة رقم ({_val(m, 'incident_no')})، "
+            f"إنه في الزمان والمكان المثبتين آلياً بترويسة هذا المحضر، واستناداً للمسوغ النظامي ({_sel(m, 'legal_reason')}) في المعاملة رقم ({_val(m, 'incident_no')})، "
             f"جرى بمعرفتنا تفتيش المركبة ({_val(m, 'plate_no')}) العائدة لـ ({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')})، وحالتها الخارجية: ({_val(m, 'body_state')})، "
-            f"وأسفر الجرد الفعلي لمحتوياتها عن وجود: ({_val(m, 'inventory_list')})، وقد جرى اتخاذ الإجراء التالي حيالها: ({_val(m, 'items_action')}). "
-            f"حُرر هذا المحضر الرسمي إثباتاً للحالة وصوناً للأمانات ومنعاً لأي ادعاء لاحق."
+            f"وأسفر الجرد الفعلي لمحتوياتها عن وجود: ({_val(m, 'inventory_list')})، وقد جرى اتخاذ الإجراء التالي حيالها: ({_sel(m, 'items_action')}). "
+            + (f" ومباشر الواقعة الميدانية: ({_val(m, 'scene_officer')}). " if str(m.get('scene_officer') or '').strip() else "")
+            + "حُرر هذا المحضر الرسمي إثباتاً للحالة وصوناً للأمانات ومنعاً لأي ادعاء لاحق."
         ),
     },
 
@@ -1614,19 +1719,31 @@ TRAFFIC_FORMS = {
                 "السير بالمركبة بدون لوحات نهائياً على الطريق العام",
                 "ارتكاب مخالفة التفحيط أو الاستعراض الخطر",
                 "تعديلات جوهرية في المحرك أو الهيكل تخل بالسلامة والسكينة",
-                "مركبة مطلوبة بتعميم قبض أو حجز مروري ساري المفعول"
-            ], "sample": "طمس أو إخفاء معالم لوحات المركبة بقصد التمويه"},
+                "مركبة مطلوبة بتعميم قبض أو حجز مروري ساري المفعول",
+                "القيادة بدون رخصة",
+                "الاشتباه بحالة غير طبيعية",
+                "الحجز على ذمة حادث جسيم أو هروب",
+                "عكس السير أو قطع الإشارة",
+                "مركبة مهملة/معطلة تعيق الطريق",
+                "السائق هارب / غير متواجد",
+                OTHER_OPTION,
+            ], "sample": "طمس أو إخفاء معالم لوحات المركبة بقصد التمويه",
+             "a4_compose": {"fmt": "{value}", "append_if": "seize_reason_other", "append_fmt": " — {extra}"}},
+            _other_field("seize_reason", "اكتب سبب الضبط يدوياً"),
             {"key": "plate_no", "label": "نوع المركبة ورقم اللوحة / الهيكل", "type": "text", "sample": "شيفروليه كابرس أسود - ك هـ ي 9012"},
             {"key": "party_name", "label": "اسم قائد المركبة عند الضبط", "type": "text", "sample": "تركي بن منصور الدوسري"},
             {"key": "party_id", "label": "رقم الهوية / الإقامة", "type": "text", "sample": "1109876543"},
             {"key": "tow_truck", "label": "بيانات سطحة السحب واسم السائق", "type": "text", "sample": "سطحة الحجز المعتمدة رقم (14) - السائق: رفيق أحمد"},
             {"key": "impound_loc", "label": "ساحة الحجز المودعة بها المركبة", "type": "text", "sample": "ساحة حجز المرور بالعارضة"},
             {"key": "pre_tow_state", "label": "حالة الهيكل الخارجي قبل الرفع على السطحة", "type": "text", "sample": "خدوش سابقة بالصدام الخلفي والزجاج سليم والأبواب مقفلة"},
+            {"key": "scene_officer", "label": "رتبة واسم مباشر الواقعة / الدورية الميدانية (اختياري)", "type": "text",
+             "sample": "", "placeholder": "يُذكر عند اختلافه عن ضابط الخفر"},
         ],
         "legal_fn": lambda m: (
             f"بناءً على الصلاحيات النظامية المخولة لرجال المرور بموجب نظام المرور ولائحته التنفيذية، جرى في الزمان والمكان الموضحين بترويسة المحضر رقم ({_val(m, 'incident_no')}) "
-            f"ضبط المركبة ({_val(m, 'plate_no')}) بقيادة ({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')}) لارتكاب مخالفة ({_val(m, 'seize_reason')}). "
+            f"ضبط المركبة ({_val(m, 'plate_no')}) بقيادة ({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')}) لارتكاب مخالفة ({_sel(m, 'seize_reason')}). "
             f"وبمعاينة المركبة قبل الرفع تبين ({_val(m, 'pre_tow_state')})، وسُلمت ميدانياً إلى ({_val(m, 'tow_truck')}) لإيداعها في ({_val(m, 'impound_loc')}) لاستكمال المقتضى النظامي."
+            + (f" ومباشر الواقعة الميدانية: ({_val(m, 'scene_officer')})." if str(m.get('scene_officer') or '').strip() else "")
         ),
     },
 
@@ -1647,14 +1764,22 @@ TRAFFIC_FORMS = {
                 "خطأ مطبعي غير مقصود في أحرف أو أرقام اللوحة أثناء الرصد الميداني",
                 "تشابه مركبتين في ذات الموقع لحظة تحرير المخالفة",
                 "اختيار بند أو وصف مخالفة غير مطابق للواقعة بالخطأ",
-                "تكرار تقني مزدوج لذات المخالفة في وقت واحد بجهاز الرصد"
-            ], "sample": "خطأ مطبعي غير مقصود في أحرف أو أرقام اللوحة أثناء الرصد الميداني"},
+                "تكرار تقني مزدوج لذات المخالفة في وقت واحد بجهاز الرصد",
+                OTHER_OPTION,
+            ], "sample": "خطأ مطبعي غير مقصود في أحرف أو أرقام اللوحة أثناء الرصد الميداني",
+             "a4_compose": {"fmt": "{value}", "append_if": "error_reason_other", "append_fmt": " — {extra}"}},
+            _other_field("error_reason", "اكتب سبب الخطأ يدوياً"),
+            {"key": "observer_name", "label": "رتبة واسم راصد المخالفة", "type": "text",
+             "sample": "العريف سعيد بن محمد العسيري", "prefill_sample": True},
             {"key": "officer_note", "label": "إفادة راصد المخالفة التفصيلية", "type": "textarea", "sample": "أثناء مباشرة تنظيم الحركة المرورية جرى إدخال حرف (ج) بدلاً من (ح) بالخطأ للوحة المركبة المخالفة الفعلية، والمركبة المسجل عليها الإشعار لم تكن بالموقع."},
+            {"key": "scene_officer", "label": "رتبة واسم مباشر الواقعة / الدورية الميدانية (اختياري)", "type": "text",
+             "sample": "", "placeholder": "يُذكر عند اختلافه عن ضابط الخفر"},
         ],
         "legal_fn": lambda m: (
             f"نرفع هذا المحضر الرسمي بشأن المخالفة المرورية رقم ({_val(m, 'incident_no')}) المقيدة بتاريخ ({_val(m, 'viol_datetime')}) على اللوحة ({_val(m, 'plate_no')})، "
-            f"حيث تبين بعد المراجعة والتدقيق وقوع خطأ في الرصد ناتج عن ({_val(m, 'error_reason')})، والبيانات المرجعية هي ({_val(m, 'party_name')} - {_val(m, 'party_id')}). "
-            f"وإيضاح الراصد الميداني كالآتي: ({_val(m, 'officer_note')}). وعليه حُرر هذا المحضر مرفقاً به صورة المخالفة ومعتمداً للعرض على الهيئة المرورية لإلغاء المخالفة نظاماً."
+            f"حيث تبين بعد المراجعة والتدقيق وقوع خطأ في الرصد ناتج عن ({_sel(m, 'error_reason')})، والبيانات المرجعية هي ({_val(m, 'party_name')} - {_val(m, 'party_id')}). "
+            f"وراصد المخالفة: ({_val(m, 'observer_name')}). وإيضاح الراصد الميداني كالآتي: ({_val(m, 'officer_note')}). "
+            f"وعليه حُرر هذا المحضر مرفقاً به صورة المخالفة ومعتمداً للعرض على الهيئة المرورية لإلغاء المخالفة نظاماً."
         ),
     },
 
@@ -1672,19 +1797,25 @@ TRAFFIC_FORMS = {
                 "امتناع قائد مركبة عن إبراز الهوية أو التجاوب مع الفرقة",
                 "وجود عائق مروري خطر أو انسكاب مواد على الطريق العام",
                 "خلاف ميداني بين أطراف حادث مروري والسيطرة عليه بالموقع",
-                "واقعة ميدانية مرورية عارضة تستوجب التوثيق الرسمي"
-            ], "sample": "تلف ممتلكات عامة (عمود إنارة / لوحة إرشادية / سياج) جراء حادث"},
+                "واقعة ميدانية مرورية عارضة تستوجب التوثيق الرسمي",
+                OTHER_OPTION,
+            ], "sample": "تلف ممتلكات عامة (عمود إنارة / لوحة إرشادية / سياج) جراء حادث",
+             "a4_compose": {"fmt": "{value}", "append_if": "incident_kind_other", "append_fmt": " — {extra}"}},
+            _other_field("incident_kind", "اكتب تصنيف الواقعة يدوياً"),
             {"key": "party_name", "label": "اسم الطرف ذي العلاقة (إن وجد)", "type": "text", "sample": "فيصل بن راشد الغامدي"},
             {"key": "party_id", "label": "رقم الهوية / الإقامة", "type": "text", "sample": "1081122334"},
             {"key": "plate_no", "label": "بيانات المركبة / العين المتضررة بالموقع", "type": "text", "sample": "جمس سييرا (ط ك ل 6610) - عمود إنارة رقم 48"},
             {"key": "facts_detail", "label": "تفاصيل الوقائع المشاهدة عياناً بالموقع", "type": "textarea", "sample": "عند مباشرة الموقع تبين ارتطام المركبة المذكورة بعمود الإنارة رقم (48) بالجزيرة الوسطية مما أدى لميلان العمود وانكشاف الكيبل الأرضي دون إصابات بشرية."},
             {"key": "taken_measure", "label": "الإجراء الفوري المتخذ في الموقع", "type": "textarea", "sample": "تأمين الموقع بالدورية التحذيرية وإشعار طوارئ البلدية والكهرباء لمباشرة العمود واستكمال إجراءات الحادث."},
+            {"key": "scene_officer", "label": "رتبة واسم مباشر الواقعة / الدورية الميدانية (اختياري)", "type": "text",
+             "sample": "", "placeholder": "يُذكر عند اختلافه عن ضابط الخفر"},
         ],
         "legal_fn": lambda m: (
-            f"إنه في الزمان والمكان المثبتين آلياً بترويسة المحضر رقم ({_val(m, 'incident_no')})، وأثناء قيامنا بمهام العمل الميداني باشرنا واقعة ({_val(m, 'incident_kind')}) "
+            f"إنه في الزمان والمكان المثبتين آلياً بترويسة المحضر رقم ({_val(m, 'incident_no')})، وأثناء قيامنا بمهام العمل الميداني باشرنا واقعة ({_sel(m, 'incident_kind')}) "
             f"المرتبطة بـ ({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')}) والمركبة / الموقع ({_val(m, 'plate_no')}). "
             f"وقد ثبت لنا بالمعاينة المباشرة الآتي: ({_val(m, 'facts_detail')})، وجرى اتخاذ الإجراء الفوري التالي: ({_val(m, 'taken_measure')}). "
-            f"وعليه حُرر هذا المحضر الرسمي إثباتاً للواقعة على الطبيعة ورفعه لضابط الخفر لاستكمال اللازم نظاماً."
+            + (f" ومباشر الواقعة الميدانية: ({_val(m, 'scene_officer')}). " if str(m.get('scene_officer') or '').strip() else "")
+            + "وعليه حُرر هذا المحضر الرسمي إثباتاً للواقعة على الطبيعة ورفعه لضابط الخفر لاستكمال اللازم نظاماً."
         ),
     },
 
@@ -1709,21 +1840,30 @@ TRAFFIC_FORMS = {
             {"key": "transport_way", "label": "وسيلة الوصول للمستشفى والحالة الأولية", "type": "select", "options": [
                 "نُقل بواسطة فرقة الهلال الأحمر السعودي من موقع الحادث",
                 "راجع الطوارئ عن طريق ذويه / نقل خاص إثر الحادث",
-                "حضر برفقة الدورية المرورية المباشرة للموقع"
-            ], "sample": "نُقل بواسطة فرقة الهلال الأحمر السعودي من موقع الحادث"},
+                "حضر برفقة الدورية المرورية المباشرة للموقع",
+                OTHER_OPTION,
+            ], "sample": "نُقل بواسطة فرقة الهلال الأحمر السعودي من موقع الحادث",
+             "a4_compose": {"fmt": "{value}", "append_if": "transport_way_other", "append_fmt": " — {extra}"}},
+            _other_field("transport_way", "اكتب وسيلة النقل يدوياً"),
             {"key": "security_hold", "label": "التوجيه الأمني بعد تلقي العلاج", "type": "select", "options": [
                 "يُطلق سراحه بعد تلقي العلاج اللازم ما لم يكن مطلوباً لجهة أخرى",
                 "يُتحفظ عليه أمنياً ويُشعر قسم مرور العارضة قبل خروجه لاستكمال التحقيق",
-                "يبقى تحت الملاحظة الطبية مع تزويدنا بالتقرير الطبي العاجل"
-            ], "sample": "يُطلق سراحه بعد تلقي العلاج اللازم ما لم يكن مطلوباً لجهة أخرى"},
-            {"key": "other_injured", "label": "بيان المصابين الإضافيين (الاسم، الهوية، الصفة، الإصابة الظاهرة - أو يكتب لا يوجد)", "type": "textarea", "sample": "2- ريان بن موسى خبراني | هوية: 1123344556 | مرافق | إصابة متوسطة بالكتف الأيمن.\n3- عادل محمد علي | إقامة: 2456677889 | قائد الطرف الثاني | رضوض وكدمات متفرقة."},
+                "يبقى تحت الملاحظة الطبية مع تزويدنا بالتقرير الطبي العاجل",
+                OTHER_OPTION,
+            ], "sample": "يُطلق سراحه بعد تلقي العلاج اللازم ما لم يكن مطلوباً لجهة أخرى",
+             "a4_compose": {"fmt": "{value}", "append_if": "security_hold_other", "append_fmt": " — {extra}"}},
+            _other_field("security_hold", "اكتب التوجيه الأمني يدوياً"),
+            {"key": "other_injured", "label": "بيان المصابين الإضافيين (الاسم، الهوية، الصفة، الإصابة الظاهرة)", "type": "textarea",
+             "sample": "2- ريان بن موسى خبراني | هوية: 1123344556 | مرافق | إصابة متوسطة بالكتف الأيمن.\n3- عادل محمد علي | إقامة: 2456677889 | قائد الطرف الثاني | رضوض وكدمات متفرقة.",
+             "visible_if": {"key": "cases_mode", "contains_any": ["عدة مصابين"]}},
         ],
         "legal_fn": lambda m: (
             f"سعادة مدير ({_val(m, 'hospital_name')}) المحترم، السلام عليكم ورحمة الله وبركاته.. "
             f"إشارةً إلى الحادث المروري رقم ({_val(m, 'incident_no')})، نبعث لسعادتكم ({_val(m, 'cases_mode')})، وبيانات المصاب الرئيسي: "
-            f"({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')} - {_val(m, 'plate_no')})، وبيان المصابين الإضافيين: ({_val(m, 'other_injured')})، "
-            f"والواصلين إليكم ({_val(m, 'transport_way')}). نأمل الأمر بإجراء الكشف الطبي اللازم وإسعافهم ومعالجتهم وتنويم من تستدعي حالته الصحية ذلك، "
-            f"وموافاتنا بتقرير طبي مفصل ومعتمد لكل حالة يوضح نوع الإصابات ومدة الشفاء المقررة، مع اعتماد التوجيه الأمني التالي حيال الخروج: ({_val(m, 'security_hold')})."
+            f"({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')} - {_val(m, 'plate_no')})"
+            + (f"، وبيان المصابين الإضافيين: ({_val(m, 'other_injured')})" if "عدة" in str(m.get("cases_mode") or "") else "")
+            + f"، والواصلين إليكم ({_sel(m, 'transport_way')}). نأمل الأمر بإجراء الكشف الطبي اللازم وإسعافهم ومعالجتهم وتنويم من تستدعي حالته الصحية ذلك، "
+            f"وموافاتنا بتقرير طبي مفصل ومعتمد لكل حالة يوضح نوع الإصابات ومدة الشفاء المقررة، مع اعتماد التوجيه الأمني التالي حيال الخروج: ({_sel(m, 'security_hold')})."
         ),
     },
 
@@ -1747,21 +1887,30 @@ TRAFFIC_FORMS = {
             {"key": "transport_death", "label": "جهة إعلان الوفاة ووسيلة نقل الجثمان", "type": "select", "options": [
                 "وفاة في موقع الحادث ونُقل الجثمان عبر النقل المجهز (الشرشورة) بعد المعاينة",
                 "توفي في قسم الطوارئ بالمستشفى متأثراً بإصاباته البالغة بالحادث",
-                "نُقل بواسطة إسعاف الهلال الأحمر وتأكدت الوفاة طبياً عند الوصول"
-            ], "sample": "وفاة في موقع الحادث ونُقل الجثمان عبر النقل المجهز (الشرشورة) بعد المعاينة"},
+                "نُقل بواسطة إسعاف الهلال الأحمر وتأكدت الوفاة طبياً عند الوصول",
+                OTHER_OPTION,
+            ], "sample": "وفاة في موقع الحادث ونُقل الجثمان عبر النقل المجهز (الشرشورة) بعد المعاينة",
+             "a4_compose": {"fmt": "{value}", "append_if": "transport_death_other", "append_fmt": " — {extra}"}},
+            _other_field("transport_death", "اكتب وسيلة النقل يدوياً"),
             {"key": "forensic_order", "label": "التوجيه النظامي حيال التحفظ والكشف الطبي", "type": "select", "options": [
                 "إيداع الجثمان بالثلاجة والتحفظ عليه وعدم تسليمه إلا بخطاب فسح رسمي من قسم مرور العارضة",
                 "إجراء الكشف الطبي الظاهري وتزويدنا بتقرير الوفاة الرسمي وأسبابها المباشرة",
-                "إبقاء الجثمان رهن الفحص الطبي الشرعي بناءً على توجيه النيابة العامة"
-            ], "sample": "إيداع الجثمان بالثلاجة والتحفظ عليه وعدم تسليمه إلا بخطاب فسح رسمي من قسم مرور العارضة"},
-            {"key": "other_deceased", "label": "بيانات الجثامين الإضافية عند تعدد الوفيات (الاسم، الهوية، الصفة - أو يكتب لا يوجد)", "type": "textarea", "sample": "لا يوجد (جثمان واحد فقط)."},
+                "إبقاء الجثمان رهن الفحص الطبي الشرعي بناءً على توجيه النيابة العامة",
+                OTHER_OPTION,
+            ], "sample": "إيداع الجثمان بالثلاجة والتحفظ عليه وعدم تسليمه إلا بخطاب فسح رسمي من قسم مرور العارضة",
+             "a4_compose": {"fmt": "{value}", "append_if": "forensic_order_other", "append_fmt": " — {extra}"}},
+            _other_field("forensic_order", "اكتب التوجيه يدوياً"),
+            {"key": "other_deceased", "label": "بيانات الجثامين الإضافية عند تعدد الوفيات (الاسم، الهوية، الصفة)", "type": "textarea",
+             "sample": "2- ...",
+             "visible_if": {"key": "deceased_count", "contains_any": ["عدة جثامين"]}},
         ],
         "legal_fn": lambda m: (
             f"سعادة مدير ({_val(m, 'hospital_name')}) المحترم، السلام عليكم ورحمة الله وبركاته.. "
             f"على إثر الحادث المروري الجسيم رقم ({_val(m, 'incident_no')})، جرى بعث ({_val(m, 'deceased_count')}) للإيداع بثلاجة الموتى طرفكم، "
-            f"وبيانات الجثمان: ({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')} - {_val(m, 'plate_no')})، البيان الإضافي للوفيات: ({_val(m, 'other_deceased')})، "
-            f"حيث كانت واقعة الوفاة والنقل: ({_val(m, 'transport_death')}). نأمل من سعادتكم الأمر باستلام وإيداع الجثمان/الجثامين في الثلاجة رسمياً، "
-            f"وإجراء الكشف الطبي اللازم وموافاتنا بتقرير الوفاة المعتمد، مع التقيد التام بالتوجيه النظامي التالي: ({_val(m, 'forensic_order')})."
+            f"وبيانات الجثمان: ({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')} - {_val(m, 'plate_no')})"
+            + (f"، البيان الإضافي للوفيات: ({_val(m, 'other_deceased')})" if "عدة" in str(m.get("deceased_count") or "") else "")
+            + f"، حيث كانت واقعة الوفاة والنقل: ({_sel(m, 'transport_death')}). نأمل من سعادتكم الأمر باستلام وإيداع الجثمان/الجثامين في الثلاجة رسمياً، "
+            f"وإجراء الكشف الطبي اللازم وموافاتنا بتقرير الوفاة المعتمد، مع التقيد التام بالتوجيه النظامي التالي: ({_sel(m, 'forensic_order')})."
         ),
     },
 
@@ -1786,13 +1935,19 @@ TRAFFIC_FORMS = {
                 "الاشتباه بالقيادة تحت تأثير مسكر أو مخدر أو مؤثر عقلي لقرائن المعاينة الميدانية",
                 "حادث مروري جسيم نتج عنه وفيات أو إصابات بالغة يستوجب الفحص النظامي الشامل",
                 "ظهور علامات غير طبيعية واضطراب في التوازن والنطق أو العثور على مواد يشتبه بها",
-                "سحب عينة حيوية احترازية لحالة منومة أو متوفاة لتحديد المسببات السمية"
-            ], "sample": "الاشتباه بالقيادة تحت تأثير مسكر أو مخدر أو مؤثر عقلي لقرائن المعاينة الميدانية"},
+                "سحب عينة حيوية احترازية لحالة منومة أو متوفاة لتحديد المسببات السمية",
+                OTHER_OPTION,
+            ], "sample": "الاشتباه بالقيادة تحت تأثير مسكر أو مخدر أو مؤثر عقلي لقرائن المعاينة الميدانية",
+             "a4_compose": {"fmt": "{value}", "append_if": "suspicion_signs_other", "append_fmt": " — {extra}"}},
+            _other_field("suspicion_signs", "اكتب المسوغ يدوياً"),
             {"key": "sample_type", "label": "نوع العينات والفحص المخبري المطلوب", "type": "select", "options": [
                 "سحب عينتي دم وبول للكشف الكمي والنوعي عن الكحول والمخدرات والمؤثرات العقلية",
                 "سحب عينة دم وريدية عاجلة لقياس نسبة الكحول والسموم (حالة طوارئ / منوم)",
-                "فحص سموم جنائي شامل للعينات الحيوية مع تحريزها بأختام رسمية"
-            ], "sample": "سحب عينتي دم وبول للكشف الكمي والنوعي عن الكحول والمخدرات والمؤثرات العقلية"},
+                "فحص سموم جنائي شامل للعينات الحيوية مع تحريزها بأختام رسمية",
+                OTHER_OPTION,
+            ], "sample": "سحب عينتي دم وبول للكشف الكمي والنوعي عن الكحول والمخدرات والمؤثرات العقلية",
+             "a4_compose": {"fmt": "{value}", "append_if": "sample_type_other", "append_fmt": " — {extra}"}},
+            _other_field("sample_type", "اكتب نوع العينات يدوياً"),
             {"key": "escort_info", "label": "بيانات المرافق الأمني وإجراء التسليم والتحريز", "type": "textarea", "sample": "مبعوث برفقة الدورية المرورية المستلمة — يُسحب الفحص تحت الإشراف المباشر مع توثيق سلسلة الحيازة وإعادة المذكور برفقة المرافق الأمني فور الانتهاء."},
         ],
         "legal_fn": _toxicology_legal,
@@ -2565,6 +2720,98 @@ def render_officer_sig_pad_html() -> str:
 </body></html>"""
 
 
+def render_live_sig_bridge_listener() -> None:
+    """جسر postMessage لحفظ تواقيع اللوحات الحية (citizen/p1..p5/officer/duty) في الجلسة."""
+    st.html(
+        """
+<style>
+textarea[placeholder*="LIVE_SIG_BRIDGE"],
+div[data-testid="stTextArea"]:has(textarea[placeholder*="LIVE_SIG_BRIDGE"]) {
+  height: 0 !important; min-height: 0 !important; max-height: 0 !important;
+  padding: 0 !important; margin: 0 !important; border: none !important;
+  opacity: 0 !important; overflow: hidden !important; pointer-events: none !important;
+}
+</style>
+<script>
+(function(){
+  function fillLiveBridge(payload) {
+    if (!payload) return false;
+    var nodes = document.querySelectorAll('textarea');
+    for (var i = 0; i < nodes.length; i++) {
+      var ph = (nodes[i].getAttribute('placeholder') || '');
+      if (ph.indexOf('LIVE_SIG_BRIDGE') === -1) continue;
+      var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+      setter.call(nodes[i], String(payload));
+      nodes[i].dispatchEvent(new Event('input', { bubbles: true }));
+      nodes[i].dispatchEvent(new Event('change', { bubbles: true }));
+      try { nodes[i].focus(); nodes[i].blur(); } catch (e) {}
+      return true;
+    }
+    return false;
+  }
+  if (!window.__khafarLiveSigBridge) {
+    window.__khafarLiveSigBridge = true;
+    window.addEventListener('message', function(ev){
+      try {
+        var data = ev.data || {};
+        if (!data || data.type !== 'khafar_live_sig' || !data.padId) return;
+        fillLiveBridge(JSON.stringify({ padId: data.padId, b64: data.b64 || '' }));
+      } catch (e) {}
+    });
+  }
+})();
+</script>
+""",
+        unsafe_allow_javascript=True,
+    )
+
+
+def _consume_live_sig_bridge() -> None:
+    raw = st.session_state.get("live_sig_bridge") or ""
+    if not str(raw).strip():
+        return
+    try:
+        payload = json.loads(raw)
+        pad_id = str(payload.get("padId") or "").strip()
+        b64 = str(payload.get("b64") or "").strip()
+        if not pad_id:
+            return
+        pads = dict(st.session_state.get("live_sig_pads") or {})
+        prev = str(pads.get(pad_id) or "")
+        if prev == b64:
+            return
+        if b64:
+            pads[pad_id] = b64
+        else:
+            pads.pop(pad_id, None)
+        st.session_state.live_sig_pads = pads
+        if pad_id == "citizen" and b64:
+            st.session_state.citizen_stamp_b64 = b64
+        elif pad_id == "officer" and b64:
+            st.session_state.officer_stamp_b64 = b64
+        elif pad_id == "duty" and b64:
+            st.session_state.duty_stamp_b64 = b64
+    except Exception:
+        pass
+
+
+def _signer_id_for_pad(form_id: str, pad: str, values: dict) -> str:
+    values = values or {}
+    if form_id == "decl_flee_waiver" and pad == "p2":
+        return str(values.get("cause_id") or "").strip()
+    if form_id == "decl_animal_hit" and pad == "p2":
+        return str(values.get("owner_id") or "").strip()
+    if pad.startswith("p") and pad[1:].isdigit():
+        return str(values.get(f"{pad}_id") or values.get("party_id") or "").strip()
+    return str(
+        values.get("agent_id")
+        or values.get("party_id")
+        or values.get("p1_id")
+        or values.get("observer_name")
+        or ""
+    ).strip()
+
+
 def render_officer_sig_bridge_listener(*, allow_ls_restore: bool = False) -> None:
     """يستقبل توقيع اللوحة من iframe ويملأ حقل الجسر، مع استعادة اختيارية من localStorage."""
     restore_flag = "true" if allow_ls_restore else "false"
@@ -2732,7 +2979,7 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool, form_
             continue
         if not _include_field_on_a4(field, fields_map):
             continue
-        shown = str(fields_map.get(key, "-") or "-")
+        shown = _resolve_select_display(fields_map, key, str(fields_map.get(key, "-") or "-"))
         label = str(field.get("a4_label") or field["label"])
         sibling_key = field.get("a4_with")
         if sibling_key:
@@ -2748,7 +2995,10 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool, form_
             extra_key = compose.get("append_if")
             extra = str(fields_map.get(extra_key, "") or "").strip() if extra_key else ""
             if extra and compose.get("append_fmt"):
-                shown += str(compose["append_fmt"]).replace("{extra}", extra)
+                if "أخرى" in str(fields_map.get(key, "") or ""):
+                    shown = extra
+                else:
+                    shown += str(compose["append_fmt"]).replace("{extra}", extra)
         field = {**field, "label": label}
         isolate = key in {"plate_no", "party_id", "awtar_no"} or "لوحة" in label or "plate" in key.lower()
         wide = dense and _field_is_wide(field, shown)
@@ -2860,6 +3110,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             col1_role_line = f"هوية رقم: {agent_id}" if agent_id else ""
             citizen_pad_title = "لوحة توقيع: الوكيل الشرعي"
             citizen_pad_sub = " — ".join(part for part in (col1_top_name, col1_role_line) if part) or "الوكيل الشرعي"
+        elif rec.get("form_id") == "min_wrong_viol":
+            col1_header = "راصد المخالفة (محرر الإشعار)"
+            col1_top_name = str(fields_map.get("observer_name") or "").strip() or (rec.get("party_name") or "").strip()
+            if col1_top_name in {"", "غير محدد", "-"}:
+                col1_top_name = ""
+            col1_role_line = ""
+            citizen_pad_title = "لوحة توقيع: راصد المخالفة"
+            citizen_pad_sub = col1_top_name or "راصد المخالفة"
         else:
             col1_header = "الطرف المعني"
             col1_top_name = (rec.get("party_name") or "").strip()
@@ -3008,14 +3266,30 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 "</td>"
             )
 
+        party_stamps = rec.get("party_stamps") or {}
+        if not isinstance(party_stamps, dict):
+            party_stamps = {}
+        if not party_stamps and isinstance(fields_map.get("__party_stamps"), dict):
+            party_stamps = fields_map.get("__party_stamps") or {}
+        live_pads = rec.get("live_sig_pads") or fields_map.get("__live_sig_pads") or {}
+        if not isinstance(live_pads, dict):
+            live_pads = {}
         sig_slots = []
         for signer in party_signers:
-            if needs_party_live:
-                inner = "<div class='sig-guide'>" + _sig_slot_img("", f"slot_{signer['pad']}") + "</div>"
-            elif rec.get("citizen_stamp_b64"):
-                inner = _sig_slot_img(rec["citizen_stamp_b64"], f"slot_{signer['pad']}")
+            pad = signer["pad"]
+            pad_b64 = (
+                str(party_stamps.get(pad) or "").strip()
+                or str(live_pads.get(pad) or "").strip()
+                or str(fields_map.get(f"__sig_{pad}") or "").strip()
+            )
+            if needs_party_live and not pad_b64:
+                inner = "<div class='sig-guide'>" + _sig_slot_img("", f"slot_{pad}") + "</div>"
+            elif pad_b64:
+                inner = _sig_slot_img(pad_b64, f"slot_{pad}")
+            elif rec.get("citizen_stamp_b64") and len(party_signers) == 1:
+                inner = _sig_slot_img(rec["citizen_stamp_b64"], f"slot_{pad}")
             else:
-                inner = _sig_slot_img("", f"slot_{signer['pad']}")
+                inner = _sig_slot_img("", f"slot_{pad}")
             sig_slots.append((signer["header"], signer["name"], signer["role"], inner))
         if not is_toxicology:
             sig_slots.append(("ضابط الخفر", str(rec.get("officer_full") or ""), "", officer_box_inner))
@@ -3644,6 +3918,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 <body>
     <div class="toolbar no-print">
         <button class="print-btn" type="button" id="printOfficialBtn">🖨️ طباعة الوثيقة الرسمية / حفظ كملف A4 PDF</button>
+        <button class="print-btn" type="button" id="downloadSignedBtn" style="margin-right:8px;background:linear-gradient(135deg,#1f6f5b,#145a48);">⬇️ تنزيل الوثيقة شاملة التواقيع المرسومة</button>
     </div>
     <div class="zoom-bar no-print" id="zoomBar">
         <button type="button" class="z-btn" data-z="-">➖ تصغير</button>
@@ -3718,11 +3993,19 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         if (empty) {{
             slot.removeAttribute('src');
             slot.style.display = 'none';
+            try {{
+              parent.postMessage({{ type: 'khafar_live_sig', padId: padId, b64: '' }}, '*');
+            }} catch (e) {{}}
             return;
         }}
         // transparent PNG sync into A4 slot
-        slot.src = canvas.toDataURL('image/png');
+        const dataUrl = canvas.toDataURL('image/png');
+        slot.src = dataUrl;
         slot.style.display = 'inline-block';
+        try {{
+          const b64 = (dataUrl.split(',')[1] || '');
+          parent.postMessage({{ type: 'khafar_live_sig', padId: padId, b64: b64 }}, '*');
+        }} catch (e) {{}}
     }}
 
     function wireLivePad(padId) {{
@@ -3896,6 +4179,29 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }});
     }}
 
+    var dlBtn = document.getElementById("downloadSignedBtn");
+    if (dlBtn) {{
+        dlBtn.addEventListener("click", function(ev) {{
+            ev.preventDefault();
+            syncAllLivePads();
+            try {{
+              var paper = document.getElementById("a4Sheet");
+              if (!paper) return;
+              var htmlDoc = "<!DOCTYPE html><html lang='ar' dir='rtl'><head><meta charset='UTF-8'><title>وثيقة موقعة</title>"
+                + "<style>body{{margin:0;background:#fff;}} .live-sig-dock,.toolbar,.zoom-bar,.no-print{{display:none!important;}}</style>"
+                + "</head><body>" + paper.outerHTML + "</body></html>";
+              var blob = new Blob([htmlDoc], {{ type: "text/html;charset=utf-8" }});
+              var url = URL.createObjectURL(blob);
+              var a = document.createElement("a");
+              a.href = url;
+              a.download = "khafar-signed-doc.html";
+              document.body.appendChild(a);
+              a.click();
+              setTimeout(function(){{ URL.revokeObjectURL(url); a.remove(); }}, 400);
+            }} catch (e) {{}}
+        }});
+    }}
+
     window.onbeforeprint = prepareA4Print;
     window.addEventListener("beforeprint", prepareA4Print);
     window.addEventListener("afterprint", restoreA4Preview);
@@ -4004,6 +4310,10 @@ if "citizen_stamp_b64" not in st.session_state:
     st.session_state.citizen_stamp_b64 = ""
 if "citizen_auth_mode" not in st.session_state:
     st.session_state.citizen_auth_mode = ""
+if "party_stamps" not in st.session_state:
+    st.session_state.party_stamps = {}
+if "live_sig_pads" not in st.session_state:
+    st.session_state.live_sig_pads = {}
 if "officer_approved" not in st.session_state:
     st.session_state.officer_approved = False
 if "officer_stamp_b64" not in st.session_state:
@@ -4046,6 +4356,8 @@ def reset_doc_state():
     st.session_state.citizen_locked = False
     st.session_state.citizen_stamp_b64 = ""
     st.session_state.citizen_auth_mode = ""
+    st.session_state.party_stamps = {}
+    st.session_state.live_sig_pads = {}
     st.session_state.officer_approved = False
     st.session_state.officer_stamp_b64 = ""
     st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لضابط الخفر)"
@@ -4058,6 +4370,8 @@ def reset_doc_state():
     st.session_state.attachment_b64 = ""
     st.session_state.show_attachments_in_print = True
     st.session_state.att_upload_nonce = int(st.session_state.get("att_upload_nonce") or 0) + 1
+    if "live_sig_bridge" in st.session_state:
+        st.session_state.live_sig_bridge = ""
 
 
 all_archived = search_records_db("", DEVICE_HASH)
@@ -4350,6 +4664,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     if st.button("🔓 فك القفل (يمسح البصمة)", use_container_width=True):
                         st.session_state.citizen_locked = False
                         st.session_state.citizen_stamp_b64 = ""
+                        st.session_state.party_stamps = {}
+                        st.session_state.live_sig_pads = {}
                         st.session_state.officer_approved = False
                         st.session_state.officer_stamp_b64 = ""
                         st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لضابط الخفر)"
@@ -4445,11 +4761,24 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 else:
                     st.caption("بعد الاعتماد تُفتح لوحة توقيع المُبلّغ المتنازل، ولوحة الطرف المتسبب عند حضوره، بجانب ضابط الخفر ووحدة الحوادث.")
             else:
-                render_field_grid([fld for fld in form_def["fields"] if not fld.get("visible_if")])
+                pair_slot = 0
+                pair_cols = None
+                for fld in form_def["fields"]:
+                    if not _field_is_visible(fld, current_values):
+                        continue
+                    if fld["type"] == "textarea" or fld.get("stack_under"):
+                        current_values[fld["key"]] = render_field(fld)
+                        pair_slot = 0
+                        continue
+                    if pair_slot % 2 == 0:
+                        pair_cols = st.columns(2)
+                    with pair_cols[pair_slot % 2]:
+                        current_values[fld["key"]] = render_field(fld)
+                    pair_slot += 1
 
             for fld in form_def["fields"]:
                 key = fld.get("key")
-                if key and key in current_values and fld.get("normalize_digits"):
+                if key and key in current_values and _should_normalize_digits(fld):
                     current_values[key] = normalize_western_digits(current_values.get(key) or "")
 
             if fid == "decl_hit_run":
@@ -4648,18 +4977,39 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                                 st.session_state.receiver_name = ""
                                 st.session_state.receiver_role = ""
                             if "بصمة منفذ الشحن" in chosen_auth:
-                                signer_id = current_values.get("agent_id") or current_values.get("party_id") or current_values.get("p1_id", "")
-                                seed = f"{st.session_state.doc_no}_{signer_id}_CITIZEN"
-                                st.session_state.citizen_stamp_b64 = generate_fingerprint_png_b64(seed, ink_rgb=(13, 71, 161))
+                                party_signers = _waiver_signers(fid, current_values)
+                                party_stamps = {}
+                                if party_signers:
+                                    for signer in party_signers:
+                                        pad = signer["pad"]
+                                        sid = _signer_id_for_pad(fid, pad, current_values)
+                                        seed = f"{st.session_state.doc_no}_{sid}_{pad}_CITIZEN"
+                                        party_stamps[pad] = generate_fingerprint_png_b64(seed, ink_rgb=(13, 71, 161))
+                                    st.session_state.party_stamps = party_stamps
+                                    st.session_state.citizen_stamp_b64 = party_stamps.get(party_signers[0]["pad"], "")
+                                else:
+                                    signer_id = (
+                                        current_values.get("agent_id")
+                                        or current_values.get("party_id")
+                                        or current_values.get("p1_id")
+                                        or current_values.get("observer_name")
+                                        or ""
+                                    )
+                                    seed = f"{st.session_state.doc_no}_{signer_id}_CITIZEN"
+                                    st.session_state.citizen_stamp_b64 = generate_fingerprint_png_b64(seed, ink_rgb=(13, 71, 161))
+                                    st.session_state.party_stamps = {}
                                 st.session_state.citizen_auth_mode = "بصمة منفذ الشحن (Type-C)"
                             elif "توقيع حي" in chosen_auth:
                                 st.session_state.citizen_stamp_b64 = ""
+                                st.session_state.party_stamps = {}
                                 st.session_state.citizen_auth_mode = "توقيع حي على الشاشة"
                             elif "ختم وتوقيع" in chosen_auth:
                                 st.session_state.citizen_stamp_b64 = ""
+                                st.session_state.party_stamps = {}
                                 st.session_state.citizen_auth_mode = "ختم وتوقيع جهة الاستلام الرسمية"
                             else:
                                 st.session_state.citizen_stamp_b64 = ""
+                                st.session_state.party_stamps = {}
                                 st.session_state.citizen_auth_mode = "غياب الطرف / امتناع مثبت بالمحضر"
                             st.session_state.citizen_locked = True
                             safe_rerun()
@@ -4821,6 +5171,21 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 officer_full_final = (st.session_state.officer_full_override or "").strip() or unit_display
 
                 sync_attachments_to_session()
+                live_pads = dict(st.session_state.get("live_sig_pads") or {})
+                party_stamps = dict(st.session_state.get("party_stamps") or {})
+                fields_for_save = dict(current_values)
+                if party_stamps:
+                    fields_for_save["__party_stamps"] = party_stamps
+                if live_pads:
+                    fields_for_save["__live_sig_pads"] = live_pads
+                    for pad_key, pad_b64 in live_pads.items():
+                        if pad_b64:
+                            fields_for_save[f"__sig_{pad_key}"] = pad_b64
+                citizen_b64 = st.session_state.citizen_stamp_b64 or live_pads.get("citizen") or ""
+                if not citizen_b64 and party_stamps:
+                    citizen_b64 = next(iter(party_stamps.values()), "")
+                officer_b64 = st.session_state.officer_stamp_b64 or live_pads.get("officer") or ""
+                duty_b64 = st.session_state.duty_stamp_b64 or live_pads.get("duty") or ""
                 ready_record = {
                     "doc_no": st.session_state.doc_no,
                     "form_id": fid,
@@ -4831,11 +5196,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     "plate_no": plate_final,
                     "gps_coords": shift["default_gps"],
                     "created_at": st.session_state.doc_time,
-                    "fields": current_values,
+                    "fields": fields_for_save,
                     "legal_text": live_legal_text,
-                    "citizen_stamp_b64": st.session_state.citizen_stamp_b64,
+                    "citizen_stamp_b64": citizen_b64,
                     "citizen_auth_mode": st.session_state.citizen_auth_mode,
-                    "officer_stamp_b64": st.session_state.officer_stamp_b64,
+                    "officer_stamp_b64": officer_b64,
                     "attachment_b64": st.session_state.attachment_b64,
                     "show_attachments_in_print": bool(st.session_state.get("show_attachments_in_print", True)),
                     "officer_full": officer_full_final,
@@ -4844,14 +5209,22 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     "verify_hash": verify_hash,
                     "officer_auth_mode": st.session_state.officer_auth_mode,
                     "duty_auth_mode": st.session_state.duty_auth_mode,
-                    "duty_stamp_b64": st.session_state.duty_stamp_b64,
+                    "duty_stamp_b64": duty_b64,
                     "receiver_name": st.session_state.receiver_name if (is_med_form or is_letter_form) else "",
                     "receiver_role": st.session_state.receiver_role if (is_med_form or is_letter_form) else "",
+                    "party_stamps": party_stamps,
+                    "live_sig_pads": live_pads,
                 }
 
                 a4_html = build_official_a4_html(ready_record, form_def, logo_b64_global, interactive_sig=True)
+                a4_html_signed = build_official_a4_html(
+                    {**ready_record, "citizen_stamp_b64": citizen_b64, "officer_stamp_b64": officer_b64, "duty_stamp_b64": duty_b64},
+                    form_def,
+                    logo_b64_global,
+                    interactive_sig=False,
+                )
                 st.write("")
-                act1, act2 = st.columns(2)
+                act1, act2, act3 = st.columns(3)
                 with act1:
                     if not DEVICE_HASH:
                         st.warning("يُجهَّز تعريف هذا الجهاز داخل المتصفح قبل حفظ الأرشيف. أعد المحاولة بعد لحظة.")
@@ -4866,8 +5239,26 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         mime="text/html",
                         use_container_width=True,
                     )
+                with act3:
+                    st.download_button(
+                        "⬇️ تنزيل شاملة التواقيع المرسومة",
+                        data=a4_html_signed.encode("utf-8"),
+                        file_name=f"{ready_record['doc_no']}_signed.html",
+                        mime="text/html",
+                        use_container_width=True,
+                        key=f"dl_signed_{ready_record['doc_no']}",
+                    )
 
                 st.markdown("#### 📄 المعاينة الرسمية مقاس A4 (جاهزة للطباعة أو الحفظ كـ PDF)")
+                render_live_sig_bridge_listener()
+                st.text_area(
+                    "جسر التواقيع الحية",
+                    key="live_sig_bridge",
+                    height=68,
+                    placeholder="LIVE_SIG_BRIDGE",
+                    label_visibility="collapsed",
+                )
+                _consume_live_sig_bridge()
                 preview_h = 1480 if (
                     ("توقيع حي" in ready_record.get("citizen_auth_mode", ""))
                     or ("توقيع حي" in ready_record.get("officer_auth_mode", ""))
@@ -4896,12 +5287,28 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
     else:
         for r in records:
             with st.expander(f"📌 {r['form_title']}  —  {r['party_name']}  |  اللوحة: {r['plate_no']}  |  ({r['doc_no']})"):
-                c_info, c_dl, c_del = st.columns([3, 1, 1])
+                c_info, c_edit, c_dl, c_del = st.columns([2.4, 1.2, 1, 1])
                 with c_info:
                     st.write(f"**رقم الهوية:** `{r['party_id']}`  |  **الوقت:** `{r['created_at']}`  |  **التوثيق:** {r['citizen_auth_mode']}")
                     st.write(f"**ختم التحقق الرقمي:** `{r['verify_hash']}`")
                 f_def = TRAFFIC_FORMS.get(r["form_id"])
+                arch_fields = r.get("fields")
+                if not isinstance(arch_fields, dict):
+                    try:
+                        arch_fields = json.loads(r.get("fields_json") or "{}")
+                    except Exception:
+                        arch_fields = {}
+                if isinstance(arch_fields, dict):
+                    r = {**r, "fields": arch_fields, "party_stamps": arch_fields.get("__party_stamps") or {}, "live_sig_pads": arch_fields.get("__live_sig_pads") or {}}
                 arch_html = build_official_a4_html(r, f_def, logo_b64_global, interactive_sig=False)
+                with c_edit:
+                    if st.button("✏️ استدعاء وتعديل كسجل جديد", key=f"edit_{r['id']}", use_container_width=True):
+                        values = {k: v for k, v in (arch_fields or {}).items() if not str(k).startswith("__")}
+                        st.session_state.pending_form_prefill = {
+                            "form_id": r["form_id"],
+                            "values": values,
+                        }
+                        open_form_from_catalog(r["form_id"])
                 with c_dl:
                     st.download_button(
                         "⬇️ تنزيل A4",
