@@ -2279,6 +2279,7 @@ BLANK_SHIFT = {
 DUTY_SIG_KEY = "duty_sig_b64"
 DUTY_SIG_LS_KEY = "khafar_duty_sig"
 MANAGER_SIG_BACKUP = "manager_sig_backup.json"
+MANAGER_SIG_PNG = "manager_signature.png"
 MANAGER_AUTH_MODE = "توقيع مدير وحدة الحوادث المعتمد مركزياً"
 DEFAULT_MANAGER_TITLE = "مدير وحدة الحوادث بقسم مرور العارضة"
 DEVICE_COOKIE = "khafar_device_uid"
@@ -2498,8 +2499,47 @@ def _default_manager_settings() -> dict:
     }
 
 
+def _manager_sig_from_secrets() -> dict:
+    """نسخة دائمة من secrets لا تُمسح عند إعادة تشغيل Streamlit Cloud."""
+    out = {}
+    try:
+        b64 = str(st.secrets.get("MANAGER_SIGNATURE_B64", "") or "").strip()
+    except Exception:
+        b64 = ""
+    if b64:
+        if b64.startswith("data:"):
+            b64 = b64.split(",", 1)[-1]
+        out["manager_sig_b64"] = b64
+    try:
+        name = str(st.secrets.get("MANAGER_NAME", "") or "").strip()
+    except Exception:
+        name = ""
+    try:
+        title = str(st.secrets.get("MANAGER_TITLE", "") or "").strip()
+    except Exception:
+        title = ""
+    if name:
+        out["manager_name"] = name
+    if title:
+        out["manager_title"] = title
+    return out
+
+
+def _read_manager_sig_png_file() -> str:
+    try:
+        if not os.path.exists(MANAGER_SIG_PNG):
+            return ""
+        with open(MANAGER_SIG_PNG, "rb") as fh:
+            raw = fh.read()
+        if not raw:
+            return ""
+        return base64.b64encode(raw).decode("utf-8")
+    except Exception:
+        return ""
+
+
 def get_manager_signature_settings() -> dict:
-    """اقرأ توقيع مدير وحدة الحوادث المعتمد مركزياً من SQLite (مع استعادة من النسخة الاحتياطية إن لزم)."""
+    """اقرأ توقيع المدير: SQLite → ملف JSON/PNG → st.secrets (دائم)."""
     out = _default_manager_settings()
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -2528,7 +2568,6 @@ def get_manager_signature_settings() -> dict:
                     out["manager_sig_b64"] = str(backup.get("manager_sig_b64") or "")
                     out["auto_insert"] = bool(backup.get("auto_insert", out["auto_insert"]))
                     out["updated_at"] = str(backup.get("updated_at") or out["updated_at"])
-                    # أعد حقن النسخة الاحتياطية في قاعدة البيانات المشتركة
                     save_manager_signature_settings(
                         out["manager_name"],
                         out["manager_title"],
@@ -2538,6 +2577,46 @@ def get_manager_signature_settings() -> dict:
                     )
         except Exception:
             pass
+
+    if not out["manager_sig_b64"]:
+        png_b64 = _read_manager_sig_png_file()
+        if png_b64:
+            out["manager_sig_b64"] = png_b64
+            try:
+                save_manager_signature_settings(
+                    out["manager_name"],
+                    out["manager_title"],
+                    png_b64,
+                    out["auto_insert"],
+                    write_backup=True,
+                )
+            except Exception:
+                pass
+
+    if not out["manager_sig_b64"]:
+        secrets_data = _manager_sig_from_secrets()
+        if secrets_data.get("manager_sig_b64"):
+            out["manager_name"] = str(secrets_data.get("manager_name") or out["manager_name"])
+            out["manager_title"] = str(secrets_data.get("manager_title") or out["manager_title"]) or DEFAULT_MANAGER_TITLE
+            out["manager_sig_b64"] = str(secrets_data.get("manager_sig_b64") or "")
+            out["updated_at"] = out.get("updated_at") or "from secrets"
+            try:
+                save_manager_signature_settings(
+                    out["manager_name"],
+                    out["manager_title"],
+                    out["manager_sig_b64"],
+                    out["auto_insert"],
+                    write_backup=True,
+                )
+            except Exception:
+                pass
+    else:
+        # املأ الاسم/المسمى من secrets إن كانا فارغين محلياً
+        secrets_data = _manager_sig_from_secrets()
+        if not out["manager_name"] and secrets_data.get("manager_name"):
+            out["manager_name"] = secrets_data["manager_name"]
+        if (not out["manager_title"] or out["manager_title"] == DEFAULT_MANAGER_TITLE) and secrets_data.get("manager_title"):
+            out["manager_title"] = secrets_data["manager_title"]
 
     name = (out["manager_name"] or "").strip()
     title = (out["manager_title"] or DEFAULT_MANAGER_TITLE).strip()
@@ -2555,6 +2634,18 @@ def _write_manager_sig_backup(data: dict) -> None:
     }
     with open(MANAGER_SIG_BACKUP, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, indent=2)
+    # ملف PNG ثابت على السيرفر لاستعادة سريعة
+    try:
+        raw_b64 = str(payload.get("manager_sig_b64") or "").strip()
+        if raw_b64:
+            if raw_b64.startswith("data:"):
+                raw_b64 = raw_b64.split(",", 1)[-1]
+            with open(MANAGER_SIG_PNG, "wb") as fh:
+                fh.write(base64.b64decode(raw_b64))
+        elif os.path.exists(MANAGER_SIG_PNG):
+            os.remove(MANAGER_SIG_PNG)
+    except Exception:
+        pass
 
 
 def save_manager_signature_settings(
@@ -2564,7 +2655,7 @@ def save_manager_signature_settings(
     auto_insert: bool = True,
     write_backup: bool = True,
 ) -> dict:
-    cleaned_sig = make_ink_transparent_b64(manager_sig_b64) if manager_sig_b64 else ""
+    cleaned_sig = make_ink_transparent_b64(manager_sig_b64, max_w=520, max_h=200) if manager_sig_b64 else ""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     name = str(manager_name or "")[:180]
     title = str(manager_title or DEFAULT_MANAGER_TITLE)[:180] or DEFAULT_MANAGER_TITLE
@@ -2598,6 +2689,38 @@ def save_manager_signature_settings(
             pass
     data["display_name"] = f"{name} — {title}".strip(" —") if name.strip() else title
     return data
+
+
+def ingest_manager_signature_bytes(
+    raw_bytes: bytes,
+    manager_name: str,
+    manager_title: str,
+    auto_insert: bool = True,
+) -> dict:
+    """اعتماد توقيع من ملف مرفوع مباشرة إلى SQLite + الملفات الثابتة."""
+    if not raw_bytes:
+        raise ValueError("ملف التوقيع فارغ")
+    b64 = base64.b64encode(raw_bytes).decode("utf-8")
+    return save_manager_signature_settings(
+        manager_name,
+        manager_title or DEFAULT_MANAGER_TITLE,
+        b64,
+        auto_insert=auto_insert,
+    )
+
+
+def manager_secrets_snippet(data: dict | None = None) -> str:
+    cfg = data or get_manager_signature_settings()
+    b64 = str(cfg.get("manager_sig_b64") or "").strip()
+    name = str(cfg.get("manager_name") or "").replace('"', '\\"')
+    title = str(cfg.get("manager_title") or DEFAULT_MANAGER_TITLE).replace('"', '\\"')
+    return (
+        "# ألصق هذا في Streamlit Secrets مرة واحدة للأبد\n"
+        f'MANAGER_PIN = "{_manager_pin()}"\n'
+        f'MANAGER_NAME = "{name}"\n'
+        f'MANAGER_TITLE = "{title}"\n'
+        f'MANAGER_SIGNATURE_B64 = """{b64}"""\n'
+    )
 
 
 def clear_manager_signature_settings(keep_meta: bool = True) -> dict:
@@ -3223,7 +3346,7 @@ def render_officer_sig_pad_html() -> str:
 
 
 def render_manager_sig_pad_html() -> str:
-    """لوحة توقيع حي لمدير وحدة الحوادث — تُحفظ مركزياً لجميع الأفراد."""
+    """لوحة توقيع المدير: تنزيل PNG شفاف + نسخ Base64 — بدون جسر نصي وبدون كيبورد."""
     return """<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
@@ -3231,17 +3354,20 @@ def render_manager_sig_pad_html() -> str:
   body{margin:0;padding:8px;background:#0d1316;font-family:Cairo,Tahoma,sans-serif;color:#e2e8f0}
   .wrap{background:#101820;border:1px solid #c9a227;border-radius:12px;padding:10px}
   .title{font-weight:800;color:#f3cc7a;font-size:13px;margin-bottom:6px;text-align:center}
+  .hint{color:#94a3b8;font-size:11px;text-align:center;margin:4px 0 8px;line-height:1.45}
   canvas{width:100%;height:180px;border:1.5px dashed #c9a227;border-radius:8px;background:#ffffff;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair;display:block}
   .actions{display:flex;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap}
-  button{border:1px solid #d4a853;background:#112924;color:#fff;border-radius:8px;padding:7px 12px;font-weight:800;cursor:pointer}
-  .ok{color:#34d399;font-size:12px;font-weight:700;text-align:center;margin-top:6px;min-height:18px}
+  button{border:1px solid #d4a853;background:#112924;color:#fff;border-radius:8px;padding:8px 12px;font-weight:800;cursor:pointer;font-size:12px}
+  button.primary{background:#145a48;border-color:#34d399}
+  .ok{color:#34d399;font-size:12px;font-weight:700;text-align:center;margin-top:8px;min-height:34px;line-height:1.4}
 </style></head><body>
 <div class="wrap">
-  <div class="title">توقيع مدير وحدة الحوادث (إصبع أو قلم) — مرة واحدة لجميع الأفراد</div>
+  <div class="title">توقيع مدير وحدة الحوادث (إصبع أو قلم)</div>
+  <div class="hint">بعد الرسم اضغط «تجهيز وتنزيل» ثم ارفع الملف بالزر أسفل اللوحة لاعتماده فوراً لجميع الأفراد — بدون كيبورد.</div>
   <canvas id="pad_manager_settings" width="900" height="220" tabindex="-1"></canvas>
   <div class="actions">
     <button type="button" id="btnMgrClear">مسح اللوحة</button>
-    <button type="button" id="btnMgrAdopt">✅ اعتماد التوقيع في الجلسة</button>
+    <button type="button" class="primary" id="btnMgrExport">✅ تجهيز وتنزيل ملف التوقيع الشفاف</button>
   </div>
   <div class="ok" id="mgrPadStatus"></div>
 </div>
@@ -3250,7 +3376,6 @@ def render_manager_sig_pad_html() -> str:
   var canvas = document.getElementById('pad_manager_settings');
   var ctx = canvas.getContext('2d');
   var drawing = false;
-  var LS_KEY = 'khafar_manager_sig_staged';
   function pos(e){
     var r = canvas.getBoundingClientRect();
     var src = (e.touches && e.touches[0]) ? e.touches[0] : e;
@@ -3272,24 +3397,71 @@ def render_manager_sig_pad_html() -> str:
   canvas.addEventListener('touchstart', start, {passive:false});
   canvas.addEventListener('touchmove', move, {passive:false});
   canvas.addEventListener('touchend', end, {passive:false});
+
+  function isBlank(){
+    var blank = document.createElement('canvas');
+    blank.width = canvas.width; blank.height = canvas.height;
+    return canvas.toDataURL() === blank.toDataURL();
+  }
+
+  function toTransparentPng(srcCanvas, maxW){
+    var w = srcCanvas.width, h = srcCanvas.height;
+    var tmp = document.createElement('canvas');
+    tmp.width = w; tmp.height = h;
+    var tctx = tmp.getContext('2d');
+    tctx.drawImage(srcCanvas, 0, 0);
+    var img = tctx.getImageData(0, 0, w, h);
+    var d = img.data;
+    for (var i = 0; i < d.length; i += 4) {
+      var r = d[i], g = d[i+1], b = d[i+2];
+      var br = (r + g + b) / 3;
+      if (br >= 248) { d[i+3] = 0; }
+      else if (br >= 210) {
+        d[i] = Math.min(r, 30); d[i+1] = Math.min(g, 55); d[i+2] = Math.min(b, 140);
+        d[i+3] = Math.max(0, Math.min(255, Math.round((255 - br) * 4.2)));
+      } else {
+        d[i] = Math.min(r, 25); d[i+1] = Math.min(g, 50); d[i+2] = Math.min(Math.max(b, 90), 160); d[i+3] = 255;
+      }
+    }
+    tctx.putImageData(img, 0, 0);
+    if (maxW && w > maxW) {
+      var scale = maxW / w;
+      var out = document.createElement('canvas');
+      out.width = Math.round(w * scale);
+      out.height = Math.round(h * scale);
+      out.getContext('2d').drawImage(tmp, 0, 0, out.width, out.height);
+      return out.toDataURL('image/png');
+    }
+    return tmp.toDataURL('image/png');
+  }
+
   document.getElementById('btnMgrClear').onclick = function(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
     document.getElementById('mgrPadStatus').textContent = '';
-    try { localStorage.removeItem(LS_KEY); } catch (e) {}
-    try { parent.postMessage({ type: 'khafar_manager_sig', b64: '' }, '*'); } catch (e) {}
   };
-  document.getElementById('btnMgrAdopt').onclick = function(){
-    var blank = document.createElement('canvas');
-    blank.width = canvas.width; blank.height = canvas.height;
-    if (canvas.toDataURL() === blank.toDataURL()) {
-      document.getElementById('mgrPadStatus').textContent = 'ارسم التوقيع أولاً';
+
+  document.getElementById('btnMgrExport').onclick = function(){
+    if (isBlank()) {
+      document.getElementById('mgrPadStatus').textContent = 'ارسم التوقيع أولاً على اللوحة.';
       return;
     }
-    var dataUrl = canvas.toDataURL('image/png');
-    var b64 = dataUrl.split(',')[1] || '';
-    try { localStorage.setItem(LS_KEY, b64); } catch (e) {}
-    try { parent.postMessage({ type: 'khafar_manager_sig', b64: b64 }, '*'); } catch (e) {}
-    document.getElementById('mgrPadStatus').textContent = 'تم اعتماد التوقيع مؤقتاً — اضغط حفظ واعتماد لجميع الأفراد';
+    var dataUrl = toTransparentPng(canvas, 260);
+    var b64 = (dataUrl.split(',')[1] || '');
+    try {
+      var a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = 'manager_signature.png';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function(){ a.remove(); }, 200);
+    } catch (e) {}
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(b64).catch(function(){});
+      }
+    } catch (e) {}
+    document.getElementById('mgrPadStatus').textContent =
+      'تم تجهيز manager_signature.png وتنزيله. ارفعه الآن من الزر أسفل اللوحة لاعتماده فوراً لجميع الأفراد.';
   };
 })();
 </script>
@@ -3320,50 +3492,8 @@ def _harden_bridge_textarea_js(placeholder_token: str) -> str:
 
 
 def render_manager_sig_bridge_listener() -> None:
-    """جسر لالتقاط توقيع المدير عند الضغط على اعتماد فقط — بدون focus وبدون كيبورد."""
-    st.html(
-        f"""
-<style>
-textarea[placeholder*="MANAGER_SIG_BRIDGE"],
-div[data-testid="stTextArea"]:has(textarea[placeholder*="MANAGER_SIG_BRIDGE"]) {{
-  height: 0 !important; min-height: 0 !important; max-height: 0 !important;
-  padding: 0 !important; margin: 0 !important; border: none !important;
-  opacity: 0 !important; overflow: hidden !important; pointer-events: none !important;
-}}
-</style>
-<script>
-(function(){{
-{_harden_bridge_textarea_js("MANAGER_SIG_BRIDGE")}
-  function fillMgrBridge(payload) {{
-    if (payload === undefined || payload === null) return false;
-    hardenBridgeFields();
-    var nodes = document.querySelectorAll('textarea');
-    for (var i = 0; i < nodes.length; i++) {{
-      var ph = (nodes[i].getAttribute('placeholder') || '');
-      if (ph.indexOf('MANAGER_SIG_BRIDGE') === -1) continue;
-      var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-      setter.call(nodes[i], String(payload));
-      nodes[i].dispatchEvent(new Event('input', {{ bubbles: true }}));
-      nodes[i].dispatchEvent(new Event('change', {{ bubbles: true }}));
-      return true;
-    }}
-    return false;
-  }}
-  if (!window.__khafarManagerSigBridge) {{
-    window.__khafarManagerSigBridge = true;
-    window.addEventListener('message', function(ev){{
-      try {{
-        var data = ev.data || {{}};
-        if (!data || data.type !== 'khafar_manager_sig') return;
-        fillMgrBridge(data.b64 || '');
-      }} catch (e) {{}}
-    }});
-  }}
-}})();
-</script>
-""",
-        unsafe_allow_javascript=True,
-    )
+    """مُلغى: اعتماد المدير يتم عبر تنزيل PNG ثم st.file_uploader مباشرة."""
+    return
 
 
 def render_live_sig_bridge_listener() -> None:
@@ -3852,6 +3982,13 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         officer_box_inner = ""
     elif duty_stamp_now:
         duty_box_inner = _sig_slot_img(duty_stamp_now, "slot_duty")
+        if manager_auto:
+            duty_box_inner += (
+                '<div style="margin-top:4px;display:inline-block;border:1.2px solid #000;'
+                'padding:2px 8px;border-radius:4px;font-size:10.5px;font-weight:800;">'
+                "مُصادق ومُعتمد نظاماً"
+                "</div>"
+            )
     elif needs_duty_pad:
         duty_box_inner = (
             "<div class='sig-guide'>"
@@ -6377,8 +6514,8 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
     with mgr_tab:
         st.markdown("### ✍️ اعتماد التوقيع الحي لمدير وحدة الحوادث")
         st.caption(
-            "هذا القسم محمي برمز سري خاص بالمدير. التوقيع يُحفظ مركزياً في قاعدة SQLite المشتركة "
-            "مع نسخة احتياطية محلية، ويظهر تلقائياً لجميع الأفراد في خانة الاعتماد أسفل يسار الوثائق الرسمية."
+            "محمي برمز سري. اعتمد التوقيع عبر تنزيل PNG من اللوحة ثم رفعه بالزر أدناه — "
+            "يُحفظ في SQLite وملف ثابت على السيرفر ويظهر لجميع أفراد الخفر تلقائياً."
         )
         if "manager_pin_ok" not in st.session_state:
             st.session_state.manager_pin_ok = False
@@ -6422,86 +6559,8 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 help="أوقف هذا الخيار مؤقتاً أثناء الإجازات أو عند الحاجة لإخفاء التوقيع المركزي.",
             )
 
-            render_manager_sig_bridge_listener()
-            components.html(render_manager_sig_pad_html(), height=300, scrolling=False)
-            if st.session_state.pop("_clear_manager_sig_bridge", False):
-                st.session_state["manager_sig_bridge"] = ""
-            mgr_bridge = st.text_area(
-                "جسر توقيع المدير",
-                key="manager_sig_bridge",
-                height=68,
-                placeholder="MANAGER_SIG_BRIDGE",
-                label_visibility="collapsed",
-            )
-            if mgr_bridge and str(mgr_bridge).strip():
-                staged = make_ink_transparent_b64(str(mgr_bridge).strip())
-                if staged and staged != st.session_state.get("manager_sig_staged"):
-                    st.session_state.manager_sig_staged = staged
-                    st.session_state["_clear_manager_sig_bridge"] = True
-                    st.toast("تم التقاط توقيع المدير من اللوحة", icon="✅")
-                    safe_rerun()
-
-            staged_preview = str(
-                st.session_state.get("manager_sig_staged")
-                or mgr_now.get("manager_sig_b64")
-                or ""
-            ).strip()
-            if staged_preview:
-                try:
-                    st.image(
-                        base64.b64decode(staged_preview),
-                        caption="معاينة التوقيع (خلفية شفافة)",
-                        width=280,
-                    )
-                except Exception:
-                    st.caption("تعذّر عرض معاينة التوقيع.")
-
-            save_c, clear_c = st.columns(2)
-            with save_c:
-                if st.button(
-                    "💾 حفظ واعتماد التوقيع لجميع الأفراد",
-                    type="primary",
-                    use_container_width=True,
-                    key="manager_sig_save_all",
-                ):
-                    payload = str(
-                        st.session_state.get("manager_sig_staged")
-                        or mgr_now.get("manager_sig_b64")
-                        or ""
-                    ).strip()
-                    if not payload:
-                        st.warning("ارسم التوقيع على اللوحة واعتمده أولاً.")
-                    else:
-                        saved = save_manager_signature_settings(
-                            mgr_name,
-                            mgr_title or DEFAULT_MANAGER_TITLE,
-                            payload,
-                            auto_insert=bool(mgr_auto),
-                        )
-                        st.session_state.manager_sig_staged = saved.get("manager_sig_b64", "")
-                        st.success("تم حفظ توقيع المدير مركزياً وسيظهر لجميع الأفراد تلقائياً.")
-                        safe_rerun()
-            with clear_c:
-                if st.button(
-                    "🗑️ مسح/تغيير التوقيع المعتمد",
-                    use_container_width=True,
-                    key="manager_sig_clear_all",
-                ):
-                    clear_manager_signature_settings(keep_meta=True)
-                    st.session_state.manager_sig_staged = ""
-                    st.session_state["_clear_manager_sig_bridge"] = True
-                    # حفظ الاسم/المسمى/التفعيل الحالي بدون صورة
-                    save_manager_signature_settings(
-                        mgr_name,
-                        mgr_title or DEFAULT_MANAGER_TITLE,
-                        "",
-                        auto_insert=bool(mgr_auto),
-                    )
-                    st.success("تم مسح التوقيع المعتمد. يمكن إعادة الرسم الآن.")
-                    safe_rerun()
-
             if st.button(
-                "💾 حفظ الاسم/المسمى وخيار الظهور فقط",
+                "💾 حفظ الاسم/المسمى وخيار الظهور",
                 use_container_width=True,
                 key="manager_meta_save_only",
             ):
@@ -6514,11 +6573,91 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 st.success("تم تحديث بيانات المدير وخيار الظهور التلقائي.")
                 safe_rerun()
 
-            st.markdown("#### 📥 تنزيل / 📤 استعادة النسخة الاحتياطية")
+            st.markdown("##### 1️⃣ ارسم ثم نزّل ملف التوقيع الشفاف")
+            components.html(render_manager_sig_pad_html(), height=360, scrolling=False)
+
+            st.markdown("##### 2️⃣ ارفع الملف لاعتماده فوراً لجميع الأفراد")
+            mgr_upload = st.file_uploader(
+                "📤 أو ارفع/ثبّت صورة التوقيع المحفوظة هنا لاعتمادها فوراً لجميع الأفراد",
+                type=["png", "jpg", "jpeg", "webp"],
+                key="manager_sig_direct_upload",
+                help="ارفع manager_signature.png الذي نزل من اللوحة، أو أي صورة توقيع واضحة.",
+            )
+            if mgr_upload is not None:
+                try:
+                    raw = mgr_upload.getvalue()
+                    upload_token = hashlib.sha256(
+                        f"{mgr_upload.name}|{len(raw)}|".encode("utf-8") + raw[:2048]
+                    ).hexdigest()
+                    if st.session_state.get("_mgr_upload_token") != upload_token:
+                        saved = ingest_manager_signature_bytes(
+                            raw,
+                            mgr_name,
+                            mgr_title or DEFAULT_MANAGER_TITLE,
+                            auto_insert=bool(mgr_auto),
+                        )
+                        st.session_state["_mgr_upload_token"] = upload_token
+                        st.success(
+                            f"✅ تم اعتماد توقيع المدير على السيرفر: {saved.get('display_name') or DEFAULT_MANAGER_TITLE}"
+                        )
+                        safe_rerun()
+                except Exception as exc:
+                    st.error(f"تعذّر اعتماد ملف التوقيع: {exc}")
+
+            saved_sig = str(mgr_now.get("manager_sig_b64") or "").strip()
+            if saved_sig:
+                st.markdown(
+                    "<div style='background:#0f3d2e;border:1px solid #34d399;border-radius:10px;"
+                    "padding:12px 14px;color:#ecfdf5;font-weight:800;margin:10px 0;line-height:1.55;'>"
+                    "✅ التوقيع الحي محفوظ على السيرفر ويظهر الآن تلقائياً لجميع أفراد الخفر في الخطابات الجديدة"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+                try:
+                    st.image(
+                        base64.b64decode(saved_sig),
+                        caption=f"معاينة التوقيع المعتمد — {mgr_now.get('display_name') or DEFAULT_MANAGER_TITLE}",
+                        width=280,
+                    )
+                except Exception:
+                    st.caption("تعذّر عرض معاينة التوقيع المحفوظ.")
+                if mgr_now.get("updated_at"):
+                    st.caption(f"آخر تحديث: {mgr_now.get('updated_at')}")
+            else:
+                st.warning("لا يوجد توقيع مدير معتمد حالياً — نزّل من اللوحة ثم ارفع الملف أعلاه.")
+
+            if not bool(mgr_now.get("auto_insert", True)) and saved_sig:
+                st.warning("التوقيع محفوظ لكن الظهور التلقائي متوقف مؤقتاً.")
+
+            if st.button(
+                "🗑️ مسح/تغيير التوقيع المعتمد",
+                use_container_width=True,
+                key="manager_sig_clear_all",
+            ):
+                save_manager_signature_settings(
+                    mgr_name,
+                    mgr_title or DEFAULT_MANAGER_TITLE,
+                    "",
+                    auto_insert=bool(mgr_auto),
+                )
+                st.success("تم مسح التوقيع المعتمد. يمكن إعادة الرسم والرفع الآن.")
+                safe_rerun()
+
+            with st.expander("🔐 نص جاهز للصقه في Streamlit Secrets (نسخة دائمة للأبد)", expanded=False):
+                if saved_sig:
+                    st.code(manager_secrets_snippet(mgr_now), language="toml")
+                    st.caption(
+                        "الصق المحتوى في Secrets على Streamlit Cloud مرة واحدة؛ "
+                        "سيُستخدم كاحتياط دائم عبر MANAGER_SIGNATURE_B64 حتى بعد إعادة التشغيل."
+                    )
+                else:
+                    st.info("اعتمد توقيعاً أولاً لعرض نص الـ Secrets.")
+
+            st.markdown("#### 📥 تنزيل / 📤 استعادة النسخة الاحتياطية JSON")
             dl_c, up_c = st.columns(2)
             with dl_c:
                 st.download_button(
-                    "📥 تنزيل نسخة احتياطية من التوقيع المعتمد",
+                    "📥 تنزيل نسخة احتياطية JSON",
                     data=export_manager_signature_backup_bytes(),
                     file_name="manager_sig_backup.json",
                     mime="application/json",
@@ -6527,32 +6666,21 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 )
             with up_c:
                 backup_file = st.file_uploader(
-                    "📤 استعادة النسخة الاحتياطية",
+                    "📤 استعادة من JSON",
                     type=["json"],
                     key="manager_sig_backup_upload",
                 )
                 if backup_file is not None and st.button(
-                    "📤 استعادة التوقيع من الملف",
+                    "📤 استعادة التوقيع من JSON",
                     use_container_width=True,
                     key="manager_sig_backup_restore",
                 ):
                     try:
-                        restored = import_manager_signature_backup(backup_file.getvalue())
-                        st.session_state.manager_sig_staged = restored.get("manager_sig_b64", "")
+                        import_manager_signature_backup(backup_file.getvalue())
                         st.success("تمت استعادة توقيع المدير من النسخة الاحتياطية.")
                         safe_rerun()
                     except Exception as exc:
                         st.error(f"تعذّرت الاستعادة: {exc}")
-
-            if mgr_now.get("manager_sig_b64") and mgr_now.get("auto_insert"):
-                st.success(
-                    f"✅ التوقيع المركزي مفعّل حالياً: {mgr_now.get('display_name') or DEFAULT_MANAGER_TITLE}"
-                    + (f" — آخر تحديث: {mgr_now.get('updated_at')}" if mgr_now.get("updated_at") else "")
-                )
-            elif mgr_now.get("manager_sig_b64"):
-                st.warning("التوقيع محفوظ لكن الظهور التلقائي متوقف مؤقتاً.")
-            else:
-                st.info("لا يوجد توقيع مدير معتمد حالياً.")
 
     with otg_tab:
         st.caption("وضع المحاكاة الصوري معزول حتى توصيل القارئ الفعلي عبر Type-C.")

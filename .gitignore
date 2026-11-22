@@ -3,3 +3,4 @@ __pycache__/
 *.db
 takmeel_backup*.json
 manager_sig_backup.json
+manager_signature.png
