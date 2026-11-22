@@ -4657,15 +4657,28 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
     }}
     .a4-fit {{ display: flex; flex-direction: column; justify-content: flex-start; flex: 1 1 auto; min-height: 100%; }}
-    .hdr {{
-        display: grid; grid-template-columns: 1fr auto 1fr;
-        align-items: center; gap: 12px;
-        padding: 2px 0 8px 0 !important; margin-bottom: 6px !important;
+    .hdr, .header, .report-header {{
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        width: 100% !important;
+        gap: 0 !important;
+        padding: 2px 0 8px 0 !important;
+        margin-bottom: 8px !important;
         border-bottom: 2px solid #0f5132;
+        box-sizing: border-box !important;
+    }}
+    .hdr > div:first-child,
+    .hdr > div:last-child,
+    .header > div:first-child,
+    .header > div:last-child {{
+        width: 38% !important;
+        max-width: 38% !important;
+        box-sizing: border-box !important;
     }}
     .hdr-right {{
-        text-align: center; line-height: 1.28 !important;
-        margin: 0 !important; padding: 0 !important;
+        text-align: center !important; line-height: 1.28 !important;
+        margin: 0 !important; padding: 0 8px 0 0 !important;
     }}
     .hdr-right p {{
         margin: 0 !important; padding: 0 !important;
@@ -4674,9 +4687,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     .hdr-center {{
         text-align: center; display: flex; justify-content: center; align-items: center;
-        width: 88px; height: 88px; min-width: 88px; min-height: 88px;
-        margin: 0; padding: 0 !important; background: transparent !important;
-        border: none !important; border-radius: 0 !important; box-shadow: none !important;
+        width: 88px !important; height: 88px; min-width: 88px; min-height: 88px;
+        flex: 0 0 88px !important; margin: 0 auto; padding: 0 !important;
+        background: transparent !important; border: none !important; border-radius: 0 !important; box-shadow: none !important;
     }}
     .hdr-center img, .hdr-logo {{
         width: 88px !important; height: 88px !important;
@@ -4686,17 +4699,23 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         background: transparent !important;
         -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }}
-    .hdr-left {{
-        text-align: right; padding: 0 !important; margin: 0 !important;
+    .hdr-left, .hdr > div:last-child, .header > div:last-child {{
+        text-align: left !important;
+        padding-right: 15px !important;
+        padding-left: 0 !important;
+        margin: 0 !important;
         line-height: 1.32 !important;
     }}
     .hdr-left p {{
         margin: 0 !important; padding: 0 !important;
         font-size: 11.5px !important; font-weight: 700 !important;
         line-height: 1.32 !important; color: #000000 !important;
+        text-align: left !important;
+        overflow-wrap: anywhere !important; word-break: break-word !important;
+        white-space: normal !important;
     }}
     .hdr-left p.hdr-nowrap {{
-        white-space: nowrap !important;
+        white-space: normal !important;
     }}
     .doc-banner {{
         background: #0f3d2e; color: #ffffff !important; text-align: center;
@@ -4820,8 +4839,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     .a4-compact, .a4-dense-print {{ padding: 14px 32px 20px 32px !important; }}
     .a4-compact .hdr, .a4-dense-print .hdr {{
-        padding: 2px 0 8px 0 !important; margin-bottom: 6px !important;
-        grid-template-columns: 1fr auto 1fr; gap: 12px;
+        display: flex !important; justify-content: space-between !important; align-items: center !important;
+        width: 100% !important; padding: 2px 0 8px 0 !important; margin-bottom: 8px !important;
         border-bottom: 2px solid #0f5132;
     }}
     .a4-compact .hdr-center, .a4-dense-print .hdr-center {{
@@ -4987,27 +5006,47 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         .a4-paper .legal-box > div:first-child {{ text-align: right !important; }}
 
-        .a4-paper .hdr {{
-            display: grid !important; grid-template-columns: 1fr auto 1fr !important;
-            align-items: center !important; gap: 8px !important;
-            padding: 2px 0 6px 0 !important; margin-bottom: 5px !important;
+        .a4-paper .hdr, .a4-paper .header, .a4-paper .report-header {{
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            width: 100% !important;
+            gap: 0 !important;
+            padding: 2px 0 6px 0 !important;
+            margin-bottom: 8px !important;
             border-bottom: 2px solid #0f5132 !important;
             page-break-inside: avoid !important; break-inside: avoid !important;
+            box-sizing: border-box !important;
+        }}
+        .a4-paper .hdr > div:first-child,
+        .a4-paper .hdr > div:last-child {{
+            width: 38% !important;
+            max-width: 38% !important;
+            box-sizing: border-box !important;
         }}
         .a4-paper .hdr-right p {{
             margin: 0 !important; padding: 0 !important;
             font-size: 11.5px !important; font-weight: 800 !important;
             line-height: 1.28 !important; color: #000000 !important;
+            text-align: center !important;
+        }}
+        .a4-paper .hdr-left, .a4-paper .hdr > div:last-child {{
+            text-align: left !important;
+            padding-right: 15px !important;
         }}
         .a4-paper .hdr-left p {{
             margin: 0 !important; padding: 0 !important;
             font-size: 10.5px !important; font-weight: 700 !important;
             line-height: 1.3 !important; color: #000000 !important;
+            text-align: left !important;
+            white-space: normal !important;
+            overflow-wrap: anywhere !important; word-break: break-word !important;
         }}
-        .a4-paper .hdr-left p.hdr-nowrap {{ white-space: nowrap !important; }}
+        .a4-paper .hdr-left p.hdr-nowrap {{ white-space: normal !important; }}
         .a4-paper .hdr-center {{
             width: 72px !important; height: 72px !important;
             min-width: 72px !important; min-height: 72px !important;
+            flex: 0 0 72px !important;
             padding: 0 !important; background: transparent !important;
             border: none !important; box-shadow: none !important;
         }}
