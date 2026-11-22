@@ -5374,9 +5374,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         </div>
         <div class="a4-row a4-row-mid">
             <div class="a4-cell legal-wrap-cell">
-                <div class="legal-box" dir="rtl" style="direction:rtl; text-align:justify; text-justify:inter-word; text-align-last:right; overflow-wrap:break-word; white-space:normal; width:100%; max-width:100%; box-sizing:border-box;">
-                    <div class="legal-title" dir="rtl" style="font-weight:800; color:#000000; direction:rtl; text-align:right;">{legal_box_title}</div>
-                    <div class="legal-body" dir="rtl" style="direction:rtl; unicode-bidi:embed; text-align:justify; text-justify:inter-word; text-align-last:right; overflow-wrap:break-word; word-break:normal; white-space:normal; word-spacing:normal; color:#000000; font-weight:700;">&#8207;{cleaned_legal_text}</div>
+                <div class="legal-box" dir="rtl">
+                    <div class="legal-title" dir="rtl">{legal_box_title}</div>
+                    <div class="legal-body" dir="rtl">&#8207;{cleaned_legal_text}</div>
                 </div>
                 {attachment_block}
             </div>
@@ -5769,7 +5769,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     function expandLegalToFillSpace(rootDoc) {{
         const doc = rootDoc || document;
-        const frame = doc.getElementById("a4PageFrame") || doc.querySelector(".a4-page-frame");
         const sheet = doc.getElementById("a4Sheet")
             || doc.querySelector(".a4-sheet")
             || doc.querySelector(".a4-paper");
@@ -5779,30 +5778,51 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         const win = doc.defaultView || window;
         const t = getPrintHeightTargets(win);
         const TARGET_H_PX = t.TARGET_H_PX;
-        const SAFE_CAP = TARGET_H_PX - 16;
 
-        applyPrintPhysicalSize(doc, true);
-        void sheet.offsetHeight;
+        // امسح أي قيود سطرية على حجم الخط / تباعد الأسطر من الصندوق ونصه
+        try {{
+            [legal].concat(Array.from(legal.querySelectorAll(".legal-title, .legal-body, div"))).forEach(function(el) {{
+                try {{
+                    el.style.removeProperty("font-size");
+                    el.style.removeProperty("line-height");
+                    el.style.removeProperty("padding");
+                    el.style.removeProperty("margin");
+                }} catch (clr) {{}}
+            }});
+        }} catch (eClr) {{}}
 
-        function midEndEl() {{
-            const mid = sheet.querySelector(".legal-wrap-cell");
-            if (!mid) return legal;
-            const att = mid.querySelector(".attachment-section");
-            return att || legal;
+        function blockH(el) {{
+            if (!el) return 0;
+            try {{
+                const cs = win.getComputedStyle(el);
+                const mt = parseFloat(cs.marginTop) || 0;
+                const mb = parseFloat(cs.marginBottom) || 0;
+                return (el.offsetHeight || el.getBoundingClientRect().height || 0) + mt + mb;
+            }} catch (e) {{
+                return el.offsetHeight || 0;
+            }}
         }}
 
-        function gapToSig() {{
-            try {{
-                const endEl = midEndEl();
-                const sigEl = sheet.querySelector(".sig-footer")
-                    || sheet.querySelector(".sig-bottom-cell");
-                if (!endEl || !sigEl) return 0;
-                const a = endEl.getBoundingClientRect();
-                const b = sigEl.getBoundingClientRect();
-                return b.top - a.bottom;
-            }} catch (e2) {{
-                return 0;
+        function measureUsedH() {{
+            // مجموع ارتفاعات الكتل الفعلية فقط (بدون الاعتماد على scrollHeight للحاوية الثابتة)
+            let sum = 0;
+            const topCell = sheet.querySelector(".a4-top-cell");
+            if (topCell) {{
+                sum += blockH(topCell);
+            }} else {{
+                sum += blockH(sheet.querySelector(".hdr"));
+                sum += blockH(sheet.querySelector(".doc-banner"));
+                sum += blockH(sheet.querySelector("table.data-tbl"));
             }}
+            sum += blockH(legal);
+            sum += blockH(sheet.querySelector(".attachment-section"));
+            const sig = sheet.querySelector(".sig-footer") || sheet.querySelector(".sig-bottom-cell");
+            sum += blockH(sig);
+            return sum;
+        }}
+
+        function freeSpace() {{
+            return TARGET_H_PX - measureUsedH();
         }}
 
         function currentLegalMetrics() {{
@@ -5821,77 +5841,93 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 pt: parseFloat(cs.paddingTop) || 0,
                 pr: parseFloat(cs.paddingRight) || 0,
                 pb: parseFloat(cs.paddingBottom) || 0,
-                pl: parseFloat(cs.paddingLeft) || 0
+                pl: parseFloat(cs.paddingLeft) || 0,
+                mt: parseFloat(cs.marginTop) || 0,
+                mb: parseFloat(cs.marginBottom) || 0
             }};
         }}
 
         function applyLegalMetrics(m) {{
-            const padY = Math.min(18, Math.max(m.pt, m.pb));
-            const padX = Math.min(20, Math.max(m.pr, m.pl));
+            const padY = Math.min(20, Math.max(m.pt, m.pb));
+            const padX = Math.min(22, Math.max(m.pr, m.pl));
+            const marY = Math.min(14, Math.max(m.mt, m.mb, 0));
             legal.style.setProperty("font-size", m.fs.toFixed(2) + "px", "important");
             legal.style.setProperty("line-height", m.lh.toFixed(3), "important");
             legal.style.setProperty("padding", padY.toFixed(2) + "px " + padX.toFixed(2) + "px", "important");
+            legal.style.setProperty("margin", marY.toFixed(2) + "px 0", "important");
             legal.querySelectorAll(".legal-body, .legal-title, div").forEach(function(el) {{
                 el.style.setProperty("font-size", m.fs.toFixed(2) + "px", "important");
                 el.style.setProperty("line-height", m.lh.toFixed(3), "important");
             }});
         }}
 
-        function atCap(m) {{
-            return m.fs >= 16.5 - 0.01 && m.lh >= 2.25 - 0.01
-                && Math.max(m.pt, m.pb) >= 18 - 0.01
-                && Math.max(m.pr, m.pl) >= 20 - 0.01;
+        function applyDataTblBump(fs, padY, padX) {{
+            sheet.querySelectorAll("table.data-tbl th, table.data-tbl td").forEach(function(el) {{
+                el.style.setProperty("font-size", fs.toFixed(2) + "px", "important");
+                el.style.setProperty("padding", padY.toFixed(2) + "px " + padX.toFixed(2) + "px", "important");
+            }});
         }}
 
-        // قياس الفراغ مع ارتفاع مؤقت auto ثم إعادة القفل
-        try {{
-            sheet.style.setProperty("height", "auto", "important");
-            sheet.style.setProperty("max-height", "none", "important");
-            sheet.style.setProperty("overflow", "visible", "important");
-        }} catch (eAuto) {{}}
-        void sheet.offsetHeight;
-        let naturalH = sheet.scrollHeight || 0;
+        function atCap(m) {{
+            return m.fs >= 16.5 - 0.01 && m.lh >= 2.25 - 0.01
+                && Math.max(m.pt, m.pb) >= 20 - 0.01
+                && Math.max(m.pr, m.pl) >= 22 - 0.01
+                && Math.max(m.mt, m.mb) >= 14 - 0.01;
+        }}
+
+        // تأكد من قفل ارتفاع الورقة ثم قِس الفراغ الحقيقي من مجموع الكتل
         applyPrintPhysicalSize(doc, true);
         void sheet.offsetHeight;
-
-        let gap = gapToSig();
-        // إن كان المحتوى أصلاً قريباً من السقف فلا توسّع
-        if (naturalH > SAFE_CAP || gap < 60) return 0;
+        let free = freeSpace();
+        if (free <= 85) return 0;
 
         let steps = 0;
-        while (gap >= 60 && steps < 24) {{
+        let dataFs = 12.5;
+        let dataPadY = 5;
+        let dataPadX = 8;
+        try {{
+            const sample = sheet.querySelector("table.data-tbl td");
+            if (sample) {{
+                const cs = win.getComputedStyle(sample);
+                dataFs = parseFloat(cs.fontSize) || dataFs;
+                dataPadY = parseFloat(cs.paddingTop) || dataPadY;
+                dataPadX = parseFloat(cs.paddingLeft) || dataPadX;
+            }}
+        }} catch (e0) {{}}
+
+        while (free > 85 && steps < 28) {{
             const before = currentLegalMetrics();
-            if (atCap(before)) break;
+            const beforeData = {{ fs: dataFs, padY: dataPadY, padX: dataPadX }};
+            if (atCap(before) && dataFs >= 13.5 - 0.01) break;
 
             const next = {{
                 fs: Math.min(16.5, before.fs + 0.35),
-                lh: Math.min(2.25, before.lh + 0.045),
-                pt: Math.min(18, before.pt + 0.55),
-                pr: Math.min(20, before.pr + 0.55),
-                pb: Math.min(18, before.pb + 0.55),
-                pl: Math.min(20, before.pl + 0.55)
+                lh: Math.min(2.25, before.lh + 0.05),
+                pt: Math.min(20, before.pt + 0.65),
+                pr: Math.min(22, before.pr + 0.65),
+                pb: Math.min(20, before.pb + 0.65),
+                pl: Math.min(22, before.pl + 0.65),
+                mt: Math.min(14, Math.max(before.mt, 4) + 0.5),
+                mb: Math.min(14, Math.max(before.mb, 4) + 0.5)
             }};
             applyLegalMetrics(next);
-            // قيس الارتفاع الطبيعي بعد التكبير
-            try {{
-                sheet.style.setProperty("height", "auto", "important");
-                sheet.style.setProperty("max-height", "none", "important");
-                sheet.style.setProperty("overflow", "visible", "important");
-            }} catch (eM) {{}}
+            dataFs = Math.min(13.5, dataFs + 0.2);
+            dataPadY = Math.min(8, dataPadY + 0.25);
+            dataPadX = Math.min(10, dataPadX + 0.25);
+            applyDataTblBump(dataFs, dataPadY, dataPadX);
             void sheet.offsetHeight;
-            const hNow = sheet.scrollHeight || 0;
-            applyPrintPhysicalSize(doc, true);
-            void sheet.offsetHeight;
-            const newGap = gapToSig();
-            if (hNow > SAFE_CAP || newGap < 18) {{
+
+            const newFree = freeSpace();
+            // توقف قبل التواقيع بهامش أمان 22px، ولا تتجاوز صفحة واحدة
+            if (newFree < 22 || measureUsedH() > TARGET_H_PX - 22) {{
                 applyLegalMetrics(before);
-                applyPrintPhysicalSize(doc, true);
+                applyDataTblBump(beforeData.fs, beforeData.padY, beforeData.padX);
                 void sheet.offsetHeight;
                 break;
             }}
-            gap = newGap;
+            free = newFree;
             steps += 1;
-            if (next.fs >= 16.5 && next.lh >= 2.25 && next.pt >= 18 && next.pr >= 20) break;
+            if (atCap(next) && dataFs >= 13.5 - 0.01) break;
         }}
         applyPrintPhysicalSize(doc, true);
         return steps;
@@ -6093,6 +6129,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + '.a4-row{{display:table-row !important;}}.a4-cell{{display:table-cell !important;width:100% !important;}}'
             + '.a4-row-mid{{height:100% !important;}}.legal-wrap-cell{{vertical-align:top !important;}}'
             + '.sig-bottom-cell{{vertical-align:bottom !important;}}'
+            + '@media screen{{'
+            + 'html,body{{margin:0 !important;padding:12px !important;background:#0f172a !important;'
+            + 'display:flex !important;flex-direction:column !important;align-items:center !important;'
+            + 'direction:rtl !important;width:100% !important;height:auto !important;overflow:auto !important;}}'
+            + '.no-print{{width:100% !important;max-width:720px !important;box-sizing:border-box !important;}}'
+            + '.a4-page-frame{{width:min(100%,210mm) !important;max-width:100% !important;height:auto !important;'
+            + 'max-height:none !important;margin:0 auto 16px auto !important;transform-origin:top center !important;'
+            + 'box-shadow:0 10px 28px rgba(0,0,0,0.45) !important;}}'
+            + '.a4-sheet,.a4-paper{{width:100% !important;height:auto !important;min-height:0 !important;'
+            + 'max-height:none !important;margin:0 auto !important;}}'
+            + '}}'
             + '@media print{{.no-print{{display:none !important;}}'
             + 'html,body{{width:100% !important;height:auto !important;margin:0 !important;padding:0 !important;overflow:hidden !important;}}'
             + '.a4-page-frame{{width:100% !important;height:254mm !important;max-height:254mm !important;overflow:hidden !important;'
@@ -6101,7 +6148,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + '.a4-sheet,.a4-paper{{height:945px !important;max-height:945px !important;overflow:hidden !important;width:100% !important;margin:0 auto !important;}}'
             + 'html.a4-print-desktop .a4-sheet,html.a4-print-desktop .a4-paper,'
             + 'body.a4-print-desktop .a4-sheet,body.a4-print-desktop .a4-paper{{height:1035px !important;max-height:1035px !important;}}}}'
-            + '</style></head><body style="margin:0;padding:0;background:#fff;direction:rtl;width:100%;height:auto;overflow:hidden;">'
+            + '</style></head><body style="margin:0;padding:12px;background:#0f172a;direction:rtl;width:100%;height:auto;overflow:auto;display:flex;flex-direction:column;align-items:center;">'
             + topBar + frameHtml
             + '<script>(function(){{'
             + 'window.__khafarPrintWin=true;document.__khafarPrintWin=true;'
@@ -6161,41 +6208,56 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + 'if(frame){{try{{frame.style.setProperty("overflow","hidden","important");}}catch(e6){{}}}}'
             + 'return step;}}'
             + 'function expandLegalToFillSpace(rootDoc){{'
-            + 'var doc=rootDoc||document;var t=getPrintHeightTargets();var TARGET_H_PX=t.TARGET_H_PX;var SAFE_CAP=TARGET_H_PX-16;'
-            + 'var frame=doc.getElementById("a4PageFrame")||doc.querySelector(".a4-page-frame");'
+            + 'var doc=rootDoc||document;var t=getPrintHeightTargets();var TARGET_H_PX=t.TARGET_H_PX;'
             + 'var sheet=doc.getElementById("a4Sheet")||doc.querySelector(".a4-sheet")||doc.querySelector(".a4-paper");'
             + 'if(!sheet)return 0;var legal=sheet.querySelector(".legal-box");if(!legal)return 0;'
-            + 'var win=doc.defaultView||window;applyPrintPhysicalSize(doc);void sheet.offsetHeight;'
-            + 'function midEndEl(){{var mid=sheet.querySelector(".legal-wrap-cell");if(!mid)return legal;'
-            + 'var att=mid.querySelector(".attachment-section");return att||legal;}}'
-            + 'function gapToSig(){{try{{var endEl=midEndEl();var sigEl=sheet.querySelector(".sig-footer")||sheet.querySelector(".sig-bottom-cell");'
-            + 'if(!endEl||!sigEl)return 0;return sigEl.getBoundingClientRect().top-endEl.getBoundingClientRect().bottom;}}catch(e2){{return 0;}}}}'
+            + 'var win=doc.defaultView||window;'
+            + 'try{{[legal].concat(Array.from(legal.querySelectorAll(".legal-title,.legal-body,div"))).forEach(function(el){{'
+            + 'try{{el.style.removeProperty("font-size");el.style.removeProperty("line-height");'
+            + 'el.style.removeProperty("padding");el.style.removeProperty("margin");}}catch(clr){{}}}});}}catch(eClr){{}}'
+            + 'function blockH(el){{if(!el)return 0;try{{var cs=win.getComputedStyle(el);'
+            + 'return (el.offsetHeight||0)+(parseFloat(cs.marginTop)||0)+(parseFloat(cs.marginBottom)||0);}}catch(e){{return el.offsetHeight||0;}}}}'
+            + 'function measureUsedH(){{var sum=0;var topCell=sheet.querySelector(".a4-top-cell");'
+            + 'if(topCell){{sum+=blockH(topCell);}}else{{sum+=blockH(sheet.querySelector(".hdr"));'
+            + 'sum+=blockH(sheet.querySelector(".doc-banner"));sum+=blockH(sheet.querySelector("table.data-tbl"));}}'
+            + 'sum+=blockH(legal);sum+=blockH(sheet.querySelector(".attachment-section"));'
+            + 'sum+=blockH(sheet.querySelector(".sig-footer")||sheet.querySelector(".sig-bottom-cell"));return sum;}}'
+            + 'function freeSpace(){{return TARGET_H_PX-measureUsedH();}}'
             + 'function currentLegalMetrics(){{var cs=win.getComputedStyle(legal);var fs=parseFloat(cs.fontSize)||12;var lhRatio=NaN;'
             + 'var lhRaw=cs.lineHeight;if(lhRaw&&lhRaw!=="normal"){{var lhPx=parseFloat(lhRaw);if(!isNaN(lhPx)&&fs>0)lhRatio=lhPx/fs;}}'
             + 'if(isNaN(lhRatio)||lhRatio<1.05)lhRatio=1.6;return {{fs:fs,lh:lhRatio,pt:parseFloat(cs.paddingTop)||0,'
-            + 'pr:parseFloat(cs.paddingRight)||0,pb:parseFloat(cs.paddingBottom)||0,pl:parseFloat(cs.paddingLeft)||0}};}}'
-            + 'function applyLegalMetrics(m){{var padY=Math.min(18,Math.max(m.pt,m.pb));var padX=Math.min(20,Math.max(m.pr,m.pl));'
+            + 'pr:parseFloat(cs.paddingRight)||0,pb:parseFloat(cs.paddingBottom)||0,pl:parseFloat(cs.paddingLeft)||0,'
+            + 'mt:parseFloat(cs.marginTop)||0,mb:parseFloat(cs.marginBottom)||0}};}}'
+            + 'function applyLegalMetrics(m){{var padY=Math.min(20,Math.max(m.pt,m.pb));var padX=Math.min(22,Math.max(m.pr,m.pl));'
+            + 'var marY=Math.min(14,Math.max(m.mt,m.mb,0));'
             + 'legal.style.setProperty("font-size",m.fs.toFixed(2)+"px","important");'
             + 'legal.style.setProperty("line-height",m.lh.toFixed(3),"important");'
             + 'legal.style.setProperty("padding",padY.toFixed(2)+"px "+padX.toFixed(2)+"px","important");'
+            + 'legal.style.setProperty("margin",marY.toFixed(2)+"px 0","important");'
             + 'legal.querySelectorAll(".legal-body,.legal-title,div").forEach(function(el){{'
             + 'el.style.setProperty("font-size",m.fs.toFixed(2)+"px","important");'
             + 'el.style.setProperty("line-height",m.lh.toFixed(3),"important");}});}}'
-            + 'function atCap(m){{return m.fs>=16.49&&m.lh>=2.24&&Math.max(m.pt,m.pb)>=17.99&&Math.max(m.pr,m.pl)>=19.99;}}'
-            + 'try{{sheet.style.setProperty("height","auto","important");sheet.style.setProperty("max-height","none","important");'
-            + 'sheet.style.setProperty("overflow","visible","important");}}catch(eA){{}}void sheet.offsetHeight;'
-            + 'var naturalH=sheet.scrollHeight||0;applyPrintPhysicalSize(doc);void sheet.offsetHeight;'
-            + 'var gap=gapToSig();if(naturalH>SAFE_CAP||gap<60)return 0;var steps=0;'
-            + 'while(gap>=60&&steps<24){{var before=currentLegalMetrics();if(atCap(before))break;'
-            + 'var next={{fs:Math.min(16.5,before.fs+0.35),lh:Math.min(2.25,before.lh+0.045),'
-            + 'pt:Math.min(18,before.pt+0.55),pr:Math.min(20,before.pr+0.55),'
-            + 'pb:Math.min(18,before.pb+0.55),pl:Math.min(20,before.pl+0.55)}};'
-            + 'applyLegalMetrics(next);'
-            + 'try{{sheet.style.setProperty("height","auto","important");sheet.style.setProperty("max-height","none","important");'
-            + 'sheet.style.setProperty("overflow","visible","important");}}catch(eM){{}}void sheet.offsetHeight;'
-            + 'var hNow=sheet.scrollHeight||0;applyPrintPhysicalSize(doc);void sheet.offsetHeight;var newGap=gapToSig();'
-            + 'if(hNow>SAFE_CAP||newGap<18){{applyLegalMetrics(before);applyPrintPhysicalSize(doc);void sheet.offsetHeight;break;}}'
-            + 'gap=newGap;steps+=1;if(next.fs>=16.5&&next.lh>=2.25&&next.pt>=18&&next.pr>=20)break;}}'
+            + 'function applyDataTblBump(fs,padY,padX){{sheet.querySelectorAll("table.data-tbl th,table.data-tbl td").forEach(function(el){{'
+            + 'el.style.setProperty("font-size",fs.toFixed(2)+"px","important");'
+            + 'el.style.setProperty("padding",padY.toFixed(2)+"px "+padX.toFixed(2)+"px","important");}});}}'
+            + 'function atCap(m){{return m.fs>=16.49&&m.lh>=2.24&&Math.max(m.pt,m.pb)>=19.99&&Math.max(m.pr,m.pl)>=21.99&&Math.max(m.mt,m.mb)>=13.99;}}'
+            + 'applyPrintPhysicalSize(doc);void sheet.offsetHeight;var free=freeSpace();if(free<=85)return 0;'
+            + 'var steps=0;var dataFs=12.5;var dataPadY=5;var dataPadX=8;'
+            + 'try{{var sample=sheet.querySelector("table.data-tbl td");if(sample){{var cs0=win.getComputedStyle(sample);'
+            + 'dataFs=parseFloat(cs0.fontSize)||dataFs;dataPadY=parseFloat(cs0.paddingTop)||dataPadY;'
+            + 'dataPadX=parseFloat(cs0.paddingLeft)||dataPadX;}}}}catch(e0){{}}'
+            + 'while(free>85&&steps<28){{var before=currentLegalMetrics();var beforeData={{fs:dataFs,padY:dataPadY,padX:dataPadX}};'
+            + 'if(atCap(before)&&dataFs>=13.49)break;'
+            + 'var next={{fs:Math.min(16.5,before.fs+0.35),lh:Math.min(2.25,before.lh+0.05),'
+            + 'pt:Math.min(20,before.pt+0.65),pr:Math.min(22,before.pr+0.65),'
+            + 'pb:Math.min(20,before.pb+0.65),pl:Math.min(22,before.pl+0.65),'
+            + 'mt:Math.min(14,Math.max(before.mt,4)+0.5),mb:Math.min(14,Math.max(before.mb,4)+0.5)}};'
+            + 'applyLegalMetrics(next);dataFs=Math.min(13.5,dataFs+0.2);dataPadY=Math.min(8,dataPadY+0.25);'
+            + 'dataPadX=Math.min(10,dataPadX+0.25);applyDataTblBump(dataFs,dataPadY,dataPadX);void sheet.offsetHeight;'
+            + 'var newFree=freeSpace();'
+            + 'if(newFree<22||measureUsedH()>TARGET_H_PX-22){{applyLegalMetrics(before);'
+            + 'applyDataTblBump(beforeData.fs,beforeData.padY,beforeData.padX);void sheet.offsetHeight;break;}}'
+            + 'free=newFree;steps+=1;if(atCap(next)&&dataFs>=13.49)break;}}'
             + 'applyPrintPhysicalSize(doc);return steps;}}'
             + 'function balanceA4Page(rootDoc){{var doc=rootDoc||document;applyPrintPhysicalSize(doc);'
             + 'stepDownFitA4(doc);expandLegalToFillSpace(doc);applyPrintPhysicalSize(doc);}}'
