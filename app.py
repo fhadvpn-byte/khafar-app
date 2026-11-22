@@ -6333,8 +6333,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     setTimeout(scheduleA4Fit, 600);
 </script>
 
+
 <style id="khafar-final-a4-fix">
-  .legal-box {
+  .legal-box {{
     display: flex !important;
     flex-direction: column !important;
     justify-content: center !important;
@@ -6345,14 +6346,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     border-radius: 6px !important;
     width: 100% !important;
     box-sizing: border-box !important;
-  }
-  .legal-box .legal-box-title {
+  }}
+  .legal-box .legal-box-title {{
     font-weight: 800 !important;
     color: #000000 !important;
     text-align: right !important;
     margin-bottom: 8px !important;
-  }
-  .legal-box .legal-box-body {
+  }}
+  .legal-box .legal-box-body {{
     direction: rtl !important;
     unicode-bidi: embed !important;
     text-align: justify !important;
@@ -6362,8 +6363,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     font-weight: 700 !important;
     overflow-wrap: break-word !important;
     white-space: normal !important;
-  }
-  img.sig-slot-img {
+  }}
+  img.sig-slot-img {{
     background: #ffffff !important;
     mix-blend-mode: normal !important;
     max-height: 58px !important;
@@ -6371,19 +6372,19 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     max-width: 95% !important;
     object-fit: contain !important;
     margin: 2px auto !important;
-  }
-  @media print {
-    @page { margin: 5mm 6mm !important; }
-    html, body {
+  }}
+  @media print {{
+    @page {{ margin: 5mm 6mm !important; }}
+    html, body {{
       margin: 0 !important;
       padding: 0 !important;
       background: #ffffff !important;
       width: 100% !important;
       height: auto !important;
       overflow: hidden !important;
-    }
-    .no-print, .toolbar, .zoom-bar, .live-sig-dock { display: none !important; }
-    #a4Sheet {
+    }}
+    .no-print, .toolbar, .zoom-bar, .live-sig-dock {{ display: none !important; }}
+    #a4Sheet {{
       display: flex !important;
       flex-direction: column !important;
       justify-content: space-between !important;
@@ -6397,52 +6398,51 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       page-break-inside: avoid !important;
       break-inside: avoid !important;
       overflow: hidden !important;
-    }
-  }
+    }}
+  }}
 </style>
 <script id="khafar-final-js-fix">
-(function() {
-  window.__padInk = window.__padInk || {};
+(function() {{
+  window.__padInk = window.__padInk || {{}};
 
-  function bindInkTracker(padId) {
+  function bindInkTracker(padId) {{
     var c = document.getElementById('pad_' + padId);
     if (!c || c.dataset.inkBound === '1') return;
     c.dataset.inkBound = '1';
-    var mark = function() { c.dataset.hasInk = '1'; window.__padInk[padId] = true; };
-    c.addEventListener('pointerdown', mark, { passive: true });
-    c.addEventListener('touchstart', mark, { passive: true });
+    var mark = function() {{ c.dataset.hasInk = '1'; window.__padInk[padId] = true; }};
+    c.addEventListener('pointerdown', mark, {{ passive: true }});
+    c.addEventListener('touchstart', mark, {{ passive: true }});
     c.addEventListener('mousedown', mark);
-  }
-  if (typeof LIVE_PADS !== 'undefined' && Array.isArray(LIVE_PADS)) {
+  }}
+  if (typeof LIVE_PADS !== 'undefined' && Array.isArray(LIVE_PADS)) {{
     LIVE_PADS.forEach(bindInkTracker);
-  }
+  }}
 
-  var origClear = window.clearLivePad;
-  window.clearLivePad = function(padId) {
+  window.clearLivePad = function(padId) {{
     var c = document.getElementById('pad_' + padId);
-    if (c) {
+    if (c) {{
       delete c.dataset.hasInk;
       window.__padInk[padId] = false;
       c.getContext('2d').clearRect(0, 0, c.width, c.height);
-    }
+    }}
     var s = document.getElementById('slot_' + padId);
-    if (s) {
+    if (s) {{
       s.removeAttribute('src');
       s.style.setProperty('display', 'none', 'important');
-    }
-    try { if (typeof padStorageKey === 'function') localStorage.removeItem(padStorageKey(padId)); } catch (e) {}
-  };
+    }}
+    try {{ if (typeof padStorageKey === 'function') localStorage.removeItem(padStorageKey(padId)); }} catch (e) {{}}
+  }};
 
-  window.syncPadToSlot = function(padId) {
+  window.syncPadToSlot = function(padId) {{
     var canvas = document.getElementById('pad_' + padId);
     var slot = document.getElementById('slot_' + padId);
     if (!canvas || !slot) return;
     var hasInk = (canvas.dataset.hasInk === '1') || !!window.__padInk[padId];
-    if (!hasInk) {
+    if (!hasInk) {{
       var saved = '';
-      try { if (typeof padStorageKey === 'function') saved = localStorage.getItem(padStorageKey(padId)) || ''; } catch (e) {}
+      try {{ if (typeof padStorageKey === 'function') saved = localStorage.getItem(padStorageKey(padId)) || ''; }} catch (e) {{}}
       if (!saved) return;
-    }
+    }}
     var out = document.createElement('canvas');
     out.width = canvas.width;
     out.height = canvas.height;
@@ -6453,19 +6453,19 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     var dataUrl = out.toDataURL('image/png');
     slot.setAttribute('src', dataUrl);
     slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; max-height:58px !important; width:auto !important; max-width:95% !important; margin:2px auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
-    try {
+    try {{
       var b64 = (dataUrl.split(',')[1] || '');
       if (b64 && typeof padStorageKey === 'function') localStorage.setItem(padStorageKey(padId), b64);
-    } catch (e) {}
-  };
+    }} catch (e) {{}}
+  }};
 
-  window.syncAllLivePads = function() {
-    if (typeof LIVE_PADS !== 'undefined' && Array.isArray(LIVE_PADS)) {
-      LIVE_PADS.forEach(function(p) { window.syncPadToSlot(p); });
-    }
-  };
+  window.syncAllLivePads = function() {{
+    if (typeof LIVE_PADS !== 'undefined' && Array.isArray(LIVE_PADS)) {{
+      LIVE_PADS.forEach(function(p) {{ window.syncPadToSlot(p); }});
+    }}
+  }};
 
-  function balanceSheetTypography(docRoot, targetH) {
+  function balanceSheetTypography(docRoot, targetH) {{
     var sheet = docRoot.getElementById('a4Sheet');
     if (!sheet) return;
     sheet.style.setProperty('display', 'flex', 'important');
@@ -6483,76 +6483,74 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     var rowsCnt = sheet.querySelectorAll('table.data-tbl tr').length;
     var textLen = legalBody ? (legalBody.textContent || '').trim().length : 0;
 
-    if (rowsCnt <= 6 && textLen <= 520) {
-      tblCells.forEach(function(td) {
+    if (rowsCnt <= 6 && textLen <= 520) {{
+      tblCells.forEach(function(td) {{
         td.style.setProperty('font-size', '13.5px', 'important');
         td.style.setProperty('padding', '9px 11px', 'important');
         td.style.setProperty('line-height', '1.6', 'important');
-      });
-      if (legal) {
+      }});
+      if (legal) {{
         legal.style.setProperty('padding', '20px 22px', 'important');
         legal.style.setProperty('margin', '10px 0 14px 0', 'important');
-      }
+      }}
       if (legalTitle) legalTitle.style.setProperty('font-size', '16px', 'important');
-      if (legalBody) {
+      if (legalBody) {{
         legalBody.style.setProperty('font-size', '16.5px', 'important');
         legalBody.style.setProperty('line-height', '2.25', 'important');
-      }
-      sigCells.forEach(function(td) {
+      }}
+      sigCells.forEach(function(td) {{
         td.style.setProperty('height', '105px', 'important');
         td.style.setProperty('padding', '8px', 'important');
-      });
-    } else if (rowsCnt <= 8 && textLen <= 700) {
-      tblCells.forEach(function(td) {
+      }});
+    }} else if (rowsCnt <= 8 && textLen <= 700) {{
+      tblCells.forEach(function(td) {{
         td.style.setProperty('font-size', '12.5px', 'important');
         td.style.setProperty('padding', '6px 9px', 'important');
-      });
+      }});
       if (legal) legal.style.setProperty('padding', '14px 16px', 'important');
-      if (legalBody) {
+      if (legalBody) {{
         legalBody.style.setProperty('font-size', '14.5px', 'important');
         legalBody.style.setProperty('line-height', '1.9', 'important');
-      }
-    }
+      }}
+    }}
 
-    // Step-down guard so heavy forms (5 parties) never exceed targetH (strictly 1/1 page)
     var fs = parseFloat((legalBody && legalBody.style.fontSize) || '12') || 12;
     var lh = parseFloat((legalBody && legalBody.style.lineHeight) || '1.55') || 1.55;
     var tfs = 11.5;
     var step = 0;
-    while (sheet.scrollHeight > targetH && step < 10) {
+    while (sheet.scrollHeight > targetH && step < 10) {{
       fs = Math.max(10.2, fs - 0.5);
       lh = Math.max(1.32, lh - 0.08);
       tfs = Math.max(10.0, tfs - 0.35);
-      if (legal) {
+      if (legal) {{
         legal.style.setProperty('padding', '6px 8px', 'important');
         legal.style.setProperty('margin', '4px 0 6px 0', 'important');
-      }
-      if (legalBody) {
+      }}
+      if (legalBody) {{
         legalBody.style.setProperty('font-size', fs + 'px', 'important');
         legalBody.style.setProperty('line-height', String(lh), 'important');
-      }
-      tblCells.forEach(function(td) {
+      }}
+      tblCells.forEach(function(td) {{
         td.style.setProperty('font-size', tfs + 'px', 'important');
         td.style.setProperty('padding', '3px 5px', 'important');
         td.style.setProperty('line-height', '1.3', 'important');
-      });
-      sigCells.forEach(function(td) {
+      }});
+      sigCells.forEach(function(td) {{
         td.style.setProperty('height', 'auto', 'important');
         td.style.setProperty('min-height', '46px', 'important');
         td.style.setProperty('padding', '3px 5px', 'important');
-      });
+      }});
       step++;
-    }
-  }
+    }}
+  }}
 
   balanceSheetTypography(document, 1035);
 
-  // Replace print button click cleanly (cloning removes old duplicate listeners)
   var oldBtn = document.querySelector('#printOfficialBtn') || document.querySelector('.print-btn');
-  if (oldBtn) {
+  if (oldBtn) {{
     var newBtn = oldBtn.cloneNode(true);
     oldBtn.parentNode.replaceChild(newBtn, oldBtn);
-    newBtn.addEventListener('click', function(ev) {
+    newBtn.addEventListener('click', function(ev) {{
       ev.preventDefault();
       ev.stopPropagation();
       window.syncAllLivePads();
@@ -6560,38 +6558,37 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       var targetH = isIOS ? 940 : 1030;
 
-      // Clone sheet and explicitly copy live canvas dataURLs into cloned slots
       var sheetClone = document.getElementById('a4Sheet').cloneNode(true);
       sheetClone.style.zoom = '1';
       sheetClone.style.transform = 'none';
       sheetClone.style.width = '100%';
-      if (typeof LIVE_PADS !== 'undefined' && Array.isArray(LIVE_PADS)) {
-        LIVE_PADS.forEach(function(padId) {
+      if (typeof LIVE_PADS !== 'undefined' && Array.isArray(LIVE_PADS)) {{
+        LIVE_PADS.forEach(function(padId) {{
           var liveSlot = document.getElementById('slot_' + padId);
           var cloneSlot = sheetClone.querySelector('#slot_' + padId);
-          if (liveSlot && cloneSlot && liveSlot.getAttribute('src')) {
+          if (liveSlot && cloneSlot && liveSlot.getAttribute('src')) {{
             cloneSlot.setAttribute('src', liveSlot.getAttribute('src'));
             cloneSlot.setAttribute('style', liveSlot.getAttribute('style') || 'display:block !important; max-height:58px !important;');
-          }
-        });
-      }
+          }}
+        }});
+      }}
 
       var stylesHtml = '';
-      document.querySelectorAll('style, link[rel="stylesheet"]').forEach(function(node) {
+      document.querySelectorAll('style, link[rel="stylesheet"]').forEach(function(node) {{
         stylesHtml += node.outerHTML;
-      });
+      }});
 
       var printDocHtml = '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">'
         + '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
         + '<title>وثيقة رسمية - قسم مرور العارضة</title>'
         + stylesHtml
-        + '<style>@media screen{body{margin:0;padding:12px;background:#0f172a;display:flex;flex-direction:column;align-items:center;}#a4Sheet{max-width:100%;}}</style>'
+        + '<style>@media screen{{body{{margin:0;padding:12px;background:#0f172a;display:flex;flex-direction:column;align-items:center;}}#a4Sheet{{max-width:100%;}}}}</style>'
         + '</head><body>'
         + (isIOS ? '<div class="no-print" style="width:100%;max-width:794px;background:#14532d;color:#fff;padding:10px 14px;border-radius:8px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;font-weight:800;"><span>جاهز للطباعة أو المشاركة ()</span><button onclick="window.print()" style="background:#eab308;color:#000;border:0;padding:7px 14px;border-radius:6px;font-weight:800;"> طباعة / PDF</button></div>' : '')
         + sheetClone.outerHTML
         + '</body></html>';
 
-      if (!isIOS) {
+      if (!isIOS) {{
         var ifr = document.getElementById('khafarHiddenPrintFrame');
         if (ifr) ifr.remove();
         ifr = document.createElement('iframe');
@@ -6602,29 +6599,29 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         idoc.open();
         idoc.write(printDocHtml);
         idoc.close();
-        setTimeout(function() {
-          try { balanceSheetTypography(idoc, targetH); } catch (e) {}
+        setTimeout(function() {{
+          try {{ balanceSheetTypography(idoc, targetH); }} catch (e) {{}}
           ifr.contentWindow.focus();
           ifr.contentWindow.print();
-        }, 420);
-      } else {
+        }}, 420);
+      }} else {{
         var w = window.open('', '_blank');
-        if (w) {
+        if (w) {{
           w.document.open();
           w.document.write(printDocHtml);
           w.document.close();
-          setTimeout(function() {
-            try { balanceSheetTypography(w.document, targetH); } catch (e) {}
+          setTimeout(function() {{
+            try {{ balanceSheetTypography(w.document, targetH); }} catch (e) {{}}
             w.focus();
             w.print();
-          }, 500);
-        } else {
+          }}, 500);
+        }} else {{
           window.print();
-        }
-      }
-    });
-  }
-})();
+        }}
+      }}
+    }});
+  }}
+}})();
 </script>
 
 </body>
