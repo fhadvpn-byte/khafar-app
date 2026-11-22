@@ -6733,6 +6733,54 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
   balanceSheetTypography(document, 1045, false, false);
 
+  // --- KHAFAR_PWA_SHARE_FIX_START ---
+  (function() {{
+    var isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+      || (window.navigator && window.navigator.standalone === true);
+
+    // حماية navigator.share إن وُجد في أي زر مشاركة داخل وضع التطبيق المثبّت
+    if (navigator && typeof navigator.share === 'function' && !navigator.__khafarShareWrapped) {{
+      var origShare = navigator.share.bind(navigator);
+      navigator.__khafarShareWrapped = true;
+      navigator.share = function(data) {{
+        try {{
+          var res = origShare(data);
+          if (res && typeof res.catch === 'function') {{
+            return res.catch(function(err) {{
+              if (err && err.name === 'AbortError') return Promise.resolve();
+              var btn = document.querySelector('#printOfficialBtn, .print-btn');
+              if (btn) btn.click();
+              return Promise.resolve();
+            }});
+          }}
+          return res;
+        }} catch (e) {{
+          var btn = document.querySelector('#printOfficialBtn, .print-btn');
+          if (btn) btn.click();
+          return Promise.resolve();
+        }}
+      }};
+    }}
+
+    // في وضع التطبيق المثبّت على الآيفون، افتح النافذة فور النقرة لتجنب حظر Safari standalone
+    var pBtn = document.querySelector('#printOfficialBtn') || document.querySelector('.print-btn');
+    if (pBtn && isStandalone && !pBtn.dataset.pwaBound) {{
+      pBtn.dataset.pwaBound = '1';
+      var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (isIOS) {{
+        pBtn.addEventListener('click', function() {{
+          try {{
+            if (!window.__khafarPreWin || window.__khafarPreWin.closed) {{
+              window.__khafarPreWin = window.open('', '_blank');
+            }}
+          }} catch (e) {{}}
+        }}, true);
+      }}
+    }}
+  }})();
+  // --- KHAFAR_PWA_SHARE_FIX_END ---
+
+
   // --- KHAFAR_INJECT_PREVIEW_ZOOM_START ---
   (function() {{
     // إيقاف أي مستمع resize قديم يعيد تكبير الورقة تلقائياً بعد ضغط الأزرار
