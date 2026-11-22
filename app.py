@@ -6375,6 +6375,55 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     object-fit: contain !important;
     margin: 2px auto !important;
   }}
+  #khafarIosShareTray {{
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    max-width: 760px;
+    margin: 8px auto 12px auto;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, #0d3b2e 0%, #07231b 100%);
+    border: 2px solid #d4a853;
+    border-radius: 12px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+    direction: rtl;
+    box-sizing: border-box;
+    font-family: 'Cairo', Tahoma, sans-serif;
+  }}
+  #khafarIosShareTray .ios-ready-main-btn {{
+    width: 100%;
+    background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);
+    color: #0b1512;
+    border: none;
+    border-radius: 9px;
+    padding: 12px 14px;
+    font-family: 'Cairo', Tahoma, sans-serif;
+    font-size: 14.5px;
+    font-weight: 900;
+    cursor: pointer;
+    text-align: center;
+  }}
+  #khafarIosShareTray .ios-ready-sub-row {{
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }}
+  #khafarIosShareTray .ios-ready-sec-btn {{
+    flex: 1 1 auto;
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    border: 1px solid rgba(212, 168, 83, 0.55);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-family: 'Cairo', Tahoma, sans-serif;
+    font-size: 12.5px;
+    font-weight: 800;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+  }}
   @media screen {{
     #zoomBar, .zoom-bar {{
       display: flex !important;
@@ -6469,7 +6518,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       height: auto !important;
       overflow: visible !important;
     }}
-    .no-print, .toolbar, #zoomBar, .zoom-bar, .live-sig-dock, #printOfficialBtn, .print-btn {{
+    .no-print, .toolbar, #zoomBar, .zoom-bar, .live-sig-dock, #printOfficialBtn, .print-btn, #khafarIosShareTray {{
       display: none !important;
     }}
     #khafarZoomViewport, #khafarZoomSizer, #khafarZoomCanvas {{
@@ -6500,9 +6549,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
   }}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/modern-screenshot@4.6.0/dist/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script id="khafar-final-js-fix">
 (function() {{
   window.__padInk = window.__padInk || {{}};
+  window.__cachedIosPdfAb = null;
+  window.__cachedIosPdfName = 'Maroor_AlArdah_Official.pdf';
 
   // =========================================================
   // 1) مزامنة التوقيع الحي بالإصبع 100%
@@ -6525,6 +6579,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     var mark = function() {{
       c.dataset.hasInk = '1';
       window.__padInk[padId] = true;
+      window.__cachedIosPdfAb = null;
     }};
     var syncSoon = function() {{
       setTimeout(function() {{ window.syncPadToSlot(padId); }}, 25);
@@ -6542,6 +6597,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   }}
 
   window.clearLivePad = function(padId) {{
+    window.__cachedIosPdfAb = null;
     var c = document.getElementById('pad_' + padId);
     if (c) {{
       delete c.dataset.hasInk;
@@ -6594,10 +6650,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
   // =========================================================
   // 2) تخصيص نموذج تحليل السموم بـ 3 خانات توقيع صحيحة الملكية:
-  //    [يمين: جهة الاستلام] | [منتصف: ضابط الخفر (توقيع ضابط الخفر فقط)] | [يسار: مدير إدارة مرور منطقة جازان + العقيد محمد آل هادي + توقيع رئيس الحوادث وتوقيعه المحفوظ]
+  //    [يمين: جهة الاستلام] | [منتصف: ضابط الخفر] | [يسار: مدير إدارة مرور منطقة جازان + العقيد محمد آل هادي + توقيع رئيس الحوادث وتوقيعه المحفوظ]
   // =========================================================
   function applyToxicologyDirectorBlock(docRoot) {{
-    var sheet = docRoot.getElementById('a4Sheet');
+    var sheet = (docRoot.getElementById ? docRoot.getElementById('a4Sheet') : null)
+      || (docRoot.querySelector ? docRoot.querySelector('#a4Sheet') : null);
     if (!sheet) return;
 
     var bannerEl = sheet.querySelector('.doc-banner');
@@ -6623,7 +6680,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     if (sheet.dataset.toxThreeColFixed === '1') return;
 
-    // أ) تحديد رأس وخلية (وحدة الحوادث) أولا قبل لمس أي صورة توقيع!
+    var ownerDoc = sheet.ownerDocument || document;
     var hdrEl = null;
     var candidates = sheet.querySelectorAll('th, td, div, span');
     for (var i = 0; i < candidates.length; i++) {{
@@ -6670,7 +6727,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     var bRow = bodyCell.parentElement;
     var rightHospCell = (bRow && bRow.cells && bRow.cells.length > 0 && bRow.cells[0] !== bodyCell) ? bRow.cells[0] : null;
 
-    // ب) حجز جميع صور وتواقيع رئيس الحوادث الموجودة داخل خلية (وحدة الحوادث) حصريا لخانة مدير الإدارة!
     var unitHeadSigs = [];
     bodyCell.querySelectorAll('img, svg').forEach(function(sigNode) {{
       if (sigNode.tagName === 'IMG') {{
@@ -6682,7 +6738,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       unitHeadSigs.push(sigNode);
     }});
 
-    // ج) البحث عن توقيع ضابط الخفر فقط خارج خلية (وحدة الحوادث) وخارج خلية (المستشفى)
     var dutySlotImg = null;
     var customDutyName = '';
 
@@ -6736,7 +6791,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
 
     if (!dutySlotImg) {{
-      dutySlotImg = docRoot.createElement('img');
+      dutySlotImg = ownerDoc.createElement('img');
       dutySlotImg.id = 'slot_khafar_duty_tox';
       dutySlotImg.className = 'sig-slot-img';
       dutySlotImg.style.display = 'none';
@@ -6744,9 +6799,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
 
     function buildMiddleDutyBox() {{
-      var dutyWrap = docRoot.createElement('div');
+      var dutyWrap = ownerDoc.createElement('div');
       dutyWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:4px 6px;gap:3px;min-height:68px;';
-      var dutySub = docRoot.createElement('div');
+      var dutySub = ownerDoc.createElement('div');
       dutySub.style.cssText = 'font-weight:800;font-size:12px;color:#0f3d2e;line-height:1.45;';
       dutySub.textContent = customDutyName ? customDutyName : 'توقيع ضابط الخفر المناوب';
       dutyWrap.appendChild(dutySub);
@@ -6754,19 +6809,18 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       return dutyWrap;
     }}
 
-    // د) إنشاء الخانة الوسطى (ضابط الخفر) بين خانة المستشفى يمينا وخانة مدير الإدارة يسارا
     var hCell = hdrEl ? hdrEl.closest('th, td') : null;
     var hRow = hCell ? hCell.parentElement : null;
     var sigTable = bodyCell.closest('table');
 
     if (sigTable && hRow && bRow && hCell !== bodyCell) {{
-      var midTh = docRoot.createElement(hCell.tagName);
+      var midTh = ownerDoc.createElement(hCell.tagName);
       midTh.className = hCell.className || '';
       midTh.style.cssText = hCell.style.cssText || '';
       midTh.textContent = 'ضابط الخفر';
       hRow.insertBefore(midTh, hCell);
 
-      var midTd = docRoot.createElement(bodyCell.tagName);
+      var midTd = ownerDoc.createElement(bodyCell.tagName);
       midTd.className = bodyCell.className || '';
       midTd.style.cssText = bodyCell.style.cssText || '';
       midTd.appendChild(buildMiddleDutyBox());
@@ -6814,7 +6868,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       }}
     }}
 
-    // هـ) وضع اسم العقيد محمد آل هادي + توقيع رئيس الحوادث (توقيعك أنت) في الخانة اليسرى
     var hdrInsideBody = hdrEl && bodyCell.contains(hdrEl) && bodyCell !== hdrEl;
     if (hdrInsideBody) {{
       var keepHdr = hdrEl;
@@ -6828,14 +6881,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       bodyCell.innerHTML = '';
     }}
 
-    var leftWrap = docRoot.createElement('div');
+    var leftWrap = ownerDoc.createElement('div');
     leftWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:4px 6px;gap:3px;min-height:68px;';
 
-    var colName = docRoot.createElement('div');
+    var colName = ownerDoc.createElement('div');
     colName.style.cssText = 'font-weight:900;font-size:13px;color:#000000;line-height:1.45;';
     colName.textContent = 'العقيد / محمد بن عبدالله آل هادي';
 
-    var accHeadLine = docRoot.createElement('div');
+    var accHeadLine = ownerDoc.createElement('div');
     accHeadLine.style.cssText = 'font-weight:800;font-size:11.5px;color:#0f3d2e;line-height:1.4;';
     accHeadLine.textContent = 'توقيع رئيس الحوادث بمرور العارضة';
 
@@ -6852,10 +6905,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   // =========================================================
   // 3) موازنة الخطوط والمسافات وقفل صفحة 1/1 بدون قص سفلي
   // =========================================================
-  function balanceSheetTypography(docRoot, targetH, isPrintMode, isIOSMode) {{
-    applyToxicologyDirectorBlock(docRoot);
-
-    var sheet = docRoot.getElementById('a4Sheet');
+  function balanceSheetElement(sheet, targetH, isPrintMode, isIOSMode, skipCssZoom) {{
     if (!sheet) return;
     sheet.style.setProperty('display', 'flex', 'important');
     sheet.style.setProperty('flex-direction', 'column', 'important');
@@ -6863,7 +6913,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     sheet.style.setProperty('box-sizing', 'border-box', 'important');
     sheet.style.setProperty('zoom', '1', 'important');
 
-    if (isIOSMode && isPrintMode) {{
+    if (isIOSMode && isPrintMode && !skipCssZoom) {{
       sheet.style.setProperty('width', '645px', 'important');
       sheet.style.setProperty('padding', '3mm 4.5mm', 'important');
     }}
@@ -7003,8 +7053,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
 
     var naturalH = sheet.scrollHeight;
-    if (isIOSMode && isPrintMode) {{
+    if (isIOSMode && isPrintMode && !skipCssZoom) {{
       sheet.style.setProperty('width', '100%', 'important');
+    }}
+
+    if (skipCssZoom) {{
+      return;
     }}
 
     if (isPrintMode && naturalH > targetH) {{
@@ -7015,6 +7069,13 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }} else if (isPrintMode) {{
       sheet.style.setProperty('height', targetH + 'px', 'important');
     }}
+  }}
+
+  function balanceSheetTypography(docRoot, targetH, isPrintMode, isIOSMode) {{
+    applyToxicologyDirectorBlock(docRoot);
+    var sheet = (docRoot.getElementById ? docRoot.getElementById('a4Sheet') : null)
+      || (docRoot.querySelector ? docRoot.querySelector('#a4Sheet') : null);
+    balanceSheetElement(sheet, targetH, isPrintMode, isIOSMode, false);
   }}
 
   applyToxicologyDirectorBlock(document);
@@ -7068,17 +7129,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     var curScale = 1;
     var lastWinW = window.innerWidth || 0;
 
-    function syncIframeHeight() {{
+    window.__syncKhafarFrameHeight = function() {{
       try {{
         if (window.frameElement) {{
           var rect = viewport.getBoundingClientRect();
-          var totalH = Math.ceil((window.pageYOffset || document.documentElement.scrollTop || 0) + rect.top + sizer.offsetHeight + 28);
+          var totalH = Math.ceil((window.pageYOffset || document.documentElement.scrollTop || 0) + rect.top + sizer.offsetHeight + 36);
           if (totalH > 350) {{
             window.frameElement.style.height = totalH + 'px';
           }}
         }}
       }} catch (e) {{}}
-    }}
+    }};
 
     window.__applyPreviewScale = function(val) {{
       curScale = Math.max(0.05, Math.min(2.0, Math.round(val * 100) / 100));
@@ -7095,7 +7156,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       var lbl = document.getElementById('zoomPctLabel');
       if (lbl) lbl.textContent = Math.round(curScale * 100) + '%';
 
-      setTimeout(syncIframeHeight, 40);
+      setTimeout(window.__syncKhafarFrameHeight, 40);
     }};
 
     function fitStageToScreen() {{
@@ -7133,12 +7194,251 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   }})();
 
   // =========================================================
-  // 5) طباعة ومشاركة موحدة (أندرويد كمبيوتر وآيفون)
+  // 5) محرك توليد ومشاركة ملف PDF الحقيقي للآيفون (يعمل في وضع التطبيق المثبت Standalone)
+  // =========================================================
+  function loadExternalScript(url) {{
+    return new Promise(function(resolve) {{
+      var s = document.createElement('script');
+      s.src = url;
+      s.onload = function() {{ resolve(true); }};
+      s.onerror = function() {{ resolve(false); }};
+      document.head.appendChild(s);
+    }});
+  }}
+
+  function ensurePdfLibraries() {{
+    var tasks = [];
+    if (!(window.jspdf && window.jspdf.jsPDF) && !window.jsPDF) {{
+      tasks.push(loadExternalScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'));
+    }}
+    if (!(window.modernScreenshot && window.modernScreenshot.domToJpeg) && !window.html2canvas) {{
+      tasks.push(loadExternalScript('https://cdn.jsdelivr.net/npm/modern-screenshot@4.6.0/dist/index.js'));
+      tasks.push(loadExternalScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'));
+    }}
+    return Promise.all(tasks);
+  }}
+
+  function getShareCapableWindow() {{
+    var wins = [];
+    try {{
+      if (window.top && window.top.navigator && typeof window.top.navigator.share === 'function') wins.push(window.top);
+    }} catch (e) {{}}
+    try {{
+      if (window.parent && window.parent !== window.top && window.parent.navigator && typeof window.parent.navigator.share === 'function') wins.push(window.parent);
+    }} catch (e) {{}}
+    if (window.navigator && typeof window.navigator.share === 'function') wins.push(window);
+
+    for (var i = 0; i < wins.length; i++) {{
+      var w = wins[i];
+      try {{
+        var b = new w.Blob(['%PDF-1.4'], {{ type: 'application/pdf' }});
+        var f = new w.File([b], 'test.pdf', {{ type: 'application/pdf' }});
+        if (!w.navigator.canShare || w.navigator.canShare({{ files: [f] }})) {{
+          return w;
+        }}
+      }} catch (e) {{}}
+    }}
+    return wins[0] || null;
+  }}
+
+  function extractCleanPdfFileName() {{
+    var numMatch = (document.getElementById('a4Sheet') ? document.getElementById('a4Sheet').textContent : '').match(/\b(4\d{{7,11}}|KHF-[A-Z0-9]+|\d{{6,10}})\b/);
+    var suffix = numMatch ? numMatch[1] : String(Date.now()).slice(-6);
+    return 'Maroor_AlArdah_' + suffix + '.pdf';
+  }}
+
+  function buildOfficialPdfArrayBuffer() {{
+    applyToxicologyDirectorBlock(document);
+    window.syncAllLivePads();
+
+    return ensurePdfLibraries().then(function() {{
+      var origSheet = document.getElementById('a4Sheet');
+      var stage = document.createElement('div');
+      stage.style.cssText = 'position:fixed;top:0;right:0;width:794px;background:#ffffff;z-index:-9999;opacity:1;pointer-events:none;margin:0;padding:0;direction:rtl;';
+
+      var clone = origSheet.cloneNode(true);
+      clone.id = 'a4SheetPdfCapture';
+      clone.style.cssText += ';width:794px !important;min-width:794px !important;max-width:794px !important;zoom:1 !important;transform:none !important;margin:0 !important;background:#ffffff !important;direction:rtl !important;font-family:Cairo,-apple-system,Tahoma,Arial,sans-serif !important;';
+
+      origSheet.querySelectorAll('img[id^="slot_"]').forEach(function(liveSlot) {{
+        var cSlot = clone.querySelector('#' + liveSlot.id);
+        if (liveSlot && cSlot && liveSlot.getAttribute('src')) {{
+          cSlot.setAttribute('src', liveSlot.getAttribute('src'));
+          cSlot.setAttribute('style', liveSlot.getAttribute('style') || 'display:block !important; max-height:48px !important;');
+        }}
+      }});
+
+      // حذف أي عنصر صورة فارغ أو مخفي حتى لا يتأخر محرك الرسم في iOS WebKit
+      clone.querySelectorAll('img').forEach(function(im) {{
+        var s = (im.getAttribute('src') || '').trim();
+        var disp = (im.style && im.style.display) || '';
+        if (!s || s.length < 12 || disp === 'none') {{
+          im.remove();
+        }}
+      }});
+
+      stage.appendChild(clone);
+      document.body.appendChild(stage);
+      balanceSheetElement(clone, 1085, true, false, true);
+
+      return new Promise(function(resolve) {{ setTimeout(resolve, 70); }}).then(function() {{
+        var capturePromise;
+        if (window.modernScreenshot && window.modernScreenshot.domToJpeg) {{
+          capturePromise = window.modernScreenshot.domToJpeg(clone, {{ scale: 0.5, quality: 0.5, backgroundColor: '#ffffff' }})
+            .catch(function() {{ return null; }})
+            .then(function() {{
+              return window.modernScreenshot.domToJpeg(clone, {{ scale: 2.2, quality: 0.92, backgroundColor: '#ffffff' }});
+            }});
+        }} else {{
+          capturePromise = Promise.reject(new Error('modernScreenshot unavailable'));
+        }}
+
+        return capturePromise.catch(function() {{
+          if (!window.html2canvas) throw new Error('PDF capture library unavailable');
+          var lb = clone.querySelector('.legal-box-body');
+          if (lb) {{
+            lb.style.setProperty('text-align', 'right', 'important');
+            lb.style.setProperty('letter-spacing', '0px', 'important');
+          }}
+          return window.html2canvas(clone, {{
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            logging: false
+          }}).then(function(cv) {{
+            return cv.toDataURL('image/jpeg', 0.92);
+          }});
+        }}).then(function(imgDataUrl) {{
+          var cW = clone.offsetWidth || 794;
+          var cH = Math.max(clone.offsetHeight || 0, clone.scrollHeight || 0, 1085);
+          stage.remove();
+
+          var JsPdfCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+          var pdf = new JsPdfCtor({{ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true }});
+          var pageW = 210, pageH = 297, margin = 4.5;
+          var maxW = pageW - margin * 2;
+          var maxH = pageH - margin * 2;
+          var ratio = cW / cH;
+          var drawW = maxW;
+          var drawH = drawW / ratio;
+          if (drawH > maxH) {{
+            drawH = maxH;
+            drawW = drawH * ratio;
+          }}
+          var x = (pageW - drawW) / 2;
+          var y = margin;
+          pdf.addImage(imgDataUrl, 'JPEG', x, y, drawW, drawH, undefined, 'FAST');
+          return pdf.output('arraybuffer');
+        }}).catch(function(err) {{
+          try {{ stage.remove(); }} catch (e) {{}}
+          throw err;
+        }});
+      }});
+    }});
+  }}
+
+  // استدعاء متزامن فوري (0ms) لقائمة مشاركة الآيفون بدون أي تأخير
+  function triggerIosNativeShareSync(ab, fileName) {{
+    var shareWin = getShareCapableWindow();
+    if (!shareWin) return Promise.reject(new Error('WebShareUnavailable'));
+    var blob = new shareWin.Blob([ab], {{ type: 'application/pdf' }});
+    var file = new shareWin.File([blob], fileName, {{ type: 'application/pdf', lastModified: Date.now() }});
+    return shareWin.navigator.share({{ files: [file] }});
+  }}
+
+  // طباعة مباشرة عبر النافذة العليا عند الحاجة داخل وضع التطبيق المثبت
+  function triggerIosTopWindowPrint() {{
+    try {{
+      applyToxicologyDirectorBlock(document);
+      window.syncAllLivePads();
+      var topDoc = (window.top && window.top.document) ? window.top.document : null;
+      if (topDoc) {{
+        var oldRoot = topDoc.getElementById('khafarTopIosPrintHost');
+        if (oldRoot) oldRoot.remove();
+        var host = topDoc.createElement('div');
+        host.id = 'khafarTopIosPrintHost';
+
+        var styles = '';
+        document.querySelectorAll('style, link[rel="stylesheet"]').forEach(function(n) {{ styles += n.outerHTML; }});
+
+        var clone = document.getElementById('a4Sheet').cloneNode(true);
+        document.querySelectorAll('#a4Sheet img[id^="slot_"]').forEach(function(ls) {{
+          var cs = clone.querySelector('#' + ls.id);
+          if (ls && cs && ls.getAttribute('src')) {{
+            cs.setAttribute('src', ls.getAttribute('src'));
+            cs.setAttribute('style', ls.getAttribute('style') || 'display:block !important; max-height:48px !important;');
+          }}
+        }});
+
+        host.innerHTML = styles
+          + '<style id="khafarTopMaskStyle">@media screen{{#khafarTopIosPrintHost{{display:none !important;}}}}@media print{{body>*:not(#khafarTopIosPrintHost){{display:none !important;}}#khafarTopIosPrintHost{{display:block !important;width:100% !important;background:#fff !important;}}}}</style>'
+          + clone.outerHTML;
+        topDoc.body.appendChild(host);
+        balanceSheetElement(host.querySelector('#a4Sheet'), 795, true, true, false);
+        window.top.focus();
+        window.top.print();
+        setTimeout(function() {{ try {{ host.remove(); }} catch (e) {{}} }}, 1500);
+        return;
+      }}
+    }} catch (e) {{}}
+    window.print();
+  }}
+
+  function showIosShareReadyTray(anchorBtn) {{
+    var tray = document.getElementById('khafarIosShareTray');
+    if (!tray) {{
+      tray = document.createElement('div');
+      tray.id = 'khafarIosShareTray';
+      tray.className = 'no-print';
+
+      var safariHref = '';
+      try {{
+        var topUrl = (window.top && window.top.location && window.top.location.href) ? window.top.location.href : window.location.href;
+        if (topUrl.indexOf('https://') === 0) {{
+          safariHref = 'x-safari-' + topUrl;
+        }}
+      }} catch (e) {{}}
+
+      tray.innerHTML = ''
+        + '<button type="button" class="ios-ready-main-btn" id="khafarIosShareNowBtn"> اضغط هنا لإرسال ومشاركة ملف الـ PDF الجاهز (واتساب / حفظ)</button>'
+        + '<div class="ios-ready-sub-row">'
+        + '<button type="button" class="ios-ready-sec-btn" id="khafarIosDirectPrintBtn"> طباعة مباشرة (AirPrint)</button>'
+        + (safariHref ? '<a class="ios-ready-sec-btn" href="' + safariHref + '" target="_top"> فتح في Safari</a>' : '')
+        + '</div>';
+
+      anchorBtn.parentNode.insertBefore(tray, anchorBtn.nextSibling);
+
+      document.getElementById('khafarIosShareNowBtn').addEventListener('click', function(e) {{
+        e.preventDefault();
+        e.stopPropagation();
+        if (!window.__cachedIosPdfAb) return;
+        triggerIosNativeShareSync(window.__cachedIosPdfAb, window.__cachedIosPdfName).catch(function(err) {{
+          if (err && err.name === 'AbortError') return;
+          triggerIosTopWindowPrint();
+        }});
+      }});
+
+      document.getElementById('khafarIosDirectPrintBtn').addEventListener('click', function(e) {{
+        e.preventDefault();
+        e.stopPropagation();
+        triggerIosTopWindowPrint();
+      }});
+    }}
+    tray.style.display = 'flex';
+    if (typeof window.__syncKhafarFrameHeight === 'function') {{
+      setTimeout(window.__syncKhafarFrameHeight, 50);
+    }}
+  }}
+
+  // =========================================================
+  // 6) زر الطباعة والمشاركة الرئيسي (الأندرويد والكمبيوتر كما هما والآيفون عبر ملف PDF الحقيقي)
   // =========================================================
   var oldBtn = document.querySelector('#printOfficialBtn') || document.querySelector('.print-btn');
   if (oldBtn) {{
     var newBtn = oldBtn.cloneNode(true);
     oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+    var origBtnHtml = newBtn.innerHTML;
+
     newBtn.addEventListener('click', function(ev) {{
       ev.preventDefault();
       ev.stopPropagation();
@@ -7147,34 +7447,44 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       window.syncAllLivePads();
 
       var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      var isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
-        || (window.navigator && window.navigator.standalone === true);
-      var targetH = isIOS ? 795 : 1042;
 
-      if (isIOS && isStandalone) {{
-        var cWrap = document.getElementById('khafarZoomCanvas');
-        var szWrap = document.getElementById('khafarZoomSizer');
-        var prevTransform = cWrap ? cWrap.style.transform : '';
-        var prevW = szWrap ? szWrap.style.width : '';
-        var prevH = szWrap ? szWrap.style.height : '';
-        if (cWrap) cWrap.style.setProperty('transform', 'none', 'important');
-        if (szWrap) {{
-          szWrap.style.setProperty('width', '100%', 'important');
-          szWrap.style.setProperty('height', 'auto', 'important');
+      // على الآيفون (سواء تطبيق مثبت على الشاشة الرئيسية أو متصفح): مشاركة ملف PDF حقيقي بصفحة 1/1
+      if (isIOS) {{
+        // إذا كان الملف مجهزا مسبقا ولم يتغير التوقيع افتح قائمة مشاركة الآيفون فورا في 0ms!
+        if (window.__cachedIosPdfAb) {{
+          triggerIosNativeShareSync(window.__cachedIosPdfAb, window.__cachedIosPdfName).catch(function(err) {{
+            if (err && err.name === 'AbortError') return;
+            showIosShareReadyTray(newBtn);
+          }});
+          return;
         }}
-        balanceSheetTypography(document, targetH, true, true);
-        window.print();
-        setTimeout(function() {{
-          balanceSheetTypography(document, 1045, false, false);
-          if (cWrap) cWrap.style.setProperty('transform', prevTransform, 'important');
-          if (szWrap) {{
-            szWrap.style.setProperty('width', prevW, 'important');
-            szWrap.style.setProperty('height', prevH, 'important');
-          }}
-        }}, 600);
+
+        newBtn.disabled = true;
+        newBtn.innerHTML = ' جاري تجهيز ملف PDF الرسمي (صفحة 1/1)...';
+
+        var pdfName = extractCleanPdfFileName();
+        buildOfficialPdfArrayBuffer().then(function(ab) {{
+          window.__cachedIosPdfAb = ab;
+          window.__cachedIosPdfName = pdfName;
+          newBtn.disabled = false;
+          newBtn.innerHTML = origBtnHtml;
+
+          // محاولة فتح قائمة مشاركة الآيفون تلقائيا فور الجاهزية
+          triggerIosNativeShareSync(ab, pdfName).catch(function(err) {{
+            if (err && err.name === 'AbortError') return;
+            // في حال انتهت مهلة النقرة في iOS أظهر زر الإرسال الفوري الجاهز أمام الفرد
+            showIosShareReadyTray(newBtn);
+          }});
+        }}).catch(function() {{
+          newBtn.disabled = false;
+          newBtn.innerHTML = origBtnHtml;
+          triggerIosTopWindowPrint();
+        }});
         return;
       }}
 
+      // على الأندرويد والكمبيوتر: المسار السريع المخفي كما هو بدون أي تغيير
+      var targetH = 1042;
       var sheetClone = document.getElementById('a4Sheet').cloneNode(true);
       sheetClone.style.zoom = '1';
       sheetClone.style.transform = 'none';
@@ -7197,50 +7507,25 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         + '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
         + '<title>وثيقة رسمية - قسم مرور العارضة</title>'
         + stylesHtml
-        + '<style>@media screen{{body{{margin:0;padding:12px;background:#0f172a;display:flex;flex-direction:column;align-items:center;}}#a4Sheet{{max-width:100%;}}}}</style>'
         + '</head><body>'
-        + (isIOS ? '<div class="no-print" style="width:100%;max-width:794px;background:#14532d;color:#fff;padding:10px 14px;border-radius:8px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;font-weight:800;"><span>اضغط طباعة ثم رمز المشاركة () بالأعلى</span><button id="iosReprintBtn" style="background:#eab308;color:#000;border:0;padding:7px 14px;border-radius:6px;font-weight:800;"> طباعة / مشاركة PDF</button></div>' : '')
         + sheetClone.outerHTML
         + '</body></html>';
 
-      if (!isIOS) {{
-        var ifr = document.getElementById('khafarHiddenPrintFrame');
-        if (ifr) ifr.remove();
-        ifr = document.createElement('iframe');
-        ifr.id = 'khafarHiddenPrintFrame';
-        ifr.style.cssText = 'position:fixed;right:0;bottom:0;width:748px;height:1123px;opacity:0;pointer-events:none;border:0;z-index:-9999;';
-        document.body.appendChild(ifr);
-        var idoc = ifr.contentWindow.document;
-        idoc.open();
-        idoc.write(printDocHtml);
-        idoc.close();
-        setTimeout(function() {{
-          try {{ balanceSheetTypography(idoc, targetH, true, false); }} catch (e) {{}}
-          ifr.contentWindow.focus();
-          ifr.contentWindow.print();
-        }}, 420);
-      }} else {{
-        var w = window.open('', '_blank');
-        if (w) {{
-          w.document.open();
-          w.document.write(printDocHtml);
-          w.document.close();
-          var runIosFit = function() {{
-            try {{ balanceSheetTypography(w.document, targetH, true, true); }} catch (e) {{}}
-          }};
-          runIosFit();
-          setTimeout(function() {{
-            runIosFit();
-            var rb = w.document.getElementById('iosReprintBtn');
-            if (rb) rb.onclick = function() {{ runIosFit(); w.print(); }};
-            w.focus();
-            w.print();
-          }}, 450);
-        }} else {{
-          balanceSheetTypography(document, targetH, true, true);
-          window.print();
-        }}
-      }}
+      var ifr = document.getElementById('khafarHiddenPrintFrame');
+      if (ifr) ifr.remove();
+      ifr = document.createElement('iframe');
+      ifr.id = 'khafarHiddenPrintFrame';
+      ifr.style.cssText = 'position:fixed;right:0;bottom:0;width:748px;height:1123px;opacity:0;pointer-events:none;border:0;z-index:-9999;';
+      document.body.appendChild(ifr);
+      var idoc = ifr.contentWindow.document;
+      idoc.open();
+      idoc.write(printDocHtml);
+      idoc.close();
+      setTimeout(function() {{
+        try {{ balanceSheetTypography(idoc, targetH, true, false); }} catch (e) {{}}
+        ifr.contentWindow.focus();
+        ifr.contentWindow.print();
+      }}, 420);
     }});
   }}
 }})();
