@@ -6337,7 +6337,65 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
 
 <style id="khafar-final-a4-fix">
-  #zoomBar, .zoom-bar {{ display: none !important; }}
+/* KHAFAR_SLEEK_ZOOM_START */
+  @media screen {{
+    #zoomBar, .zoom-bar {{
+      display: flex !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      flex-wrap: wrap !important;
+      justify-content: center !important;
+      align-items: center !important;
+      gap: 6px !important;
+      width: fit-content !important;
+      max-width: 98% !important;
+      margin: 10px auto 14px auto !important;
+      padding: 6px 10px !important;
+      background: linear-gradient(135deg, #0d3b2e 0%, #07231b 100%) !important;
+      border: 1.5px solid #d4a853 !important;
+      border-radius: 999px !important;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32) !important;
+      direction: rtl !important;
+    }}
+    #zoomBar button, .zoom-bar button, .khafar-z-btn {{
+      background: rgba(255, 255, 255, 0.1) !important;
+      color: #ffffff !important;
+      border: 1px solid rgba(212, 168, 83, 0.45) !important;
+      border-radius: 999px !important;
+      padding: 5px 13px !important;
+      font-family: 'Cairo', Tahoma, sans-serif !important;
+      font-size: 12.5px !important;
+      font-weight: 800 !important;
+      cursor: pointer !important;
+      line-height: 1.3 !important;
+      margin: 0 !important;
+    }}
+    #zoomBar button:hover, .zoom-bar button:hover, .khafar-z-btn:hover {{
+      background: #15805c !important;
+      border-color: #fde68a !important;
+    }}
+    .khafar-z-fit {{
+      background: linear-gradient(135deg, #d4a853 0%, #b08532 100%) !important;
+      color: #0b1512 !important;
+      border: none !important;
+      font-weight: 900 !important;
+    }}
+    .khafar-z-pct, #zoomPctLabel {{
+      background: #ffffff !important;
+      color: #092c20 !important;
+      border-radius: 999px !important;
+      padding: 4px 12px !important;
+      font-size: 12.5px !important;
+      font-weight: 900 !important;
+      min-width: 54px !important;
+      text-align: center !important;
+      cursor: pointer !important;
+    }}
+  }}
+  @media print {{
+    #zoomBar, .zoom-bar, #khafarPreviewZoomBar {{ display: none !important; }}
+  }}
+/* KHAFAR_SLEEK_ZOOM_END */
   .legal-box {{
     display: flex !important;
     flex-direction: column !important;
@@ -6635,6 +6693,77 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   }}
 
   balanceSheetTypography(document, 1045, false, false);
+
+  // --- KHAFAR_INJECT_PREVIEW_ZOOM_START ---
+  (function() {{
+    var sheetEl = document.getElementById('a4Sheet');
+    if (!sheetEl) return;
+
+    // إزالة أي شريط قديم معطل وبناء شريط كبسولي موحد فوق ورقة المعاينة مباشرة
+    var oldBars = document.querySelectorAll('#zoomBar, .zoom-bar, #khafarPreviewZoomBar');
+    oldBars.forEach(function(b) {{ b.remove(); }});
+
+    var bar = document.createElement('div');
+    bar.id = 'zoomBar';
+    bar.className = 'zoom-bar no-print';
+    bar.innerHTML = ''
+      + '<button type="button" class="khafar-z-btn" data-kz="-"> تصغير</button>'
+      + '<span class="khafar-z-pct" id="zoomPctLabel" data-kz="1" title="اضغط للعودة إلى 100%">100%</span>'
+      + '<button type="button" class="khafar-z-btn" data-kz="+"> تكبير</button>'
+      + '<button type="button" class="khafar-z-btn" data-kz="1.3">130%</button>'
+      + '<button type="button" class="khafar-z-btn khafar-z-fit" data-kz="fit"> ملاءمة الشاشة</button>';
+
+    sheetEl.parentNode.insertBefore(bar, sheetEl);
+
+    var ZKEY = 'khafar_a4_preview_zoom';
+    var curZ = 1;
+    try {{
+      var sv = parseFloat(localStorage.getItem(ZKEY) || '');
+      if (sv >= 0.4 && sv <= 2.2) curZ = sv;
+    }} catch (e) {{}}
+
+    function applyPreviewZoom(val) {{
+      curZ = Math.max(0.4, Math.min(2.2, Math.round(val * 100) / 100));
+      sheetEl.style.transformOrigin = 'top center';
+      sheetEl.style.setProperty('zoom', String(curZ), 'important');
+      var lbl = document.getElementById('zoomPctLabel');
+      if (lbl) lbl.textContent = Math.round(curZ * 100) + '%';
+      try {{ localStorage.setItem(ZKEY, String(curZ)); }} catch (e) {{}}
+      try {{
+        if (window.frameElement) {{
+          setTimeout(function() {{
+            var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+            if (h > 400) window.frameElement.style.height = Math.ceil(h + 45) + 'px';
+          }}, 60);
+        }}
+      }} catch (e) {{}}
+    }}
+
+    function fitPreviewToScreen() {{
+      sheetEl.style.setProperty('zoom', '1', 'important');
+      var availW = (document.documentElement.clientWidth || window.innerWidth || 794) - 24;
+      var sheetW = sheetEl.offsetWidth || 794;
+      applyPreviewZoom(availW / Math.max(sheetW, 1));
+    }}
+
+    bar.querySelectorAll('[data-kz]').forEach(function(btn) {{
+      btn.addEventListener('click', function() {{
+        var act = btn.getAttribute('data-kz');
+        if (act === '+') applyPreviewZoom(curZ + 0.12);
+        else if (act === '-') applyPreviewZoom(curZ - 0.12);
+        else if (act === 'fit') fitPreviewToScreen();
+        else applyPreviewZoom(parseFloat(act) || 1);
+      }});
+    }});
+
+    if (window.innerWidth < 820 && !localStorage.getItem(ZKEY)) {{
+      setTimeout(fitPreviewToScreen, 150);
+    }} else {{
+      setTimeout(function() {{ applyPreviewZoom(curZ); }}, 120);
+    }}
+  }})();
+  // --- KHAFAR_INJECT_PREVIEW_ZOOM_END ---
+
 
   var oldBtn = document.querySelector('#printOfficialBtn') || document.querySelector('.print-btn');
   if (oldBtn) {{
