@@ -4056,7 +4056,7 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool, form_
             rows.append(f"<tr>{pair_cells(str(key), shown, True)}</tr>")
         return "".join(rows)
 
-    compact_settlement = form_id == "decl_settlement" and _count_parties(fields_map) >= 3
+    compact_settlement = form_id == "decl_settlement"
     party_count = _count_parties(fields_map) if compact_settlement else 0
     skip_keys = set()
     if compact_settlement:
@@ -4631,11 +4631,13 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     banner_title = (form_def or {}).get("official_title") or rec["form_title"]
     sheet_cls = "a4-sheet a4-paper a4-page print-area dense-fit"
     table_rows = rows_html.count("<tr")
+    form_id_now = str(rec.get("form_id") or "")
+    dense_always = form_id_now in {"decl_settlement", "decl_flee_waiver", "decl_animal_hit", "med_toxicology"}
     if (
-        len(party_signers) >= 3
+        dense_always
+        or len(party_signers) >= 3
         or table_rows > 8
         or image_count > 0
-        or str(rec.get("form_id") or "") == "med_toxicology"
     ):
         sheet_cls += " a4-dense-print"
     gps_line_html = gps_header_line(str(rec.get("gps_coords") or ""))
@@ -5026,23 +5028,28 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-compact table.data-tbl, .a4-dense-print table.data-tbl {{ margin-bottom: 6px !important; }}
     .a4-compact table.data-tbl td, .a4-compact table.data-tbl td.val,
     .a4-dense-print table.data-tbl td, .a4-dense-print table.data-tbl td.val {{
-        padding: 3px 6px !important; font-size: 11px !important; line-height: 1.35 !important;
+        padding: 3.5px 6px !important; font-size: 11px !important; line-height: 1.35 !important;
     }}
     .a4-compact .legal-box, .a4-dense-print .legal-box {{
-        font-size: 11px !important; line-height: 1.45 !important; padding: 6px 8px !important; margin-bottom: 6px !important;
+        font-size: 11.5px !important; line-height: 1.5 !important; padding: 7px 10px !important; margin-bottom: 6px !important;
     }}
     .a4-compact .legal-box div, .a4-dense-print .legal-box div {{
-        font-size: 11px !important; line-height: 1.45 !important;
+        font-size: 11.5px !important; line-height: 1.5 !important;
     }}
     .a4-compact table.sig-tbl td, .a4-dense-print table.sig-tbl td {{
-        min-height: 58px !important; padding: 4px 6px !important;
+        min-height: 54px !important; padding: 4px 6px !important;
     }}
-    .a4-compact .sig-cell, .a4-dense-print .sig-cell {{ min-height: 52px !important; padding: 4px !important; }}
+    .a4-compact .sig-cell, .a4-dense-print .sig-cell {{ min-height: 54px !important; padding: 4px 6px !important; }}
     .a4-compact .sig-head, .a4-dense-print .sig-head {{ font-size: 10px !important; padding: 3px !important; }}
-    .a4-compact .footer-qr, .a4-dense-print .footer-qr {{ padding: 4px 8px !important; }}
+    .a4-compact .footer-qr, .a4-dense-print .footer-qr {{ padding: 4px 8px !important; margin-top: 6px !important; }}
     .a4-compact .footer-qr img, .a4-dense-print .footer-qr img {{ width: 32px !important; height: 32px !important; }}
+    .a4-compact .doc-banner, .a4-dense-print .doc-banner,
+    .a4-compact .hdr, .a4-dense-print .hdr,
+    .a4-compact .sig-footer, .a4-dense-print .sig-footer {{
+        margin-bottom: 6px !important;
+    }}
     @media print {{
-        @page {{ size: A4 portrait; margin: 7mm 8mm !important; }}
+        @page {{ size: A4 portrait; margin: 5mm 7mm !important; }}
         html, body {{
             margin: 0 !important; padding: 0 !important; height: auto !important;
             overflow: visible !important; background: #ffffff !important;
@@ -5064,15 +5071,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             transform: none !important;
             zoom: 1 !important;
             width: 100% !important;
-            max-width: 194mm !important;
-            min-height: 278mm !important;
+            max-width: 196mm !important;
+            min-height: 0 !important;
             height: auto !important;
             max-height: none !important;
-            padding: 6mm 7mm !important;
+            padding: 4mm 5mm !important;
             margin: 0 auto !important;
             display: flex !important;
             flex-direction: column !important;
-            justify-content: space-between !important;
+            justify-content: flex-start !important;
             box-sizing: border-box !important;
             page-break-after: avoid !important;
             page-break-inside: avoid !important;
@@ -5132,12 +5139,24 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             font-size: 12.5px !important;
             line-height: 1.75 !important;
             padding: 8px 10px !important;
-            margin-bottom: 8px !important;
+            margin-bottom: 6px !important;
             white-space: normal !important;
         }}
         .a4-paper .legal-box div, .a4-sheet .legal-box div {{
             text-align: justify !important; text-align-last: right !important;
             font-size: 12.5px !important; line-height: 1.75 !important; white-space: normal !important;
+        }}
+        .a4-dense-print .legal-box, .a4-compact .legal-box,
+        .a4-paper.a4-dense-print .legal-box, .a4-sheet.a4-dense-print .legal-box {{
+            font-size: 11.5px !important; line-height: 1.5 !important;
+            padding: 7px 10px !important; margin-bottom: 6px !important;
+        }}
+        .a4-dense-print .legal-box div, .a4-compact .legal-box div {{
+            font-size: 11.5px !important; line-height: 1.5 !important;
+        }}
+        .a4-dense-print table.data-tbl td, .a4-dense-print table.data-tbl td.val,
+        .a4-compact table.data-tbl td, .a4-compact table.data-tbl td.val {{
+            padding: 3.5px 6px !important; font-size: 11px !important; line-height: 1.35 !important;
         }}
         .a4-paper .hdr, .a4-sheet .hdr {{
             display: flex !important; justify-content: space-between !important; align-items: center !important;
@@ -5168,24 +5187,29 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             text-align: left !important; white-space: normal !important; margin: 0 !important;
         }}
         .signatures, .sig-footer, table.sig-tbl, .sig-grid, .footer-qr, .attachment-section {{
-            margin-top: auto !important;
+            margin-top: 6px !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
         }}
         .a4-paper table.sig-tbl td, .a4-paper .sig-cell,
         .a4-sheet table.sig-tbl td, .a4-sheet .sig-cell {{
-            min-height: 68px !important; padding: 6px !important;
+            min-height: 54px !important; padding: 4px 6px !important;
+        }}
+        .a4-dense-print table.sig-tbl td, .a4-dense-print .sig-cell,
+        .a4-compact table.sig-tbl td, .a4-compact .sig-cell {{
+            min-height: 54px !important; padding: 4px 6px !important;
         }}
         .a4-paper img.sig-slot-img, .a4-sheet img.sig-slot-img, img.sig-slot-img {{
-            max-height: 50px !important; height: auto !important;
+            max-height: 46px !important; height: auto !important;
             background: #ffffff !important; mix-blend-mode: multiply !important;
         }}
-        .a4-paper .footer-qr, .a4-sheet .footer-qr {{ margin-top: 8px !important; padding: 6px 8px !important; }}
+        .a4-paper .footer-qr, .a4-sheet .footer-qr {{ margin-top: 6px !important; padding: 4px 6px !important; }}
         a, a[href^="tel"] {{
             color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
         }}
-        .a4-paper.a4-dense-print, .a4-paper.a4-compact {{
-            padding: 6mm 7mm !important;
+        .a4-paper.a4-dense-print, .a4-paper.a4-compact,
+        .a4-sheet.a4-dense-print, .a4-sheet.a4-compact {{
+            padding: 4mm 5mm !important;
         }}
     }}
 </style>
@@ -5477,6 +5501,33 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     try {{ window.syncAllLivePads = syncAllLivePads; }} catch (e) {{}}
 
+    function fitSinglePageForPrint(root) {{
+        const MAX_PRINT_PX = 1035;
+        const sheet = (root && root.querySelector)
+            ? (root.querySelector("#a4Sheet") || root.querySelector(".a4-sheet") || root.querySelector(".a4-paper") || root)
+            : (document.getElementById("a4Sheet") || document.querySelector(".a4-sheet") || document.querySelector(".a4-paper"));
+        if (!sheet) return 1;
+        try {{
+            sheet.style.zoom = "1";
+            sheet.style.setProperty("transform", "none", "important");
+            sheet.style.maxHeight = "none";
+            sheet.style.height = "auto";
+            sheet.style.minHeight = "0";
+            sheet.style.overflow = "visible";
+        }} catch (e) {{}}
+        // إجبار إعادة قياس الارتفاع بعد إزالة التكبير السابق
+        void sheet.offsetHeight;
+        const h = Math.max(sheet.scrollHeight || 0, sheet.offsetHeight || 0);
+        if (!h || h <= MAX_PRINT_PX) {{
+            try {{ sheet.style.zoom = "1"; }} catch (e2) {{}}
+            return 1;
+        }}
+        const ratio = Math.max(0.72, Math.floor((MAX_PRINT_PX / h) * 1000) / 1000);
+        try {{ sheet.style.zoom = String(ratio); }} catch (e3) {{}}
+        return ratio;
+    }}
+    try {{ window.fitSinglePageForPrint = fitSinglePageForPrint; }} catch (e) {{}}
+
     function prepareA4Print() {{
         syncAllLivePads();
         const viewport = document.getElementById("a4PreviewViewport");
@@ -5491,7 +5542,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         paper.style.removeProperty("width");
         paper.style.margin = "0 auto";
         paper.style.maxHeight = "none";
+        paper.style.minHeight = "0";
+        paper.style.height = "auto";
         paper.style.overflow = "visible";
+        fitSinglePageForPrint(paper);
     }}
     try {{ window.prepareA4Print = prepareA4Print; }} catch (e) {{}}
 
@@ -5500,7 +5554,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         const paper = document.getElementById("a4Sheet");
         if (viewport) {{
             viewport.style.height = "";
-            viewport.style.overflow = "auto";
+            viewport.style.overflow = "hidden";
         }}
         if (paper) {{
             paper.style.zoom = "";
@@ -5509,6 +5563,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             paper.style.width = "";
             paper.style.removeProperty("height");
             paper.style.removeProperty("max-height");
+            paper.style.removeProperty("min-height");
             paper.style.overflow = "";
         }}
         scheduleA4Fit();
@@ -5542,15 +5597,30 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + '<title>وثيقة رسمية - قسم مرور العارضة</title>'
             + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap">'
             + styles
-            + '<style>@page{{size:A4 portrait;margin:7mm 8mm !important;}}'
+            + '<style>@page{{size:A4 portrait;margin:5mm 7mm !important;}}'
             + 'html,body{{margin:0;padding:0;background:#fff;direction:rtl;}}'
             + '@media print{{.no-print{{display:none !important;}}}}'
             + '</style></head><body style="margin:0;padding:8px;background:#fff;direction:rtl;">'
             + topBar + sheetHtml
-            + '<script>(function(){{function go(){{try{{window.focus();}}catch(e){{}}try{{window.print();}}catch(e2){{}}}}'
+            + '<script>(function(){{'
+            + 'function fitSinglePageForPrint(root){{'
+            + 'var MAX_PRINT_PX=1035;'
+            + 'var sheet=(root&&root.querySelector)?(root.querySelector("#a4Sheet")||root.querySelector(".a4-sheet")||root.querySelector(".a4-paper")||root)'
+            + ':(document.getElementById("a4Sheet")||document.querySelector(".a4-sheet")||document.querySelector(".a4-paper"));'
+            + 'if(!sheet)return 1;'
+            + 'try{{sheet.style.zoom="1";sheet.style.setProperty("transform","none","important");sheet.style.maxHeight="none";sheet.style.height="auto";sheet.style.minHeight="0";sheet.style.overflow="visible";}}catch(e){{}}'
+            + 'void sheet.offsetHeight;'
+            + 'var h=Math.max(sheet.scrollHeight||0,sheet.offsetHeight||0);'
+            + 'if(!h||h<=MAX_PRINT_PX){{try{{sheet.style.zoom="1";}}catch(e2){{}}return 1;}}'
+            + 'var ratio=Math.max(0.72,Math.floor((MAX_PRINT_PX/h)*1000)/1000);'
+            + 'try{{sheet.style.zoom=String(ratio);}}catch(e3){{}}'
+            + 'return ratio;}}'
+            + 'function go(){{try{{fitSinglePageForPrint(document);}}catch(e){{}}try{{window.focus();}}catch(e2){{}}try{{window.print();}}catch(e3){{}}}}'
             + 'if(document.fonts&&document.fonts.ready){{document.fonts.ready.then(function(){{setTimeout(go,450);}});}}'
             + 'else{{setTimeout(go,450);}}'
-            + 'window.addEventListener("load",function(){{setTimeout(go,700);}});}}());<\\/script>'
+            + 'window.addEventListener("load",function(){{setTimeout(go,700);}});'
+            + 'window.addEventListener("beforeprint",function(){{try{{fitSinglePageForPrint(document);}}catch(e){{}}}});'
+            + '}}());<\\/script>'
             + '</body></html>';
     }}
 
