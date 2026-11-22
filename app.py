@@ -923,7 +923,7 @@ def _rtl_isolate(text: str, *, as_html: bool = True) -> str:
     if not as_html:
         return "\u200f" + v + "\u200f"
     return (
-        '<span dir="rtl" style="unicode-bidi:isolate; white-space:nowrap;">'
+        '<span dir="rtl" style="unicode-bidi:isolate; white-space:normal;">'
         + html.escape(v)
         + "</span>"
     )
@@ -3067,7 +3067,7 @@ def read_device_uid() -> str:
 
 
 def ensure_device_identity() -> tuple[str, str]:
-    """ يضمن وجود معرّف جهاز فوري: كوكي المتصفح أولاً، ثم معرّف الجلسة الاحتياطي."""
+    """ يضمن وجود معرّف جهاز فوري: كوكي المتصفح أولاً، ثم ?duid=، ثم معرّف الجلسة الاحتياطي."""
     cookie_uid = read_device_uid()
     if cookie_uid:
         st.session_state["device_uid"] = cookie_uid
@@ -3075,6 +3075,18 @@ def ensure_device_identity() -> tuple[str, str]:
         hashed = device_hash_for(cookie_uid)
         st.session_state["device_hash"] = hashed
         return cookie_uid, hashed
+
+    # مسار مساند للآيفون عندما تكون الكوكيز فارغة داخل iframe / ITP
+    try:
+        q_uid = str(st.query_params.get("duid") or "").strip()
+    except Exception:
+        q_uid = ""
+    if q_uid and _UUID4_RE.match(q_uid):
+        st.session_state["device_uid"] = q_uid
+        st.session_state["device_uid_pending"] = q_uid
+        hashed = device_hash_for(q_uid)
+        st.session_state["device_hash"] = hashed
+        return q_uid, hashed
 
     pending = str(
         st.session_state.get("device_uid_pending")
@@ -3282,7 +3294,7 @@ def gps_header_line(coords: str) -> str:
     href = html.escape(maps, quote=True)
     return (
         f"<p>إحداثيات الموقع: {safe} "
-        f"<a href='{href}' target='_blank' rel='noopener noreferrer' "
+        f"<a class='no-print' href='{href}' target='_blank' rel='noopener noreferrer' "
         f"style='font-size:11px; font-weight:800; color:#000000; margin-right:6px;'>خرائط</a></p>"
     )
 
@@ -3350,35 +3362,55 @@ def auto_save_to_archive(rec: dict, device_hash: str) -> bool:
     return ok
 
 
-def search_records_db(q: str = "", device_hash: str = "") -> list:
-    if not device_hash:
-        return []
+def search_records_db(q: str = "", device_hash: str = "", *, all_devices: bool = False) -> list:
+    """جلب السجلات. عند all_devices=True تُعرض كل سجلات القسم دون فلتر device_hash (مهم للآيفون)."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    q = q.strip()
-    if not q:
-        rows = conn.execute(
-            "SELECT * FROM records WHERE device_hash=? ORDER BY id DESC",
-            (device_hash,),
-        ).fetchall()
+    q = (q or "").strip()
+    if all_devices or not device_hash:
+        if not all_devices and not device_hash:
+            conn.close()
+            return []
+        if not q:
+            rows = conn.execute("SELECT * FROM records ORDER BY id DESC").fetchall()
+        else:
+            like = f"%{q}%"
+            rows = conn.execute(
+                """
+                SELECT * FROM records
+                WHERE party_id LIKE ? OR plate_no LIKE ? OR party_name LIKE ? OR doc_no LIKE ? OR form_title LIKE ?
+                ORDER BY id DESC
+                """,
+                (like, like, like, like, like),
+            ).fetchall()
     else:
-        like = f"%{q}%"
-        rows = conn.execute("""
-            SELECT * FROM records
-            WHERE device_hash=? AND (
-                party_id LIKE ? OR plate_no LIKE ? OR party_name LIKE ? OR doc_no LIKE ? OR form_title LIKE ?
-            )
-            ORDER BY id DESC
-        """, (device_hash, like, like, like, like, like)).fetchall()
+        if not q:
+            rows = conn.execute(
+                "SELECT * FROM records WHERE device_hash=? ORDER BY id DESC",
+                (device_hash,),
+            ).fetchall()
+        else:
+            like = f"%{q}%"
+            rows = conn.execute(
+                """
+                SELECT * FROM records
+                WHERE device_hash=? AND (
+                    party_id LIKE ? OR plate_no LIKE ? OR party_name LIKE ? OR doc_no LIKE ? OR form_title LIKE ?
+                )
+                ORDER BY id DESC
+                """,
+                (device_hash, like, like, like, like, like),
+            ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def delete_record_db(rec_id: int, device_hash: str):
-    if not device_hash:
-        return
+def delete_record_db(rec_id: int, device_hash: str = "", *, force: bool = False):
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("DELETE FROM records WHERE id=? AND device_hash=?", (rec_id, device_hash))
+    if force or not device_hash:
+        conn.execute("DELETE FROM records WHERE id=?", (rec_id,))
+    else:
+        conn.execute("DELETE FROM records WHERE id=? AND device_hash=?", (rec_id, device_hash))
     conn.commit()
     conn.close()
 
@@ -3434,9 +3466,27 @@ def render_device_bootstrap(
   function isUuid(v) {{
     return /^[0-9a-f]{{8}}-[0-9a-f]{{4}}-4[0-9a-f]{{3}}-[89ab][0-9a-f]{{3}}-[0-9a-f]{{12}}$/i.test(String(v || ""));
   }}
+  function isIOS() {{
+    try {{
+      return /iPad|iPhone|iPod/i.test(navigator.userAgent || "")
+        || (navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1);
+    }} catch (e) {{ return false; }}
+  }}
+  function readQuery(name) {{
+    try {{ return new URLSearchParams(window.location.search || "").get(name) || ""; }} catch (e) {{ return ""; }}
+  }}
+  function softReload() {{
+    // تجنّب حلقات إعادة التحميل على iOS Safari / WebView
+    if (isIOS()) return;
+    try {{
+      window.location.replace(window.location.pathname + window.location.search + window.location.hash);
+    }} catch (e) {{}}
+  }}
   var uid = "";
   try {{ uid = localStorage.getItem(uidKey) || ""; }} catch (e) {{}}
   if (!uid) uid = readCookie(uidKey);
+  var qUid = readQuery("duid");
+  if (!isUuid(uid) && isUuid(qUid)) uid = qUid;
   if (!isUuid(uid) && isUuid(preferredUid)) uid = preferredUid;
   if (!isUuid(uid)) uid = uuid4();
   try {{ localStorage.setItem(uidKey, uid); }} catch (e) {{}}
@@ -3445,12 +3495,14 @@ def render_device_bootstrap(
     try {{ localStorage.removeItem(shiftKey); }} catch (e) {{}}
     try {{ localStorage.removeItem(dutySigKey); }} catch (e) {{}}
     writeCookie(shiftKey, "", 0);
-    if (!sessionStorage.getItem("khafar_wiped")) {{
-      sessionStorage.setItem("khafar_wiped", "1");
-      window.location.replace(window.location.pathname + window.location.search + window.location.hash);
-      return;
-    }}
-    sessionStorage.removeItem("khafar_wiped");
+    try {{
+      if (!sessionStorage.getItem("khafar_wiped")) {{
+        sessionStorage.setItem("khafar_wiped", "1");
+        softReload();
+        return;
+      }}
+      sessionStorage.removeItem("khafar_wiped");
+    }} catch (e) {{}}
   }} else if (officialShift) {{
     var packed = JSON.stringify(officialShift);
     try {{ localStorage.setItem(shiftKey, packed); }} catch (e) {{}}
@@ -3461,26 +3513,30 @@ def render_device_bootstrap(
   }} else {{
     var localShift = "";
     try {{ localShift = localStorage.getItem(shiftKey) || ""; }} catch (e) {{}}
-    if (localShift && !readCookie(shiftKey) && !sessionStorage.getItem("khafar_shift_sync")) {{
-      sessionStorage.setItem("khafar_shift_sync", "1");
-      try {{
-        var parsed = JSON.parse(localShift);
-        if (parsed && typeof parsed === "object") {{
-          delete parsed.duty_sig_b64;
-          localShift = JSON.stringify(parsed);
-          localStorage.setItem(shiftKey, localShift);
-        }}
-      }} catch (e2) {{}}
-      writeCookie(shiftKey, localShift, 31536000);
-      window.location.replace(window.location.pathname + window.location.search + window.location.hash);
-      return;
+    try {{
+      if (localShift && !readCookie(shiftKey) && !sessionStorage.getItem("khafar_shift_sync")) {{
+        sessionStorage.setItem("khafar_shift_sync", "1");
+        try {{
+          var parsed = JSON.parse(localShift);
+          if (parsed && typeof parsed === "object") {{
+            delete parsed.duty_sig_b64;
+            localShift = JSON.stringify(parsed);
+            try {{ localStorage.setItem(shiftKey, localShift); }} catch (e3) {{}}
+          }}
+        }} catch (e2) {{}}
+        writeCookie(shiftKey, localShift, 31536000);
+        softReload();
+        return;
+      }}
+      sessionStorage.removeItem("khafar_shift_sync");
+    }} catch (e) {{}}
+  }}
+  try {{
+    if (!serverHasUid && !sessionStorage.getItem("khafar_uid_boot")) {{
+      sessionStorage.setItem("khafar_uid_boot", "1");
+      softReload();
     }}
-    sessionStorage.removeItem("khafar_shift_sync");
-  }}
-  if (!serverHasUid && !sessionStorage.getItem("khafar_uid_boot")) {{
-    sessionStorage.setItem("khafar_uid_boot", "1");
-    window.location.replace(window.location.pathname + window.location.search + window.location.hash);
-  }}
+  }} catch (e) {{}}
 }})();
 </script>
 """,
@@ -3540,7 +3596,7 @@ def render_hide_st_cloud_badges() -> None:
 # =====================================================================
 def _sig_slot_img(b64: str, slot_id: str) -> str:
     slot_style = (
-        "max-height:58px; height:auto; max-width:98%; width:auto; object-fit:contain; "
+        "max-height:50px; height:auto; max-width:98%; width:auto; object-fit:contain; "
         "display:inline-block; background:#ffffff !important; mix-blend-mode:multiply; "
         "border:none !important; box-shadow:none !important;"
     )
@@ -4590,12 +4646,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 <head>
 <meta charset="UTF-8">
 <meta name="format-detection" content="telephone=no">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <title>{rec['doc_no']} - {banner_title}</title>
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap');
-    * {{ box-sizing: border-box; font-family: "Cairo", "Tajawal", "Segoe UI", Tahoma, Arial, sans-serif !important; }}
+    *, *::before, *::after {{ box-sizing: border-box; font-family: "Cairo", "Tajawal", Tahoma, Arial, sans-serif !important; }}
     /* ورقة A4 معزولة داخل iframe: نص أسود عريض فوق خلفية بيضاء */
     html, body {{ color-scheme: light; direction: rtl; }}
     body {{ margin: 0; padding: 14px; background: #0d1316; direction: rtl; text-align: right; color: #e2e8f0; }}
@@ -4686,7 +4740,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .sig-grid .sig-role {{ font-size: 8.5px; }}
     .sig-grid .sig-slot-img, .sig-multi .sig-slot-img, .sig-tbl .sig-slot-img,
     img.sig-slot-img, #slot_duty, #slot_officer, #slot_citizen {{
-        max-height: 58px !important; height: auto !important; max-width: 98% !important;
+        max-height: 50px !important; height: auto !important; max-width: 98% !important;
         width: auto !important; object-fit: contain !important; display: inline-block !important;
         background: #ffffff !important; mix-blend-mode: multiply !important;
         border: none !important; box-shadow: none !important; visibility: visible !important;
@@ -4695,10 +4749,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         background: #ffffff !important; mix-blend-mode: multiply !important;
     }}
     .sig-guide {{ background: #ffffff !important; }}
+    .ios-print-hint {{
+        display: none; margin: 8px auto; max-width: 210mm; padding: 10px 12px;
+        background: #fef2f2; border: 1px solid #f87171; border-radius: 8px;
+        color: #b91c1c; font-size: 13px; font-weight: 700; text-align: center;
+    }}
     @media print {{
         .sig-tbl .sig-slot-img, .sig-grid .sig-slot-img, .sig-multi .sig-slot-img, img.sig-slot-img {{
             display: inline-block !important; visibility: visible !important; opacity: 1 !important;
-            max-height: 52px !important; height: auto !important;
+            max-height: 50px !important; height: auto !important;
             background: #ffffff !important; mix-blend-mode: multiply !important;
             border: none !important; box-shadow: none !important;
             -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
@@ -4793,23 +4852,26 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         box-sizing: border-box !important;
     }}
     .hdr-right {{
-        text-align: center !important; line-height: 1.28 !important;
+        text-align: center !important; line-height: 1.38 !important;
         margin: 0 !important; padding: 0 8px 0 0 !important;
+        width: 38% !important; max-width: 38% !important;
     }}
     .hdr-right p {{
         margin: 0 !important; padding: 0 !important;
         font-size: 12.5px !important; font-weight: 800 !important;
-        line-height: 1.28 !important; color: #000000 !important;
+        line-height: 1.38 !important; color: #000000 !important;
+        text-align: center !important;
     }}
     .hdr-center {{
         text-align: center; display: flex; justify-content: center; align-items: center;
-        width: 88px !important; height: 88px; min-width: 88px; min-height: 88px;
-        flex: 0 0 88px !important; margin: 0 auto; padding: 0 !important;
+        width: 24% !important; max-width: 24% !important;
+        height: 80px; min-width: 80px; min-height: 80px;
+        flex: 0 0 24% !important; margin: 0 auto; padding: 0 6px !important;
         background: transparent !important; border: none !important; border-radius: 0 !important; box-shadow: none !important;
     }}
     .hdr-center img, .hdr-logo {{
-        width: 88px !important; height: 88px !important;
-        max-width: 88px !important; max-height: 88px !important;
+        width: 80px !important; height: 80px !important;
+        max-width: 80px !important; max-height: 80px !important;
         object-fit: contain !important; display: block;
         margin: 0 auto; padding: 0 !important; border: none !important;
         background: transparent !important;
@@ -4817,10 +4879,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     .hdr-left, .hdr > div:last-child, .header > div:last-child {{
         text-align: left !important;
-        padding-right: 15px !important;
+        padding-right: 14px !important;
         padding-left: 0 !important;
         margin: 0 !important;
         line-height: 1.32 !important;
+        width: 38% !important; max-width: 38% !important;
     }}
     .hdr-left p {{
         margin: 0 !important; padding: 0 !important;
@@ -4852,17 +4915,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         color-adjust: exact !important;
     }}
     table.data-tbl th, table.data-tbl td {{
-        border: 1.4px solid #000000 !important; padding: 10px 12px !important;
-        font-size: 14px !important; line-height: 1.7 !important; vertical-align: top;
+        border: 1px solid #1e293b !important; padding: 5px 8px !important;
+        font-size: 12px !important; line-height: 1.45 !important; vertical-align: top;
         direction: rtl; text-align: right; color: #000000 !important; font-weight: 700 !important;
         white-space: normal !important; word-wrap: break-word !important;
         overflow-wrap: anywhere !important; word-break: break-word !important;
         overflow: hidden !important;
     }}
-    table.data-tbl td.lbl {{ width: 21%; background: #f4f7f6 !important; font-weight: 800 !important; color: #000000 !important; }}
+    table.data-tbl td.lbl {{ width: 20%; background: #f3f6f5 !important; font-weight: 800 !important; color: #000000 !important; }}
     table.data-tbl td.val {{
-        width: 29%; color: #000000 !important; font-weight: 700 !important;
-        white-space: normal !important; font-size: 14px !important;
+        width: 30%; background: #ffffff !important; color: #000000 !important; font-weight: 700 !important;
+        white-space: normal !important; font-size: 12px !important;
         overflow-wrap: anywhere !important; word-break: break-word !important; overflow: hidden !important;
     }}
     table.data-tbl td.val.plate-val, table.data-tbl td.plate-val {{
@@ -4878,14 +4941,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         white-space: normal !important; display: inline !important;
         overflow-wrap: anywhere !important; word-break: break-word !important;
     }}
-    table.data-tbl.cols-4 td.lbl.half {{ width: 21%; }}
-    table.data-tbl.cols-4 td.val.half {{ width: 29%; }}
-    table.data-tbl.cols-4 td.lbl {{ width: 21%; }}
+    table.data-tbl.cols-4 td.lbl.half {{ width: 20%; }}
+    table.data-tbl.cols-4 td.val.half {{ width: 30%; }}
+    table.data-tbl.cols-4 td.lbl {{ width: 20%; }}
     table.data-tbl.cols-4 td.val.span3 {{ width: auto; }}
     .legal-box {{
-        background: #f8fafc !important; border: 1.4px solid #0f3d2e; border-right: 5px solid #0f3d2e !important;
-        border-radius: 6px; padding: 14px 16px !important; margin-bottom: 14px !important;
-        font-size: 13.5px !important; line-height: 1.9 !important;
+        background: #ffffff !important; border: 1px solid #94a3b8; border-right: 4px solid #0f3d2e !important;
+        border-radius: 4px; padding: 10px 12px !important; margin-bottom: 12px !important;
+        font-size: 12.5px !important; line-height: 1.75 !important;
         text-align: justify !important; text-justify: inter-word !important; text-align-last: right !important;
         direction: rtl !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important;
         overflow-wrap: break-word !important; word-break: normal !important; white-space: normal !important;
@@ -4893,7 +4956,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     .legal-box > div:first-child {{ margin-bottom: 8px !important; font-weight: 800 !important; text-align: right !important; }}
     .legal-box div {{
-        font-size: 13.5px !important; line-height: 1.9 !important; color: #000000 !important; font-weight: 700 !important;
+        font-size: 12.5px !important; line-height: 1.75 !important; color: #000000 !important; font-weight: 700 !important;
         text-align: justify !important; text-justify: inter-word !important; text-align-last: right !important;
         direction: rtl !important; overflow-wrap: break-word !important; word-break: normal !important;
         white-space: normal !important; word-spacing: normal !important;
@@ -4908,8 +4971,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     table.sig-multi .sig-person, table.sig-multi .sig-head, table.sig-multi .sig-role {{
         word-break: normal !important; overflow-wrap: break-word; white-space: normal;
     }}
-    table.sig-tbl th {{ background: #f1f5f3; border: 1.4px solid #000000 !important; padding: 9px !important; font-size: 13px; line-height: 1.65 !important; color: #000000 !important; font-weight: 800 !important; }}
-    table.sig-tbl td {{ border: 1.4px solid #000000 !important; padding: 12px 10px !important; width: {col_width}; vertical-align: middle; height: auto; min-height: 95px; line-height: 1.65 !important; color: #000000 !important; font-weight: 700 !important; }}
+    table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #1e293b !important; padding: 8px !important; font-size: 12px; line-height: 1.45 !important; color: #000000 !important; font-weight: 800 !important; }}
+    table.sig-tbl td {{ border: 1px solid #1e293b !important; padding: 8px 6px !important; width: {col_width}; vertical-align: middle; height: auto; min-height: 76px; line-height: 1.45 !important; color: #000000 !important; font-weight: 700 !important; }}
     .sig-person {{ color: #000000 !important; font-weight: 800 !important; }}
     .sig-role {{ color: #000000 !important; font-weight: 700 !important; }}
     .sig-head {{ color: #000000 !important; font-weight: 800 !important; border: 1.4px solid #000000 !important; }}
@@ -4960,14 +5023,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         border-bottom: 2px solid #0f5132;
     }}
     .a4-compact .hdr-center, .a4-dense-print .hdr-center {{
-        width: 88px; height: 88px; min-width: 88px; min-height: 88px; padding: 0 !important;
+        width: 24% !important; height: 80px; min-width: 80px; min-height: 80px; padding: 0 6px !important;
     }}
     .a4-compact .hdr-center img, .a4-compact .hdr-logo,
     .a4-dense-print .hdr-center img, .a4-dense-print .hdr-logo {{
-        width: 88px !important; height: 88px !important;
-        max-width: 88px !important; max-height: 88px !important;
+        width: 80px !important; height: 80px !important;
+        max-width: 80px !important; max-height: 80px !important;
     }}
-    .a4-compact .hdr-right p, .a4-dense-print .hdr-right p {{ font-size: 12.5px !important; line-height: 1.28 !important; }}
+    .a4-compact .hdr-right p, .a4-dense-print .hdr-right p {{ font-size: 12.5px !important; line-height: 1.38 !important; }}
     .a4-compact .hdr-left p, .a4-dense-print .hdr-left p {{ font-size: 11.5px !important; line-height: 1.32 !important; }}
     .a4-compact .doc-banner, .a4-dense-print .doc-banner {{
         font-size: 13px !important; padding: 4px 8px !important; margin-bottom: 6px !important;
@@ -4991,242 +5054,160 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-compact .footer-qr, .a4-dense-print .footer-qr {{ padding: 4px 8px !important; }}
     .a4-compact .footer-qr img, .a4-dense-print .footer-qr img {{ width: 32px !important; height: 32px !important; }}
     @media print {{
-        @page {{ size: A4 portrait; margin: 6mm 8mm !important; }}
+        @page {{ size: A4 portrait; margin: 7mm 8mm !important; }}
         html, body {{
-            margin: 0 !important;
-            padding: 0 !important;
-            height: auto !important;
-            min-height: 0 !important;
-            max-height: none !important;
-            overflow: visible !important;
-            background: #ffffff !important;
-            direction: rtl !important;
-            text-align: right !important;
-            transform: none !important;
+            margin: 0 !important; padding: 0 !important; height: auto !important;
+            overflow: visible !important; background: #ffffff !important;
+            direction: rtl !important; text-align: right !important; transform: none !important;
         }}
         .a4-preview-viewport, .a4-preview-wrapper {{
-            margin: 0 !important;
-            padding: 0 !important;
-            height: auto !important;
-            overflow: visible !important;
-            background: #ffffff !important;
-            direction: rtl !important;
+            margin: 0 !important; padding: 0 !important; height: auto !important;
+            overflow: visible !important; background: #ffffff !important; direction: rtl !important;
         }}
         .toolbar, .no-print, .zoom-bar, .live-sig-dock, .clear-sig-btn, .sig-guide-hint, .sig-mode-note,
-        .live-pad-actions, .live-sig-dock-head {{ display: none !important; }}
+        .live-pad-actions, .live-sig-dock-head, .ios-print-hint {{ display: none !important; }}
         .sig-guide, .sig-guide-print-clean {{
             border: none !important; padding: 0 !important; margin: 0 !important; background: transparent !important;
         }}
         .live-pad-canvas {{ display: none !important; border: none !important; }}
 
-        /* حاوية الورقة الرئيسية */
         .a4-sheet, .a4-paper, .a4-page, .print-area, .report-container {{
             direction: rtl !important;
             transform: none !important;
             zoom: 1 !important;
             width: 100% !important;
-            max-width: 100% !important;
+            max-width: 194mm !important;
+            min-height: 278mm !important;
             height: auto !important;
-            min-height: 0 !important;
             max-height: none !important;
-            padding: 4mm 5mm !important;
+            padding: 6mm 7mm !important;
             margin: 0 auto !important;
-            display: block !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
             box-sizing: border-box !important;
+            page-break-after: avoid !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
             box-shadow: none !important;
-            border: none !important;
+            border: 1.5px solid #0f3d2e !important;
+            border-radius: 4px !important;
             overflow: visible !important;
             background: #ffffff !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             color-adjust: exact !important;
         }}
-        .a4-fit {{ height: auto !important; min-height: 0 !important; transform: none !important; zoom: 1 !important; }}
-        .a4-paper, .a4-paper * {{
+        .a4-fit {{
+            height: auto !important; min-height: 0 !important; flex: 1 1 auto !important;
+            transform: none !important; zoom: 1 !important;
+            display: flex !important; flex-direction: column !important; justify-content: flex-start !important;
+        }}
+        .a4-paper, .a4-paper *, .a4-sheet, .a4-sheet * {{
             color: #000000 !important; opacity: 1 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             color-adjust: exact !important;
         }}
-        .a4-paper .doc-banner, .a4-paper .doc-banner * {{
+        .a4-paper .doc-banner, .a4-paper .doc-banner *,
+        .a4-sheet .doc-banner, .a4-sheet .doc-banner * {{
             color: #ffffff !important;
             background-color: #0f3d2e !important;
         }}
-
-        /* تقليص حشوة الجداول وتثبيت الحدود داخل المستطيل */
         .a4-paper table, .a4-sheet table {{
-            width: 100% !important;
-            border-collapse: collapse !important;
-            margin-bottom: 6px !important;
-            table-layout: fixed !important;
+            width: 100% !important; border-collapse: collapse !important;
+            margin-bottom: 8px !important; table-layout: fixed !important;
         }}
         .a4-paper th, .a4-paper td, .a4-sheet th, .a4-sheet td {{
-            padding: 4px 6px !important;
-            font-size: 11.5px !important;
-            line-height: 1.35 !important;
-            white-space: normal !important;
-            word-wrap: break-word !important;
-            overflow-wrap: anywhere !important;
-            word-break: break-word !important;
-            overflow: hidden !important;
-        }}
-        .a4-paper td span, .a4-paper td b, .a4-paper td strong,
-        .a4-sheet td span, .a4-sheet td b, .a4-sheet td strong,
-        .a4-paper .rtl-iso, .a4-sheet .rtl-iso {{
-            white-space: normal !important;
-            display: inline !important;
-            overflow-wrap: anywhere !important;
-            word-break: break-word !important;
-        }}
-        .a4-paper table.data-tbl td.lbl {{ background: #f4f7f6 !important; }}
-        .a4-paper table.data-tbl td.val.plate-val, .a4-paper table.data-tbl td.plate-val {{
-            white-space: normal !important; overflow: hidden !important;
-            word-break: break-word !important; overflow-wrap: anywhere !important;
-        }}
-        .a4-paper table.sig-tbl th, .a4-paper .sig-head {{ background: #f1f5f3 !important; }}
-
-        /* ضبط صندوق الخطاب ومنع خروج الأرقام */
-        .a4-paper p, .a4-paper div, .a4-sheet p, .a4-sheet div {{
+            border: 1px solid #1e293b !important;
+            padding: 5px 8px !important;
+            font-size: 12px !important;
             line-height: 1.45 !important;
-            overflow-wrap: break-word !important;
+            white-space: normal !important;
+            overflow-wrap: anywhere !important;
             word-break: break-word !important;
         }}
-        .a4-paper .legal-box {{
-            background: #f8fafc !important;
-            border-right: 5px solid #0f3d2e !important;
+        .a4-paper table.data-tbl td.lbl, .a4-sheet table.data-tbl td.lbl {{
+            width: 20% !important; background: #f3f6f5 !important;
+        }}
+        .a4-paper table.data-tbl td.val, .a4-sheet table.data-tbl td.val {{
+            width: 30% !important; background: #ffffff !important;
+        }}
+        .a4-paper .legal-box, .a4-sheet .legal-box {{
+            background: #ffffff !important;
+            border: 1px solid #94a3b8 !important;
+            border-right: 4px solid #0f3d2e !important;
             color: #000000 !important;
             text-align: justify !important;
-            text-justify: inter-word !important;
             text-align-last: right !important;
             direction: rtl !important;
-            line-height: 1.45 !important;
-            overflow-wrap: break-word !important;
-            word-break: break-word !important;
-            white-space: normal !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            box-sizing: border-box !important;
-            padding: 6px 8px !important;
-            margin-bottom: 6px !important;
-        }}
-        .a4-paper .legal-box div {{
-            text-align: justify !important;
-            text-align-last: right !important;
-            direction: rtl !important;
-            overflow-wrap: break-word !important;
-            word-break: break-word !important;
-            white-space: normal !important;
-            line-height: 1.45 !important;
-        }}
-        .a4-paper .legal-box > div:first-child {{ text-align: right !important; }}
-
-        .a4-paper .hdr, .a4-paper .header, .a4-paper .report-header {{
-            display: flex !important;
-            justify-content: space-between !important;
-            align-items: center !important;
-            width: 100% !important;
-            gap: 0 !important;
-            padding: 2px 0 6px 0 !important;
+            font-size: 12.5px !important;
+            line-height: 1.75 !important;
+            padding: 8px 10px !important;
             margin-bottom: 8px !important;
-            border-bottom: 2px solid #0f5132 !important;
-            page-break-inside: avoid !important; break-inside: avoid !important;
-            box-sizing: border-box !important;
-        }}
-        .a4-paper .hdr > div:first-child,
-        .a4-paper .hdr > div:last-child {{
-            width: 38% !important;
-            max-width: 38% !important;
-            box-sizing: border-box !important;
-        }}
-        .a4-paper .hdr-right p {{
-            margin: 0 !important; padding: 0 !important;
-            font-size: 11.5px !important; font-weight: 800 !important;
-            line-height: 1.28 !important; color: #000000 !important;
-            text-align: center !important;
-        }}
-        .a4-paper .hdr-left, .a4-paper .hdr > div:last-child {{
-            text-align: left !important;
-            padding-right: 15px !important;
-        }}
-        .a4-paper .hdr-left p {{
-            margin: 0 !important; padding: 0 !important;
-            font-size: 10.5px !important; font-weight: 700 !important;
-            line-height: 1.3 !important; color: #000000 !important;
-            text-align: left !important;
             white-space: normal !important;
-            overflow-wrap: anywhere !important; word-break: break-word !important;
         }}
-        .a4-paper .hdr-left p.hdr-nowrap {{ white-space: normal !important; }}
-        .a4-paper .hdr-center {{
-            width: 72px !important; height: 72px !important;
-            min-width: 72px !important; min-height: 72px !important;
-            flex: 0 0 72px !important;
-            padding: 0 !important; background: transparent !important;
-            border: none !important; box-shadow: none !important;
+        .a4-paper .legal-box div, .a4-sheet .legal-box div {{
+            text-align: justify !important; text-align-last: right !important;
+            font-size: 12.5px !important; line-height: 1.75 !important; white-space: normal !important;
         }}
-        .a4-paper .hdr-center img, .a4-paper .hdr-logo {{
-            width: 72px !important; height: 72px !important;
-            max-width: 72px !important; max-height: 72px !important;
-            object-fit: contain !important;
+        .a4-paper .hdr, .a4-sheet .hdr {{
+            display: flex !important; justify-content: space-between !important; align-items: center !important;
+            width: 100% !important; gap: 0 !important; padding: 2px 0 6px 0 !important; margin-bottom: 8px !important;
+            border-bottom: 2px solid #0f5132 !important; page-break-inside: avoid !important;
         }}
-        .a4-paper .doc-banner {{
-            margin-bottom: 6px !important; padding: 5px 8px !important; font-size: 13px !important;
+        .a4-paper .hdr-right, .a4-sheet .hdr-right {{
+            width: 38% !important; max-width: 38% !important; text-align: center !important; line-height: 1.38 !important;
         }}
-        .a4-paper table.data-tbl {{ margin-bottom: 6px !important; }}
-
-        /* تقليص خانة التواقيع ومنع انفصالها في صفحة مستقلة */
-        .signatures, .sig-footer, table.sig-tbl, .sig-grid, .footer-qr, .attachment-section,
-        .a4-paper table:last-of-type {{
-            margin-top: 6px !important;
+        .a4-paper .hdr-right p, .a4-sheet .hdr-right p {{
+            text-align: center !important; font-size: 12px !important; line-height: 1.38 !important; margin: 0 !important;
+        }}
+        .a4-paper .hdr-center, .a4-sheet .hdr-center {{
+            width: 24% !important; max-width: 24% !important;
+            min-width: 80px !important; min-height: 80px !important;
+            height: 80px !important; flex: 0 0 24% !important; padding: 0 6px !important;
+        }}
+        .a4-paper .hdr-center img, .a4-paper .hdr-logo,
+        .a4-sheet .hdr-center img, .a4-sheet .hdr-logo {{
+            width: 80px !important; height: 80px !important;
+            max-width: 80px !important; max-height: 80px !important;
+        }}
+        .a4-paper .hdr-left, .a4-sheet .hdr-left {{
+            width: 38% !important; max-width: 38% !important;
+            text-align: left !important; padding-right: 14px !important;
+        }}
+        .a4-paper .hdr-left p, .a4-sheet .hdr-left p {{
+            text-align: left !important; white-space: normal !important; margin: 0 !important;
+        }}
+        .signatures, .sig-footer, table.sig-tbl, .sig-grid, .footer-qr, .attachment-section {{
+            margin-top: auto !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
         }}
-        .a4-paper table.sig-tbl td, .a4-paper .sig-cell {{
-            min-height: 42px !important; padding: 4px 6px !important;
+        .a4-paper table.sig-tbl td, .a4-paper .sig-cell,
+        .a4-sheet table.sig-tbl td, .a4-sheet .sig-cell {{
+            min-height: 68px !important; padding: 6px !important;
         }}
-        .a4-paper .footer-qr {{ margin-top: 6px !important; padding: 4px 6px !important; }}
-
-        /* تصغير صور التواقيع والباركود (مع الإبقاء على الشعار أوضح) */
-        .a4-paper img.sig-slot-img, .a4-paper .sig-slot-img,
-        .a4-paper .footer-qr img, .a4-paper .att-card img {{
-            max-height: 45px !important;
-            height: auto !important;
-            width: auto !important;
-            object-fit: contain !important;
+        .a4-paper img.sig-slot-img, .a4-sheet img.sig-slot-img, img.sig-slot-img {{
+            max-height: 50px !important; height: auto !important;
+            background: #ffffff !important; mix-blend-mode: multiply !important;
         }}
-        .a4-paper .hdr-center img, .a4-paper .hdr-logo {{
-            max-height: 72px !important;
-        }}
-
+        .a4-paper .footer-qr, .a4-sheet .footer-qr {{ margin-top: 8px !important; padding: 6px 8px !important; }}
         a, a[href^="tel"] {{
             color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
         }}
         .a4-paper.a4-dense-print, .a4-paper.a4-compact {{
-            padding: 4mm 5mm !important;
+            padding: 6mm 7mm !important;
         }}
     }}
 </style>
 </head>
 <body>
-    <div dir="rtl" style="text-align:center; margin: 12px 0;" class="no-print">
-        <button id="ios-pdf-btn" type="button" onclick="exportReportForIOS()" style="
-            width:100%; background:#14532d; color:#fff; border:1px solid #c5a059;
-            padding:14px; font-size:16px; font-weight:bold; border-radius:8px; cursor:pointer;">
-            📄 استخراج التقرير PDF / طباعة (يدعم الآيفون)
-        </button>
-        <div id="ios-preview-box" style="display:none; margin-top:12px; background:#f8fafc; border:2px solid #16a34a; border-radius:8px; padding:10px;">
-            <p style="color:#14532d; font-weight:bold; font-size:13px; margin:0 0 8px 0;">
-                ✅ تم تجهيز الوثيقة!<br>
-                • في <b>سفاري</b>: اختر <b>(تنزيل)</b> من الرسالة المنبثقة لفتح الـ PDF.<br>
-                • داخل <b>واتساب للآيفون</b>: اضغط <b>ضغطة مطولة</b> على الوثيقة أدناه واختر <b>(مشاركة)</b> أو <b>(طباعة)</b>:
-            </p>
-            <img id="ios-ready-img" alt="معاينة الوثيقة" style="width:100%; border:1px solid #cbd5e1; border-radius:4px;" />
-        </div>
+    <div id="iosPrintHint" class="ios-print-hint no-print">
+        للطباعة أو حفظ PDF على الآيفون: افتح الرابط في متصفح Safari عبر أيقونة البوصلة بالأسفل
     </div>
     <div class="toolbar no-print">
-        <button class="print-btn" type="button" id="printOfficialBtn">🖨️ طباعة مباشرة من المتصفح</button>
+        <button class="print-btn" type="button" id="printOfficialBtn">🖨️ طباعة الوثيقة الرسمية / حفظ ومشاركة A4 PDF</button>
     </div>
     <div class="zoom-bar no-print" id="zoomBar">
         <button type="button" class="z-btn" data-z="-">➖ تصغير</button>
@@ -5295,9 +5276,31 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         f"{rec.get('form_id') or 'form'}_{rec.get('auto_doc_no') or rec.get('doc_no') or 'doc'}",
         ensure_ascii=False,
     )};
+    window.__memPads = window.__memPads || {{}};
 
     function padStorageKey(padId) {{
         return 'khafar_pad_' + DOC_SIG_KEY + '_' + padId;
+    }}
+    function padStoreGet(key) {{
+        try {{
+            var v = localStorage.getItem(key);
+            if (v) return v;
+        }} catch (e) {{}}
+        try {{
+            var s = sessionStorage.getItem(key);
+            if (s) return s;
+        }} catch (e2) {{}}
+        return window.__memPads[key] || '';
+    }}
+    function padStoreSet(key, val) {{
+        window.__memPads[key] = val || '';
+        try {{ localStorage.setItem(key, val || ''); }} catch (e) {{}}
+        try {{ sessionStorage.setItem(key, val || ''); }} catch (e2) {{}}
+    }}
+    function padStoreDel(key) {{
+        try {{ delete window.__memPads[key]; }} catch (e) {{}}
+        try {{ localStorage.removeItem(key); }} catch (e2) {{}}
+        try {{ sessionStorage.removeItem(key); }} catch (e3) {{}}
     }}
 
     // مزامنة محلية فقط داخل نفس إطار HTML — بدون postMessage / بدون Streamlit rerun / بدون كيبورد
@@ -5315,15 +5318,24 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         if (empty) {{
             slot.removeAttribute('src');
             slot.style.display = 'none';
-            try {{ localStorage.removeItem(padStorageKey(padId)); }} catch (e) {{}}
+            padStoreDel(padStorageKey(padId));
             return;
         }}
-        const dataUrl = canvas.toDataURL('image/png');
+        // خلفية بيضاء صافية + حبر أزرق داكن واضح عند التصدير للطباعة
+        const out = document.createElement('canvas');
+        out.width = canvas.width;
+        out.height = canvas.height;
+        const octx = out.getContext('2d');
+        octx.fillStyle = '#ffffff';
+        octx.fillRect(0, 0, out.width, out.height);
+        octx.drawImage(canvas, 0, 0);
+        const dataUrl = out.toDataURL('image/png');
         slot.src = dataUrl;
         slot.style.display = 'inline-block';
+        slot.style.background = '#ffffff';
         try {{
           const b64 = (dataUrl.split(',')[1] || '');
-          if (b64) localStorage.setItem(padStorageKey(padId), b64);
+          if (b64) padStoreSet(padStorageKey(padId), b64);
         }} catch (e) {{}}
     }}
 
@@ -5337,6 +5349,18 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             canvas.setAttribute('tabindex', '-1');
         }} catch (e) {{}}
         const ctx = canvas.getContext('2d');
+        const dpr = Math.max(window.devicePixelRatio || 1, 1);
+        if (!canvas.dataset.dprReady) {{
+            const rect = canvas.getBoundingClientRect();
+            const displayW = Math.max(rect.width || canvas.width || 900, 1);
+            const displayH = Math.max(rect.height || canvas.height || 220, 1);
+            canvas.width = Math.round(displayW * dpr);
+            canvas.height = Math.round(displayH * dpr);
+            canvas.style.width = displayW + 'px';
+            canvas.style.height = displayH + 'px';
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            canvas.dataset.dprReady = '1';
+        }}
         ctx.strokeStyle = PEN_COLOR;
         ctx.lineWidth = 2.8;
         ctx.lineCap = 'round';
@@ -5348,9 +5372,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             if (e.touches && e.touches.length) src = e.touches[0];
             else if (e.changedTouches && e.changedTouches.length) src = e.changedTouches[0];
             else if (typeof e.clientX === 'number') src = e;
+            // إحداثيات CSS ثابتة مع setTransform(dpr)
             return {{
-                x: (src.clientX - r.left) * (canvas.width / (r.width || 1)),
-                y: (src.clientY - r.top) * (canvas.height / (r.height || 1))
+                x: (src.clientX - r.left),
+                y: (src.clientY - r.top)
             }};
         }};
         const startDraw = (e) => {{
@@ -5378,7 +5403,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 return;
             }}
             drawing = false;
-            // عند رفع الإصبع فقط: احفظ محلياً وانسخ فوراً إلى خانة A4 — بدون سيرفر وبدون rerun
             syncPadToSlot(padId);
         }};
         canvas.addEventListener('pointerdown', startDraw, {{ passive: false }});
@@ -5392,7 +5416,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         canvas.addEventListener('touchmove', moveDraw, {{ passive: false }});
         canvas.addEventListener('touchend', endDraw, {{ passive: false }});
         canvas.addEventListener('touchcancel', endDraw, {{ passive: false }});
-        try {{ canvas.setPointerCapture && null; }} catch (e) {{}}
         canvas.addEventListener('pointerdown', function(ev) {{
             try {{ if (canvas.setPointerCapture) canvas.setPointerCapture(ev.pointerId); }} catch (e) {{}}
         }}, {{ passive: false }});
@@ -5401,7 +5424,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     function clearLivePad(padId) {{
         const canvas = document.getElementById('pad_' + padId);
         if (!canvas) return;
-        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+        const ctx = canvas.getContext('2d');
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
         syncPadToSlot(padId);
     }}
 
@@ -5415,16 +5442,22 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         img.onload = function() {{
             try {{
                 const ctx = canvas.getContext('2d');
+                const dpr = Math.max(window.devicePixelRatio || 1, 1);
+                ctx.save();
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                ctx.restore();
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                const w = canvas.width / dpr;
+                const h = canvas.height / dpr;
+                ctx.drawImage(img, 0, 0, w, h);
                 syncPadToSlot(padId);
             }} catch (e) {{}}
         }};
         img.src = 'data:image/png;base64,' + b64;
     }}
     (LIVE_PADS || []).forEach(function(padId) {{
-        var b64 = '';
-        try {{ b64 = localStorage.getItem(padStorageKey(padId)) || ''; }} catch (e) {{ b64 = ''; }}
+        var b64 = padStoreGet(padStorageKey(padId));
         if (!b64 && PRELOADED_SIGS && PRELOADED_SIGS[padId]) b64 = PRELOADED_SIGS[padId];
         if (b64) restoreLivePad(padId, b64);
     }});
@@ -5536,78 +5569,84 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         scheduleA4Fit();
     }}
 
-    async function exportReportForIOS() {{
-        const btn = document.getElementById("ios-pdf-btn");
-        const target =
-            document.getElementById("print-area") ||
-            document.getElementById("a4Sheet") ||
-            document.querySelector(".a4-page") ||
-            document.querySelector(".a4-paper") ||
-            document.querySelector(".report-container");
-        if (!target) {{
-            alert("لم يتم العثور على حاوية التقرير البيضاء، تأكد من مطابقة الـ id أو الـ class");
-            return;
-        }}
-        if (!window.htmlToImage || !window.jspdf) {{
-            alert("مكتبات التصدير لم تُحمَّل بعد. تحقق من الاتصال ثم أعد المحاولة.");
-            return;
-        }}
-        const originalLabel = btn ? btn.innerText : "";
-        if (btn) {{
-            btn.innerText = "⏳ جاري تجهيز الوثيقة للآيفون...";
-            btn.disabled = true;
-        }}
+    function collectPrintStyles() {{
         try {{
-            try {{
-                if (typeof syncAllLivePads === "function") syncAllLivePads();
-                if (typeof prepareA4Print === "function") prepareA4Print();
-            }} catch (e) {{}}
-            const options = {{ quality: 0.95, pixelRatio: 2, backgroundColor: "#ffffff" }};
-            await htmlToImage.toJpeg(target, options);
-            const imgData = await htmlToImage.toJpeg(target, options);
-            const readyImg = document.getElementById("ios-ready-img");
-            const previewBox = document.getElementById("ios-preview-box");
-            if (readyImg) readyImg.src = imgData;
-            if (previewBox) previewBox.style.display = "block";
-            const {{ jsPDF }} = window.jspdf;
-            const pdf = new jsPDF("p", "mm", "a4");
-            const imgProps = pdf.getImageProperties(imgData);
-            const pageWidth = 198;
-            let pageHeight = (imgProps.height * pageWidth) / imgProps.width;
-            if (pageHeight > 285) pageHeight = 285;
-            pdf.addImage(imgData, "JPEG", 6, 6, pageWidth, pageHeight);
-            const pdfDataUri = pdf.output("datauristring");
-            const link = document.createElement("a");
-            link.href = pdfDataUri;
-            link.download = "وثيقة_مرور_العارضة.pdf";
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            if (btn) btn.innerText = "✅ تم استخراج الوثيقة بنجاح";
-        }} catch (err) {{
-            alert("حدث خطأ أثناء تجهيز الملف: " + (err && err.message ? err.message : err));
-            if (btn) btn.innerText = originalLabel || "📄 استخراج التقرير PDF / طباعة (يدعم الآيفون)";
-        }} finally {{
-            if (btn) btn.disabled = false;
-            try {{ restoreA4Preview(); }} catch (e) {{}}
+            return Array.from(document.querySelectorAll("style"))
+                .map(function(node) {{ return node.outerHTML; }})
+                .join("\\n");
+        }} catch (e) {{
+            return "";
         }}
     }}
-    try {{ window.exportReportForIOS = exportReportForIOS; }} catch (e) {{}}
 
-    async function printOrDownloadIOS() {{
-        return exportReportForIOS();
+    function buildCleanPrintHtml(sheetHtml) {{
+        var styles = collectPrintStyles();
+        var topBar = ''
+            + '<div class="no-print" style="position:sticky;top:0;z-index:9999;background:#14532d;color:#fff;'
+            + 'padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px;'
+            + 'font-family:Cairo,Tahoma,sans-serif;direction:rtl;margin-bottom:10px;">'
+            + '<button type="button" onclick="window.print()" style="background:#eab308;color:#000;border:none;'
+            + 'padding:8px 14px;border-radius:6px;font-weight:800;font-size:14px;cursor:pointer;">'
+            + '🖨️ اضغط للطباعة أو الحفظ PDF عبر مشاركة سفاري (⬆️)</button>'
+            + '<button type="button" onclick="window.close()" style="background:#dc2626;color:#fff;border:none;'
+            + 'padding:8px 14px;border-radius:6px;font-weight:800;font-size:14px;cursor:pointer;">✕ إغلاق</button>'
+            + '</div>';
+        return '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">'
+            + '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+            + '<meta name="format-detection" content="telephone=no">'
+            + '<title>وثيقة رسمية - قسم مرور العارضة</title>'
+            + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap">'
+            + styles
+            + '<style>@page{{size:A4 portrait;margin:7mm 8mm !important;}}'
+            + 'html,body{{margin:0;padding:0;background:#fff;direction:rtl;}}'
+            + '@media print{{.no-print{{display:none !important;}}}}'
+            + '</style></head><body style="margin:0;padding:8px;background:#fff;direction:rtl;">'
+            + topBar + sheetHtml
+            + '<script>(function(){{function go(){{try{{window.focus();}}catch(e){{}}try{{window.print();}}catch(e2){{}}}}'
+            + 'if(document.fonts&&document.fonts.ready){{document.fonts.ready.then(function(){{setTimeout(go,450);}});}}'
+            + 'else{{setTimeout(go,450);}}'
+            + 'window.addEventListener("load",function(){{setTimeout(go,700);}});}}());<\\/script>'
+            + '</body></html>';
     }}
-    try {{ window.printOrDownloadIOS = printOrDownloadIOS; }} catch (e) {{}}
+
+    function openOfficialPrintWindow() {{
+        // مسار متزامن 100%: مزامنة التواقيع ثم window.open داخل نفس ضغطة المستخدم
+        try {{ syncAllLivePads(); }} catch (e) {{}}
+        try {{ prepareA4Print(); }} catch (e2) {{}}
+        var sheet = document.getElementById("a4Sheet")
+            || document.querySelector(".a4-page")
+            || document.querySelector(".a4-paper");
+        if (!sheet) {{
+            alert("لم يتم العثور على ورقة A4");
+            return;
+        }}
+        var printWin = window.open("", "_blank");
+        if (!printWin || printWin.closed || typeof printWin.closed === "undefined") {{
+            var hint = document.getElementById("iosPrintHint");
+            if (hint) hint.style.display = "block";
+            try {{ prepareA4Print(); }} catch (e3) {{}}
+            try {{ window.print(); }} catch (e4) {{}}
+            return;
+        }}
+        var hintHide = document.getElementById("iosPrintHint");
+        if (hintHide) hintHide.style.display = "none";
+        var cleanHtml = buildCleanPrintHtml(sheet.outerHTML);
+        try {{
+            printWin.document.open();
+            printWin.document.write(cleanHtml);
+            printWin.document.close();
+        }} catch (e5) {{
+            try {{ prepareA4Print(); window.print(); }} catch (e6) {{}}
+        }}
+        setTimeout(function() {{ try {{ restoreA4Preview(); }} catch (e7) {{}} }}, 1200);
+    }}
+    try {{ window.openOfficialPrintWindow = openOfficialPrintWindow; }} catch (e) {{}}
 
     var printBtn = document.getElementById("printOfficialBtn");
     if (printBtn) {{
         printBtn.addEventListener("click", function(ev) {{
             ev.preventDefault();
-            try {{
-                if (typeof syncAllLivePads === "function") syncAllLivePads();
-                if (typeof prepareA4Print === "function") prepareA4Print();
-            }} catch (e) {{}}
-            window.print();
+            openOfficialPrintWindow();
         }});
     }}
 
@@ -5798,7 +5837,7 @@ def reset_doc_state():
             del st.session_state[state_key]
 
 
-all_archived = search_records_db("", DEVICE_HASH)
+all_archived = search_records_db("", DEVICE_HASH, all_devices=True)
 archive_count = len(all_archived)
 
 header_logo_widget = (
@@ -6795,9 +6834,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 st.markdown("#### 📄 المعاينة الرسمية مقاس A4 (جاهزة للطباعة أو الحفظ كـ PDF)")
                 st.caption(
                     "التواقيع تُرسم وتُحفظ محلياً داخل المعاينة. "
-                    "بعد التوقيع اضغط زر الطباعة الأخضر أدناه (يعمل على الآيفون عبر نافذة آمنة)."
+                    "بعد التوقيع اضغط زر الطباعة الوحيد أعلى ورقة A4 (متوافق مع Safari والآيفون)."
                 )
-                render_print_button(a4_html, "🖨️ طباعة الوثيقة الرسمية / حفظ كملف A4 PDF")
                 preview_h = 1480 if (
                     ("توقيع حي" in ready_record.get("citizen_auth_mode", ""))
                     or ("توقيع حي" in ready_record.get("officer_auth_mode", ""))
@@ -6819,10 +6857,15 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
     """, unsafe_allow_html=True)
 
     search_q = st.text_input("🔍 ابحث برقم الهوية، رقم اللوحة، اسم الطرف، أو الرقم المرجعي:")
-    records = search_records_db(search_q, DEVICE_HASH)
+    show_all_dept = st.toggle(
+        "عرض جميع سجلات القسم المحفوظة على السيرفر",
+        value=True,
+        help="مفيد على الآيفون عند اختفاء كوكي الجهاز: يعرض كل وثائق القسم دون الاعتماد على device_hash فقط.",
+    )
+    records = search_records_db(search_q, DEVICE_HASH, all_devices=bool(show_all_dept))
 
     if not records:
-        st.info("لا توجد سجلات محفوظة على هذا الجهاز.")
+        st.info("لا توجد سجلات محفوظة" + (" على السيرفر." if show_all_dept else " على هذا الجهاز."))
     else:
         for r in records:
             with st.expander(f"📌 {r['form_title']}  —  {r['party_name']}  |  اللوحة: {r['plate_no']}  |  ({r['doc_no']})"):
@@ -6859,11 +6902,10 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
                     )
                 with c_del:
                     if st.button("🗑️ حذف السجل", key=f"del_{r['id']}", use_container_width=True):
-                        delete_record_db(r["id"], DEVICE_HASH)
+                        delete_record_db(r["id"], DEVICE_HASH, force=bool(show_all_dept))
                         safe_rerun()
 
                 if st.checkbox("عرض ومعاينة ورقة الـ A4 الرسمية للطباعة", key=f"chk_prev_{r['id']}"):
-                    render_print_button(arch_html, "🖨️ طباعة / حفظ التقرير PDF")
                     components.html(arch_html, height=1150, scrolling=True)
 
 
