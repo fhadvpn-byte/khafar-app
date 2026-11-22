@@ -3537,7 +3537,8 @@ def render_device_bootstrap(
       softReload();
     }}
   }} catch (e) {{}}
-}})();
+}setTimeout(function(){ try { if (window.innerWidth < 820 && typeof fitToScreenZoom === 'function') fitToScreenZoom(); } catch(e){} }, 180);
+})();
 </script>
 """,
         unsafe_allow_javascript=True,
@@ -6402,6 +6403,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       break-inside: avoid !important;
     }}
   }}
+/* KHAFAR_HIDE_DECL_ZOOM */
+  #zoomBar, .zoom-bar { display: none !important; }
 </style>
 <script id="khafar-final-js-fix">
 (function() {{
