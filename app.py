@@ -6369,7 +6369,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   img.sig-slot-img {{
     background: #ffffff !important;
     mix-blend-mode: normal !important;
-    max-height: 52px !important;
+    max-height: 50px !important;
     width: auto !important;
     max-width: 95% !important;
     object-fit: contain !important;
@@ -6505,7 +6505,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   window.__padInk = window.__padInk || {{}};
 
   // =========================================================
-  // 1) ربط ومزامنة لوحات التوقيع الحي بالإصبع 100%
+  // 1) مزامنة التوقيع الحي بالإصبع 100%
   // =========================================================
   function canvasHasVisibleInk(canvas) {{
     try {{
@@ -6579,7 +6579,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     octx.drawImage(canvas, 0, 0);
     var dataUrl = out.toDataURL('image/png');
     slot.setAttribute('src', dataUrl);
-    slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; max-height:50px !important; width:auto !important; max-width:95% !important; margin:3px auto 0 auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
+    slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; max-height:48px !important; width:auto !important; max-width:95% !important; margin:3px auto 0 auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
     try {{
       var b64 = (dataUrl.split(',')[1] || '');
       if (b64 && typeof padStorageKey === 'function') localStorage.setItem(padStorageKey(padId), b64);
@@ -6593,9 +6593,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   }};
 
   // =========================================================
-  // 2) تخصيص نموذج إحالة وطلب تحليل السموم حصرا:
-  //    باسم مدير إدارة مرور منطقة جازان (العقيد / محمد بن عبدالله آل هادي)
-  //    ويوقع من ضابط الخفر (مع نقل خانة التوقيع الحي إلى داخل المربع)
+  // 2) تخصيص نموذج تحليل السموم بـ 3 خانات توقيع:
+  //    [يمين: جهة الاستلام] | [منتصف: ضابط الخفر] | [يسار: مدير إدارة مرور منطقة جازان + توقيع رئيس الحوادث بمرور العارضة]
   // =========================================================
   function applyToxicologyDirectorBlock(docRoot) {{
     var sheet = docRoot.getElementById('a4Sheet');
@@ -6611,24 +6610,27 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     if (!isTox) return;
 
-    // تحديث عنوان لوحة التوقيع الحي العلوية في شاشة المعاينة لهذا النموذج فقط
+    // تعديل مسمى لوحة التوقيع الحي العلوية إلى "ضابط الخفر المناوب" في هذا النموذج فقط
     if (docRoot === document) {{
       docRoot.querySelectorAll('div, span, label, strong, b').forEach(function(el) {{
-        if (el.children.length === 0 && (el.textContent || '').indexOf('مستلم الخفر المناوب') !== -1 && !sheet.contains(el)) {{
-          el.textContent = el.textContent.replace(/مستلم الخفر المناوب/g, 'ضابط الخفر (عن مدير إدارة مرور منطقة جازان)');
+        if (el.children.length === 0 && !sheet.contains(el)) {{
+          var t = el.textContent || '';
+          if (t.indexOf('مستلم الخفر المناوب') !== -1) {{
+            el.textContent = t.replace(/مستلم الخفر المناوب/g, 'ضابط الخفر المناوب');
+          }}
         }}
       }});
     }}
 
-    if (sheet.dataset.toxDirectorApplied === '1') return;
+    if (sheet.dataset.toxThreeColApplied === '1') return;
 
-    // استخراج عنصر التوقيع الحي لضابط الخفر قبل إخفاء الشريط السفلي المكرر
+    // 1) التقاط عنصر التوقيع الحي الخاص بضابط الخفر قبل حذف الشريط السفلي المكرر
     var dutySlotImg = sheet.querySelector('img#slot_officer, img#slot_duty, img#slot_khafar, img#slot_receiver');
     if (!dutySlotImg) {{
       var allSlots = sheet.querySelectorAll('img[id^="slot_"]');
       for (var sIdx = 0; sIdx < allSlots.length; sIdx++) {{
         var sid = (allSlots[sIdx].id || '').toLowerCase();
-        if (sid.indexOf('hosp') === -1 && sid.indexOf('cit') === -1 && sid.indexOf('party') === -1) {{
+        if (sid.indexOf('hosp') === -1 && sid.indexOf('cit') === -1 && sid.indexOf('party') === -1 && sid.indexOf('acc') === -1) {{
           dutySlotImg = allSlots[sIdx];
           break;
         }}
@@ -6647,7 +6649,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         var colonPos = rawT.indexOf(':');
         if (colonPos !== -1) {{
           var extracted = rawT.slice(colonPos + 1).trim();
-          if (extracted && extracted !== 'مستلم الخفر المناوب' && extracted !== 'ضابط الخفر' && extracted !== '-') {{
+          if (extracted && extracted !== 'مستلم الخفر المناوب' && extracted !== 'ضابط الخفر' && extracted !== 'ضابط الخفر المناوب' && extracted !== '-') {{
             customDutyName = extracted;
           }}
         }}
@@ -6659,21 +6661,21 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
           if (dutySlotImg && parentRow.contains(dutySlotImg) && dutySlotImg.parentNode) {{
             dutySlotImg.parentNode.removeChild(dutySlotImg);
           }}
-          parentRow.style.setProperty('display', 'none', 'important');
+          parentRow.remove();
         }} else {{
-          el.style.setProperty('display', 'none', 'important');
+          el.remove();
         }}
       }}
     }});
 
-    // تحديد رأس عمود (وحدة الحوادث) وخلية التوقيع التابعة له أيا كان هيكل الجدول
+    // 2) تحديد رأس وخلية (وحدة الحوادث) الأصلية أقصى اليسار
     var hdrEl = null;
     var candidates = sheet.querySelectorAll('th, td, div, span');
     for (var i = 0; i < candidates.length; i++) {{
       var c = candidates[i];
       if (c.children.length === 0) {{
         var ct = (c.textContent || '').trim();
-        if (ct === 'وحدة الحوادث' || ct === 'رئيس وحدة الحوادث') {{
+        if (ct === 'وحدة الحوادث' || ct === 'رئيس وحدة الحوادث' || ct === 'مدير إدارة مرور منطقة جازان') {{
           hdrEl = c;
           break;
         }}
@@ -6686,7 +6688,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       var bc = bodyCandidates[j];
       if (bc.querySelector('table') || bc.querySelector('tr')) continue;
       var bt = (bc.textContent || '').trim();
-      if ((bt.indexOf('فهد بن أحمد') !== -1 || bt.indexOf('مجرشي') !== -1 || bt.indexOf('رئيس وحدة الحوادث') !== -1) && bt.length < 220) {{
+      if ((bt.indexOf('فهد بن أحمد') !== -1 || bt.indexOf('مجرشي') !== -1 || bt.indexOf('رئيس وحدة الحوادث') !== -1 || bt.indexOf('محمد بن عبدالله آل هادي') !== -1) && bt.length < 240) {{
         if (bc.tagName === 'TD') {{
           bodyCell = bc;
           break;
@@ -6699,54 +6701,147 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     if (hdrEl) {{
       hdrEl.textContent = 'مدير إدارة مرور منطقة جازان';
       if (!bodyCell) {{
-        var hCell = hdrEl.closest('th, td');
-        var hRow = hCell ? hCell.parentElement : null;
-        var tbl = hCell ? hCell.closest('table') : null;
-        if (tbl && hRow && tbl.rows && tbl.rows[hRow.rowIndex + 1]) {{
-          bodyCell = tbl.rows[hRow.rowIndex + 1].cells[hCell.cellIndex] || null;
+        var hCellLookup = hdrEl.closest('th, td');
+        var hRowLookup = hCellLookup ? hCellLookup.parentElement : null;
+        var tblLookup = hCellLookup ? hCellLookup.closest('table') : null;
+        if (tblLookup && hRowLookup && tblLookup.rows && tblLookup.rows[hRowLookup.rowIndex + 1]) {{
+          bodyCell = tblLookup.rows[hRowLookup.rowIndex + 1].cells[hCellLookup.cellIndex] || null;
         }}
       }}
     }}
 
-    if (bodyCell) {{
-      var hdrInsideBody = hdrEl && bodyCell.contains(hdrEl) && bodyCell !== hdrEl;
-      if (hdrInsideBody) {{
-        var keepHdr = hdrEl;
-        while (keepHdr.parentElement && keepHdr.parentElement !== bodyCell) {{
-          keepHdr = keepHdr.parentElement;
+    if (!bodyCell) return;
+
+    // 3) الاحتفاظ بأي صورة توقيع محفوظة لرئيس الحوادث كانت داخل خلية وحدة الحوادث الأصلية
+    var unitSavedSigs = [];
+    bodyCell.querySelectorAll('img, svg').forEach(function(sigNode) {{
+      if (sigNode !== dutySlotImg) {{
+        if (sigNode.tagName === 'IMG') {{
+          var sVal = sigNode.getAttribute('src') || '';
+          if (sVal) {{
+            sigNode.setAttribute('style', 'display:block !important; max-height:46px !important; width:auto !important; max-width:92% !important; margin:3px auto 0 auto !important; object-fit:contain !important;');
+          }}
         }}
-        while (keepHdr.nextSibling) {{
-          bodyCell.removeChild(keepHdr.nextSibling);
-        }}
-      }} else {{
-        bodyCell.innerHTML = '';
+        unitSavedSigs.push(sigNode);
       }}
+    }});
 
-      var wrap = docRoot.createElement('div');
-      wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:4px 6px;gap:3px;min-height:68px;';
-
-      var directorLine = docRoot.createElement('div');
-      directorLine.style.cssText = 'font-weight:900;font-size:13.5px;color:#000000;line-height:1.45;';
-      directorLine.textContent = 'العقيد / محمد بن عبدالله آل هادي';
-
-      var dutyLine = docRoot.createElement('div');
-      dutyLine.style.cssText = 'font-weight:800;font-size:11.5px;color:#0f3d2e;line-height:1.4;';
-      dutyLine.textContent = customDutyName ? ('توقيع ضابط الخفر: ' + customDutyName) : 'توقيع ضابط الخفر المناوب';
-
-      wrap.appendChild(directorLine);
-      wrap.appendChild(dutyLine);
-
-      if (!dutySlotImg) {{
-        dutySlotImg = docRoot.createElement('img');
-        dutySlotImg.id = 'slot_officer';
-        dutySlotImg.className = 'sig-slot-img';
-        dutySlotImg.style.display = 'none';
-        dutySlotImg.alt = '';
-      }}
-      wrap.appendChild(dutySlotImg);
-      bodyCell.appendChild(wrap);
-      sheet.dataset.toxDirectorApplied = '1';
+    // تجهيز عنصر التوقيع الحي لضابط الخفر في الخانة الوسطى
+    if (!dutySlotImg) {{
+      dutySlotImg = docRoot.createElement('img');
+      dutySlotImg.id = 'slot_officer';
+      dutySlotImg.className = 'sig-slot-img';
+      dutySlotImg.style.display = 'none';
+      dutySlotImg.alt = '';
     }}
+
+    function buildMiddleDutyBox() {{
+      var dutyWrap = docRoot.createElement('div');
+      dutyWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:4px 6px;gap:3px;min-height:68px;';
+      var dutySub = docRoot.createElement('div');
+      dutySub.style.cssText = 'font-weight:800;font-size:12px;color:#0f3d2e;line-height:1.45;';
+      dutySub.textContent = customDutyName ? customDutyName : 'توقيع ضابط الخفر المناوب';
+      dutyWrap.appendChild(dutySub);
+      dutyWrap.appendChild(dutySlotImg);
+      return dutyWrap;
+    }}
+
+    // 4) إنشاء الخانة الوسطى (ضابط الخفر) بين خانة المستشفى يمينا وخانة مدير الإدارة يسارا
+    var hCell = hdrEl ? hdrEl.closest('th, td') : null;
+    var hRow = hCell ? hCell.parentElement : null;
+    var bRow = bodyCell.parentElement;
+    var sigTable = bodyCell.closest('table');
+
+    if (sigTable && hRow && bRow && hCell !== bodyCell) {{
+      var midTh = docRoot.createElement(hCell.tagName);
+      midTh.className = hCell.className || '';
+      midTh.style.cssText = hCell.style.cssText || '';
+      midTh.textContent = 'ضابط الخفر';
+      hRow.insertBefore(midTh, hCell);
+
+      var midTd = docRoot.createElement(bodyCell.tagName);
+      midTd.className = bodyCell.className || '';
+      midTd.style.cssText = bodyCell.style.cssText || '';
+      midTd.appendChild(buildMiddleDutyBox());
+      bRow.insertBefore(midTd, bodyCell);
+
+      // ضبط عرض الأعمدة الثلاثة بالتساوي (33.33%)
+      var cols = sigTable.querySelectorAll('colgroup col');
+      if (cols && cols.length === 2) {{
+        var extraCol = cols[1].cloneNode(true);
+        cols[1].parentNode.insertBefore(extraCol, cols[1]);
+        cols = sigTable.querySelectorAll('colgroup col');
+      }}
+      if (cols && cols.length === 3) {{
+        cols.forEach(function(cl) {{ cl.style.width = '33.33%'; }});
+      }}
+      Array.prototype.forEach.call(hRow.cells, function(cell) {{
+        cell.removeAttribute('width');
+        cell.style.setProperty('width', '33.33%', 'important');
+      }});
+      Array.prototype.forEach.call(bRow.cells, function(cell) {{
+        cell.removeAttribute('width');
+        cell.style.setProperty('width', '33.33%', 'important');
+      }});
+      Array.prototype.forEach.call(sigTable.rows, function(r) {{
+        if (r !== hRow && r !== bRow && r.cells.length === 1 && r.cells[0].colSpan === 2) {{
+          r.cells[0].colSpan = 3;
+        }}
+      }});
+    }} else if (bRow) {{
+      // في حال كانت الترويسة والخلية مدمجة في عنصر واحد
+      var midCombined = bodyCell.cloneNode(false);
+      if (hdrEl && bodyCell.contains(hdrEl)) {{
+        var hdrTop = hdrEl;
+        while (hdrTop.parentElement && hdrTop.parentElement !== bodyCell) {{
+          hdrTop = hdrTop.parentElement;
+        }}
+        var midHdrClone = hdrTop.cloneNode(true);
+        midHdrClone.textContent = 'ضابط الخفر';
+        midCombined.appendChild(midHdrClone);
+      }}
+      midCombined.appendChild(buildMiddleDutyBox());
+      bRow.insertBefore(midCombined, bodyCell);
+      if (bRow.children) {{
+        Array.prototype.forEach.call(bRow.children, function(ch) {{
+          ch.style.setProperty('width', '33.33%', 'important');
+        }});
+      }}
+    }}
+
+    // 5) تعبئة الخانة اليسرى: العقيد / محمد بن عبدالله آل هادي + توقيع رئيس الحوادث بمرور العارضة
+    var hdrInsideBody = hdrEl && bodyCell.contains(hdrEl) && bodyCell !== hdrEl;
+    if (hdrInsideBody) {{
+      var keepHdr = hdrEl;
+      while (keepHdr.parentElement && keepHdr.parentElement !== bodyCell) {{
+        keepHdr = keepHdr.parentElement;
+      }}
+      while (keepHdr.nextSibling) {{
+        bodyCell.removeChild(keepHdr.nextSibling);
+      }}
+    }} else {{
+      bodyCell.innerHTML = '';
+    }}
+
+    var leftWrap = docRoot.createElement('div');
+    leftWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:4px 6px;gap:3px;min-height:68px;';
+
+    var colName = docRoot.createElement('div');
+    colName.style.cssText = 'font-weight:900;font-size:13px;color:#000000;line-height:1.45;';
+    colName.textContent = 'العقيد / محمد بن عبدالله آل هادي';
+
+    var accHeadLine = docRoot.createElement('div');
+    accHeadLine.style.cssText = 'font-weight:800;font-size:11.5px;color:#0f3d2e;line-height:1.4;';
+    accHeadLine.textContent = 'توقيع رئيس الحوادث بمرور العارضة';
+
+    leftWrap.appendChild(colName);
+    leftWrap.appendChild(accHeadLine);
+    unitSavedSigs.forEach(function(sigEl) {{
+      leftWrap.appendChild(sigEl);
+    }});
+
+    bodyCell.appendChild(leftWrap);
+    sheet.dataset.toxThreeColApplied = '1';
   }}
 
   // =========================================================
@@ -6917,13 +7012,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
   }}
 
-  // تطبيق التخصيص ومزامنة التواقيع عند التحميل
   applyToxicologyDirectorBlock(document);
   window.syncAllLivePads();
   balanceSheetTypography(document, 1045, false, false);
 
   // =========================================================
-  // 4) شريط التكبير والتصغير الكبسولي السلس (5% إلى 200%)
+  // 4) شريط التكبير والتصغير السلس (5% إلى 200%)
   // =========================================================
   (function() {{
     window.addEventListener('resize', function(ev) {{
@@ -7034,7 +7128,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   }})();
 
   // =========================================================
-  // 5) طباعة ومشاركة موحدة (أندرويد كمبيوتر وآيفون Safari + وضع التطبيق المثبت)
+  // 5) طباعة ومشاركة موحدة (أندرويد كمبيوتر وآيفون)
   // =========================================================
   var oldBtn = document.querySelector('#printOfficialBtn') || document.querySelector('.print-btn');
   if (oldBtn) {{
@@ -7052,7 +7146,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         || (window.navigator && window.navigator.standalone === true);
       var targetH = isIOS ? 795 : 1042;
 
-      // في وضع التطبيق المثبت على الآيفون: طباعة متزامنة مباشرة تفتح نافذة AirPrint وزر المشاركة () دون حظر
       if (isIOS && isStandalone) {{
         var cWrap = document.getElementById('khafarZoomCanvas');
         var szWrap = document.getElementById('khafarZoomSizer');
@@ -7086,7 +7179,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         var cloneSlot = sheetClone.querySelector('#' + liveSlot.id);
         if (liveSlot && cloneSlot && liveSlot.getAttribute('src')) {{
           cloneSlot.setAttribute('src', liveSlot.getAttribute('src'));
-          cloneSlot.setAttribute('style', liveSlot.getAttribute('style') || 'display:block !important; max-height:50px !important;');
+          cloneSlot.setAttribute('style', liveSlot.getAttribute('style') || 'display:block !important; max-height:48px !important;');
         }}
       }});
 
