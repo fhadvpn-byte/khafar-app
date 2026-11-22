@@ -3342,6 +3342,169 @@ def save_record_to_db(rec: dict, device_hash: str) -> bool:
     return True
 
 
+
+# === KHAFAR_MANUAL_ARCHIVE_START ===
+_KHAFAR_RUN_ARCH_SEQ = 0
+_KHAFAR_AUTO_ARCHIVE_LINES = {8855}
+_KHAFAR_USED_RETURN_LINES = {8855}
+_KHAFAR_ARCHIVE_SS_KEYS = ['auto_archived_refs']
+_KHAFAR_ARCHIVE_UI_RANGES = [(3004, 3009), (3157, 3163), (3572, 3579), (7834, 7863), (8878, 9319), (8893, 8935)]
+
+def _khafar_is_viewing_archive_tab(call_frame) -> bool:
+    import streamlit as _st
+    try:
+        f = call_frame
+        while f is not None:
+            ln = getattr(f, "f_lineno", -1)
+            for _s, _e in _KHAFAR_ARCHIVE_UI_RANGES:
+                if _s <= ln <= _e:
+                    return True
+            fn_nm = getattr(getattr(f, "f_code", None), "co_name", "").lower()
+            if "archive" in fn_nm and any(w in fn_nm for w in ("tab", "page", "view", "render", "show")):
+                return True
+            f = getattr(f, "f_back", None)
+    except Exception:
+        pass
+    try:
+        for _k, _v in list(_st.session_state.items()):
+            _kl = str(_k).lower()
+            if isinstance(_v, bool) and _v and ("archive" in _kl or "ارشيف" in _kl or "أرشيف" in _kl):
+                return True
+            if isinstance(_v, str) and any(_t in _kl for _t in ("tab", "nav", "page", "view", "section", "mode", "menu")):
+                if ("أرشيف" in _v) or ("ارشيف" in _v) or (_v.strip().lower() == "archive"):
+                    return True
+    except Exception:
+        pass
+    return False
+
+def _khafar_dry_run_call(_orig_fn, *args, **kwargs):
+    import builtins as _bi, copy as _copy, io as _io, pathlib as _pl, sqlite3 as _sq3, streamlit as _st
+    _ss_backup = {}
+    for _sk in _KHAFAR_ARCHIVE_SS_KEYS:
+        if _sk in _st.session_state:
+            try:
+                _ss_backup[_sk] = _copy.deepcopy(_st.session_state[_sk])
+            except Exception:
+                pass
+    _orig_write_text = _pl.Path.write_text
+    _orig_write_bytes = _pl.Path.write_bytes
+    _orig_open = _bi.open
+    _orig_connect = _sq3.connect
+
+    def _noop_write(*_a, **_kw):
+        return 0
+
+    def _guarded_open(file, mode="r", *a, **kw):
+        if any(m in str(mode) for m in ("w", "a", "+", "x")) and "archive" in str(file).lower():
+            return _io.StringIO() if "b" not in str(mode) else _io.BytesIO()
+        return _orig_open(file, mode, *a, **kw)
+
+    class _ReadOnlyConnProxy:
+        def __init__(self, real_conn):
+            self._c = real_conn
+        def execute(self, sql, *a, **kw):
+            s_up = str(sql).lstrip().upper()
+            if s_up.startswith(("INSERT", "REPLACE", "UPDATE", "DELETE")):
+                class _DummyCur:
+                    lastrowid = 0
+                    rowcount = 0
+                    def fetchone(self): return None
+                    def fetchall(self): return []
+                return _DummyCur()
+            return self._c.execute(sql, *a, **kw)
+        def commit(self):
+            return None
+        def __getattr__(self, name):
+            return getattr(self._c, name)
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            try:
+                self._c.close()
+            except Exception:
+                pass
+            return False
+
+    def _guarded_connect(*a, **kw):
+        return _ReadOnlyConnProxy(_orig_connect(*a, **kw))
+
+    try:
+        _pl.Path.write_text = _noop_write
+        _pl.Path.write_bytes = _noop_write
+        _bi.open = _guarded_open
+        _sq3.connect = _guarded_connect
+        return _orig_fn(*args, **kwargs)
+    finally:
+        _pl.Path.write_text = _orig_write_text
+        _pl.Path.write_bytes = _orig_write_bytes
+        _bi.open = _orig_open
+        _sq3.connect = _orig_connect
+        for _sk, _sval in _ss_backup.items():
+            _st.session_state[_sk] = _sval
+
+def _khafar_wrap_manual_archive(_orig_fn, _fn_name=""):
+    import sys as _sys, streamlit as _st
+    def _wrapped(*args, **kwargs):
+        global _KHAFAR_RUN_ARCH_SEQ
+        try:
+            _caller_frame = _sys._getframe(1)
+            _caller_line = _caller_frame.f_lineno
+        except Exception:
+            _caller_frame = None
+            _caller_line = -1
+
+        if _caller_line not in _KHAFAR_AUTO_ARCHIVE_LINES:
+            return _orig_fn(*args, **kwargs)
+
+        if _khafar_is_viewing_archive_tab(_caller_frame):
+            if _caller_line in _KHAFAR_USED_RETURN_LINES:
+                return _khafar_dry_run_call(_orig_fn, *args, **kwargs)
+            return None
+
+        _KHAFAR_RUN_ARCH_SEQ += 1
+        _btn_key = f"_khafar_manual_arch_save_{_fn_name}_{_caller_line}_{_KHAFAR_RUN_ARCH_SEQ}"
+        _flash_key = f"_khafar_manual_arch_ok_{_fn_name}_{_caller_line}"
+
+        _st.markdown(
+            '<div style="background:linear-gradient(135deg,#0d3b2e 0%,#07231b 100%);'
+            'border:1.5px solid #d4a853;border-radius:10px;padding:8px 14px;margin:8px 0 6px 0;'
+            'direction:rtl;text-align:right;color:#fef3c7;font-size:13px;font-weight:700;">'
+            ' <b>حفظ الوثيقة في الأرشيف:</b> لن تحفظ المسودات تلقائيا  اضغط الزر أدناه عند الرغبة في اعتماد وحفظ هذه الوثيقة في الأرشيف.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        try:
+            _clicked = _st.button(
+                " حفظ واعتماد الوثيقة في الأرشيف الرسمي",
+                key=_btn_key,
+                type="primary",
+                use_container_width=True,
+            )
+        except Exception:
+            _clicked = _st.form_submit_button(
+                " حفظ واعتماد الوثيقة في الأرشيف الرسمي",
+                use_container_width=True,
+            )
+
+        if _clicked:
+            _res = _orig_fn(*args, **kwargs)
+            _st.session_state[_flash_key] = True
+            try:
+                _st.toast(" تم حفظ الوثيقة في الأرشيف الرسمي بنجاح!", icon="")
+            except Exception:
+                pass
+            _st.rerun()
+            return _res
+
+        if _st.session_state.pop(_flash_key, False):
+            _st.success(" تم حفظ واعتماد الوثيقة في الأرشيف الرسمي بنجاح!")
+
+        if _caller_line in _KHAFAR_USED_RETURN_LINES:
+            return _khafar_dry_run_call(_orig_fn, *args, **kwargs)
+        return None
+    return _wrapped
+# === KHAFAR_MANUAL_ARCHIVE_END ===
+
 def auto_save_to_archive(rec: dict, device_hash: str) -> bool:
     """حفظ تلقائي مرة واحدة لكل رقم مرجعي قبل عرض زر الطباعة."""
     ref = str((rec or {}).get("doc_no") or "").strip()
@@ -3360,6 +3523,7 @@ def auto_save_to_archive(rec: dict, device_hash: str) -> bool:
         st.session_state.auto_archived_refs = archived
         st.session_state.last_auto_archive_ref = ref
     return ok
+auto_save_to_archive = _khafar_wrap_manual_archive(auto_save_to_archive, 'auto_save_to_archive')
 
 
 def search_records_db(q: str = "", device_hash: str = "", *, all_devices: bool = False) -> list:
