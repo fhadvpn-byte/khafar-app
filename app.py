@@ -6335,6 +6335,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
 
 
+
 <style id="khafar-final-a4-fix">
   .legal-box {{
     display: flex !important;
@@ -6466,7 +6467,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
   }};
 
-  function balanceSheetTypography(docRoot, targetH, isPrintMode) {{
+  function balanceSheetTypography(docRoot, targetH, isPrintMode, isIOSMode) {{
     var sheet = docRoot.getElementById('a4Sheet');
     if (!sheet) return;
     sheet.style.setProperty('display', 'flex', 'important');
@@ -6474,7 +6475,13 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     sheet.style.setProperty('justify-content', 'space-between', 'important');
     sheet.style.setProperty('box-sizing', 'border-box', 'important');
     sheet.style.setProperty('zoom', '1', 'important');
-    // Measure natural height first without clipping!
+
+    // On iOS AirPrint, measure at AirPrint's narrower print width (645px) so lines don't re-wrap taller during print
+    if (isIOSMode && isPrintMode) {{
+      sheet.style.setProperty('width', '645px', 'important');
+      sheet.style.setProperty('padding', '3mm 4.5mm', 'important');
+    }}
+
     sheet.style.setProperty('height', 'auto', 'important');
     sheet.style.setProperty('min-height', targetH + 'px', 'important');
     sheet.style.setProperty('max-height', 'none', 'important');
@@ -6500,63 +6507,62 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     var textLen = legalBody ? (legalBody.textContent || '').trim().length : 0;
     var hasAtts = attImgs && attImgs.length > 0;
 
-    // 1) Expand short forms so middle whitespace is filled nicely
     if (rowsCnt <= 6 && textLen <= 520 && sigCells.length <= 3) {{
       tblCells.forEach(function(td) {{
-        td.style.setProperty('font-size', '13.5px', 'important');
-        td.style.setProperty('padding', '9px 11px', 'important');
-        td.style.setProperty('line-height', '1.6', 'important');
+        td.style.setProperty('font-size', isIOSMode ? '12.5px' : '13.5px', 'important');
+        td.style.setProperty('padding', isIOSMode ? '6px 8px' : '9px 11px', 'important');
+        td.style.setProperty('line-height', isIOSMode ? '1.45' : '1.6', 'important');
       }});
       if (legal) {{
-        legal.style.setProperty('padding', '18px 20px', 'important');
-        legal.style.setProperty('margin', '8px 0 12px 0', 'important');
+        legal.style.setProperty('padding', isIOSMode ? '12px 14px' : '18px 20px', 'important');
+        legal.style.setProperty('margin', isIOSMode ? '5px 0 8px 0' : '8px 0 12px 0', 'important');
       }}
-      if (legalTitle) legalTitle.style.setProperty('font-size', '15.5px', 'important');
+      if (legalTitle) legalTitle.style.setProperty('font-size', isIOSMode ? '14px' : '15.5px', 'important');
       if (legalBody) {{
-        legalBody.style.setProperty('font-size', hasAtts ? '15px' : '16.5px', 'important');
-        legalBody.style.setProperty('line-height', hasAtts ? '2.0' : '2.25', 'important');
+        legalBody.style.setProperty('font-size', isIOSMode ? (hasAtts ? '13px' : '14.2px') : (hasAtts ? '15px' : '16.5px'), 'important');
+        legalBody.style.setProperty('line-height', isIOSMode ? (hasAtts ? '1.65' : '1.85') : (hasAtts ? '2.0' : '2.25'), 'important');
       }}
       sigCells.forEach(function(td) {{
-        td.style.setProperty('height', hasAtts ? '90px' : '105px', 'important');
-        td.style.setProperty('padding', '8px', 'important');
+        td.style.setProperty('height', isIOSMode ? (hasAtts ? '62px' : '72px') : (hasAtts ? '90px' : '105px'), 'important');
+        td.style.setProperty('padding', isIOSMode ? '5px' : '8px', 'important');
       }});
     }} else if (rowsCnt <= 8 && textLen <= 700 && sigCells.length <= 4) {{
       tblCells.forEach(function(td) {{
-        td.style.setProperty('font-size', '12px', 'important');
-        td.style.setProperty('padding', '5px 8px', 'important');
+        td.style.setProperty('font-size', isIOSMode ? '11.5px' : '12px', 'important');
+        td.style.setProperty('padding', isIOSMode ? '4px 6px' : '5px 8px', 'important');
       }});
-      if (legal) legal.style.setProperty('padding', '12px 14px', 'important');
+      if (legal) legal.style.setProperty('padding', isIOSMode ? '8px 10px' : '12px 14px', 'important');
       if (legalBody) {{
-        legalBody.style.setProperty('font-size', '13.5px', 'important');
-        legalBody.style.setProperty('line-height', '1.8', 'important');
+        legalBody.style.setProperty('font-size', isIOSMode ? '12.5px' : '13.5px', 'important');
+        legalBody.style.setProperty('line-height', isIOSMode ? '1.6' : '1.8', 'important');
       }}
     }}
 
-    // 2) Step-down compression for ultra-heavy forms (e.g. 5 parties + wakala + 4 photos + 2 sig rows)
     var fs = parseFloat((legalBody && legalBody.style.fontSize) || '11.5') || 11.5;
     var lh = parseFloat((legalBody && legalBody.style.lineHeight) || '1.45') || 1.45;
     var tfs = 11.0;
+    var maxSteps = isIOSMode ? 18 : 14;
     var step = 0;
 
-    while (sheet.scrollHeight > targetH && step < 14) {{
-      fs = Math.max(9.4, fs - 0.35);
-      lh = Math.max(1.22, lh - 0.05);
-      tfs = Math.max(9.3, tfs - 0.25);
+    while (sheet.scrollHeight > targetH && step < maxSteps) {{
+      fs = Math.max(8.8, fs - 0.35);
+      lh = Math.max(1.18, lh - 0.05);
+      tfs = Math.max(8.8, tfs - 0.25);
 
       if (hdr) {{
         hdr.style.setProperty('padding', '0 0 3px 0', 'important');
         hdr.style.setProperty('margin-bottom', '4px', 'important');
       }}
       if (logo) {{
-        logo.style.setProperty('width', '56px', 'important');
-        logo.style.setProperty('height', '56px', 'important');
-        logo.style.setProperty('max-width', '56px', 'important');
-        logo.style.setProperty('max-height', '56px', 'important');
+        logo.style.setProperty('width', '54px', 'important');
+        logo.style.setProperty('height', '54px', 'important');
+        logo.style.setProperty('max-width', '54px', 'important');
+        logo.style.setProperty('max-height', '54px', 'important');
       }}
       if (hdrCenter) {{
-        hdrCenter.style.setProperty('width', '56px', 'important');
-        hdrCenter.style.setProperty('height', '56px', 'important');
-        hdrCenter.style.setProperty('min-height', '56px', 'important');
+        hdrCenter.style.setProperty('width', '54px', 'important');
+        hdrCenter.style.setProperty('height', '54px', 'important');
+        hdrCenter.style.setProperty('min-height', '54px', 'important');
       }}
       if (banner) {{
         banner.style.setProperty('padding', '3px 8px', 'important');
@@ -6579,41 +6585,46 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       }}
       tblCells.forEach(function(td) {{
         td.style.setProperty('font-size', tfs + 'px', 'important');
-        td.style.setProperty('padding', '2px 5px', 'important');
-        td.style.setProperty('line-height', '1.22', 'important');
+        td.style.setProperty('padding', '2px 4px', 'important');
+        td.style.setProperty('line-height', '1.2', 'important');
       }});
       if (attSec) {{
         attSec.style.setProperty('margin', '2px 0', 'important');
         attSec.style.setProperty('padding', '2px 5px', 'important');
       }}
       attImgs.forEach(function(im) {{
-        im.style.setProperty('max-height', (step > 5 ? '48px' : '58px'), 'important');
+        im.style.setProperty('max-height', (step > 5 ? '44px' : '54px'), 'important');
       }});
       sigHeads.forEach(function(th) {{
-        th.style.setProperty('font-size', '9.5px', 'important');
+        th.style.setProperty('font-size', '9.2px', 'important');
         th.style.setProperty('padding', '2px 4px', 'important');
-        th.style.setProperty('line-height', '1.2', 'important');
+        th.style.setProperty('line-height', '1.18', 'important');
       }});
       sigCells.forEach(function(td) {{
         td.style.setProperty('height', 'auto', 'important');
-        td.style.setProperty('min-height', '38px', 'important');
+        td.style.setProperty('min-height', '34px', 'important');
         td.style.setProperty('padding', '2px 4px', 'important');
-        td.style.setProperty('line-height', '1.2', 'important');
+        td.style.setProperty('line-height', '1.18', 'important');
       }});
       sigImgs.forEach(function(im) {{
-        im.style.setProperty('max-height', '34px', 'important');
+        im.style.setProperty('max-height', '32px', 'important');
       }});
       if (footerQr) {{
-        footerQr.style.setProperty('margin-top', '4px', 'important');
+        footerQr.style.setProperty('margin-top', '3px', 'important');
         footerQr.style.setProperty('padding', '3px 6px', 'important');
       }}
       step++;
     }}
 
-    // 3) Zero-clipping safety net: if STILL taller than 1 page, scale gently instead of cutting off the bottom!
     var naturalH = sheet.scrollHeight;
+
+    // Restore full responsive width on iOS after measuring at 645px
+    if (isIOSMode && isPrintMode) {{
+      sheet.style.setProperty('width', '100%', 'important');
+    }}
+
     if (isPrintMode && naturalH > targetH) {{
-      var z = Math.max(0.75, Math.floor((targetH / naturalH) * 1000) / 1000);
+      var z = Math.max(0.72, Math.floor((targetH / naturalH) * 1000) / 1000);
       sheet.style.setProperty('min-height', '0', 'important');
       sheet.style.setProperty('zoom', String(z), 'important');
       sheet.style.setProperty('margin', '0 auto', 'important');
@@ -6622,7 +6633,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
   }}
 
-  balanceSheetTypography(document, 1045, false);
+  balanceSheetTypography(document, 1045, false, false);
 
   var oldBtn = document.querySelector('#printOfficialBtn') || document.querySelector('.print-btn');
   if (oldBtn) {{
@@ -6634,7 +6645,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       window.syncAllLivePads();
 
       var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      var targetH = isIOS ? 945 : 1042;
+      // Android/Desktop stays at 1042 (untouched!); iOS lowered from 945 to 795 so footer-qr fits on Page 1 of 1
+      var targetH = isIOS ? 795 : 1042;
 
       var sheetClone = document.getElementById('a4Sheet').cloneNode(true);
       sheetClone.style.zoom = '1';
@@ -6662,7 +6674,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         + stylesHtml
         + '<style>@media screen{{body{{margin:0;padding:12px;background:#0f172a;display:flex;flex-direction:column;align-items:center;}}#a4Sheet{{max-width:100%;}}}}</style>'
         + '</head><body>'
-        + (isIOS ? '<div class="no-print" style="width:100%;max-width:794px;background:#14532d;color:#fff;padding:10px 14px;border-radius:8px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;font-weight:800;"><span>جاهز للطباعة أو المشاركة ()</span><button onclick="window.print()" style="background:#eab308;color:#000;border:0;padding:7px 14px;border-radius:6px;font-weight:800;"> طباعة / PDF</button></div>' : '')
+        + (isIOS ? '<div class="no-print" style="width:100%;max-width:794px;background:#14532d;color:#fff;padding:10px 14px;border-radius:8px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;font-weight:800;"><span>جاهز للطباعة أو المشاركة ()</span><button id="iosReprintBtn" style="background:#eab308;color:#000;border:0;padding:7px 14px;border-radius:6px;font-weight:800;"> طباعة / PDF</button></div>' : '')
         + sheetClone.outerHTML
         + '</body></html>';
 
@@ -6678,7 +6690,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         idoc.write(printDocHtml);
         idoc.close();
         setTimeout(function() {{
-          try {{ balanceSheetTypography(idoc, targetH, true); }} catch (e) {{}}
+          try {{ balanceSheetTypography(idoc, targetH, true, false); }} catch (e) {{}}
           ifr.contentWindow.focus();
           ifr.contentWindow.print();
         }}, 420);
@@ -6688,8 +6700,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
           w.document.open();
           w.document.write(printDocHtml);
           w.document.close();
+          var runIosFit = function() {{
+            try {{ balanceSheetTypography(w.document, targetH, true, true); }} catch (e) {{}}
+          }};
+          runIosFit();
           setTimeout(function() {{
-            try {{ balanceSheetTypography(w.document, targetH, true); }} catch (e) {{}}
+            runIosFit();
+            var rb = w.document.getElementById('iosReprintBtn');
+            if (rb) rb.onclick = function() {{ runIosFit(); w.print(); }};
             w.focus();
             w.print();
           }}, 500);
