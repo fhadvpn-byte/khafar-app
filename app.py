@@ -4868,12 +4868,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }}
     .hdr-left, .hdr > div:last-child, .header > div:last-child {{
+        direction: rtl !important;
         text-align: left !important;
-        padding-right: 14px !important;
-        padding-left: 0 !important;
+        padding-right: 10px !important;
+        padding-left: 6px !important;
         margin: 0 !important;
         line-height: 1.32 !important;
         width: 38% !important; max-width: 38% !important;
+        box-sizing: border-box !important;
     }}
     .hdr-left p {{
         margin: 0 !important; padding: 0 !important;
@@ -4972,12 +4974,23 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         page-break-inside: avoid; break-inside: avoid;
     }}
     .footer-qr {{
-        margin-top: 8px !important; padding-top: 8px !important;
+        margin-top: 8px !important;
         background: #f4f7f6; border: 1.4px solid #000000; border-radius: 6px;
-        padding: 8px 10px; display: flex; flex-direction: row; justify-content: space-between; align-items: center;
+        padding: 5px 8px !important; display: flex; flex-direction: row; justify-content: space-between; align-items: center;
         direction: rtl !important;
+        width: 100% !important; max-width: 100% !important;
+        box-sizing: border-box !important;
         page-break-inside: avoid; break-inside: avoid;
         color: #000000 !important; font-weight: 700 !important;
+        overflow: hidden !important;
+    }}
+    .footer-qr > div:first-child {{
+        flex: 1 1 auto; min-width: 0; text-align: right !important; padding-left: 8px !important;
+    }}
+    .footer-qr img {{
+        flex: 0 0 auto; width: 42px !important; height: 42px !important;
+        max-width: 42px !important; max-height: 42px !important;
+        display: block !important;
     }}
     .attachment-section {{
         margin-top: 4px; border: 1px dashed #000000; border-radius: 6px; padding: 3px 6px;
@@ -5049,14 +5062,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         margin-bottom: 6px !important;
     }}
     @media print {{
-        @page {{ size: A4 portrait; margin: 3.5mm 4mm !important; }}
+        @page {{ size: A4 portrait; margin: 5mm 6mm !important; }}
         html, body {{
-            margin: 0 !important; padding: 0 !important; height: auto !important;
-            overflow: visible !important; background: #ffffff !important;
+            width: 100% !important; margin: 0 !important; padding: 0 !important; height: auto !important;
+            overflow: visible !important; overflow-x: hidden !important; background: #ffffff !important;
             direction: rtl !important; text-align: right !important; transform: none !important;
         }}
         .a4-preview-viewport, .a4-preview-wrapper {{
-            margin: 0 !important; padding: 0 !important; height: auto !important;
+            margin: 0 !important; padding: 0 !important; height: auto !important; width: 100% !important;
             overflow: visible !important; background: #ffffff !important; direction: rtl !important;
         }}
         .toolbar, .no-print, .zoom-bar, .live-sig-dock, .clear-sig-btn, .sig-guide-hint, .sig-mode-note,
@@ -5070,12 +5083,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             direction: rtl !important;
             transform: none !important;
             width: 100% !important;
-            max-width: none !important;
+            max-width: 100% !important;
             height: auto !important;
             min-height: 0 !important;
             max-height: none !important;
             padding: 3.5mm 4.5mm !important;
-            margin: 0 !important;
+            margin: 0 auto !important;
             display: flex !important;
             flex-direction: column !important;
             justify-content: flex-start !important;
@@ -5093,6 +5106,27 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             print-color-adjust: exact !important;
             color-adjust: exact !important;
         }}
+        .a4-ultra-fit table.data-tbl td, .a4-ultra-fit table.data-tbl th,
+        .a4-ultra-fit .sig-tbl td, .a4-ultra-fit .sig-tbl th, .a4-ultra-fit .sig-cell {{
+            padding-top: 2.5px !important; padding-bottom: 2.5px !important;
+            line-height: 1.32 !important; font-size: 10.5px !important;
+        }}
+        .a4-ultra-fit .legal-box, .a4-ultra-fit .legal-box div {{
+            padding-top: 5px !important; padding-bottom: 5px !important;
+            margin-bottom: 4px !important; line-height: 1.32 !important; font-size: 11px !important;
+        }}
+        .a4-ultra-fit .doc-banner {{
+            padding-top: 4px !important; padding-bottom: 4px !important; margin-bottom: 4px !important;
+            font-size: 12.5px !important;
+        }}
+        .a4-ultra-fit .hdr {{
+            padding-bottom: 3px !important; margin-bottom: 4px !important;
+        }}
+        .a4-ultra-fit table.sig-tbl td, .a4-ultra-fit .sig-cell {{
+            min-height: 44px !important; padding: 3px 5px !important;
+        }}
+        .a4-ultra-fit img.sig-slot-img {{ max-height: 38px !important; }}
+        .a4-ultra-fit .footer-qr {{ padding: 4px 6px !important; margin-top: 4px !important; }}
         .a4-fit {{
             height: auto !important; min-height: 0 !important; flex: 1 1 auto !important;
             transform: none !important;
@@ -5189,7 +5223,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         .a4-paper .hdr-left, .a4-sheet .hdr-left {{
             width: 38% !important; max-width: 38% !important;
-            text-align: left !important; padding-right: 14px !important;
+            direction: rtl !important;
+            text-align: left !important;
+            padding-right: 10px !important;
+            padding-left: 6px !important;
+            box-sizing: border-box !important;
         }}
         .a4-paper .hdr-left p, .a4-sheet .hdr-left p {{
             text-align: left !important; white-space: normal !important; margin: 0 !important;
@@ -5216,7 +5254,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             background: #ffffff !important; mix-blend-mode: multiply !important;
         }}
         .a4-paper .footer-qr, .a4-sheet .footer-qr, .footer-qr {{
-            margin-top: 8px !important; padding: 4px 6px !important;
+            margin-top: 8px !important; padding: 5px 8px !important;
+            width: 100% !important; max-width: 100% !important;
+            box-sizing: border-box !important; overflow: hidden !important;
         }}
         a, a[href^="tel"] {{
             color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
@@ -5224,7 +5264,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         .a4-paper.a4-dense-print, .a4-paper.a4-compact,
         .a4-sheet.a4-dense-print, .a4-sheet.a4-compact {{
             padding: 3.5mm 4.5mm !important;
-            width: 100% !important; max-width: none !important; margin: 0 !important;
+            width: 100% !important; max-width: 100% !important; margin: 0 auto !important;
         }}
         .a4-sheet.a4-short-fill, .a4-paper.a4-short-fill {{
             min-height: 283mm !important;
@@ -5525,62 +5565,63 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     try {{ window.syncAllLivePads = syncAllLivePads; }} catch (e) {{}}
 
     function fitSinglePageForPrint(root) {{
-        const SAFE_A4_PX = 1068;
+        const SAFE_A4_PX = 1045;
         const sheet = (root && root.querySelector)
             ? (root.querySelector("#a4Sheet") || root.querySelector(".a4-sheet") || root.querySelector(".a4-paper") || root)
             : (document.getElementById("a4Sheet") || document.querySelector(".a4-sheet") || document.querySelector(".a4-paper"));
         if (!sheet) return 1;
         try {{
             sheet.classList.remove("a4-short-fill");
+            sheet.classList.remove("a4-ultra-fit");
             sheet.style.minHeight = "0";
             sheet.style.height = "auto";
             sheet.style.maxHeight = "none";
             sheet.style.overflow = "visible";
             sheet.style.setProperty("transform", "none", "important");
             sheet.style.removeProperty("zoom");
-            sheet.style.setProperty("max-width", "none", "important");
             sheet.style.setProperty("width", "100%", "important");
-            sheet.style.setProperty("margin", "0", "important");
+            sheet.style.setProperty("max-width", "100%", "important");
+            sheet.style.setProperty("margin", "0 auto", "important");
+            sheet.style.setProperty("margin-left", "auto", "important");
+            sheet.style.setProperty("margin-right", "auto", "important");
+            sheet.style.setProperty("box-sizing", "border-box", "important");
         }} catch (e) {{}}
-        // قياس على العرض الكامل الفعلي (~764px) لتقليل التفاف الأسطر والهوامش الجانبية
-        try {{
-            const measureW = Math.max(
-                (document.documentElement && document.documentElement.clientWidth) || 0,
-                (document.body && document.body.clientWidth) || 0,
-                764
-            );
-            sheet.style.setProperty("width", Math.min(measureW, 764) + "px", "important");
-        }} catch (e0) {{
-            try {{ sheet.style.setProperty("width", "764px", "important"); }} catch (e00) {{}}
-        }}
         void sheet.offsetHeight;
-        const h = sheet.scrollHeight || sheet.offsetHeight || 0;
+        let h = sheet.scrollHeight || sheet.offsetHeight || 0;
         let z = 1;
         if (h > SAFE_A4_PX) {{
+            // ضغط عمودي أولاً مع بقاء العرض 100% متساوي الهوامش يميناً ويساراً
+            try {{ sheet.classList.add("a4-ultra-fit"); }} catch (e1) {{}}
+            void sheet.offsetHeight;
+            h = sheet.scrollHeight || sheet.offsetHeight || 0;
+        }}
+        if (h > SAFE_A4_PX) {{
             z = Math.max(0.74, Math.floor((SAFE_A4_PX / h) * 1000) / 1000);
-            try {{ sheet.style.setProperty("zoom", String(z), "important"); }} catch (e2) {{}}
             try {{
-                const parentW = document.documentElement.clientWidth || document.body.clientWidth || 0;
-                const rectW = sheet.getBoundingClientRect().width;
-                if (parentW > 0 && rectW > 0 && rectW < parentW * 0.97) {{
-                    sheet.style.setProperty("width", (100 / z).toFixed(3) + "%", "important");
-                }} else {{
-                    sheet.style.setProperty("width", "100%", "important");
-                }}
-            }} catch (e3) {{
-                try {{ sheet.style.setProperty("width", "100%", "important"); }} catch (e4) {{}}
-            }}
+                sheet.style.setProperty("zoom", String(z), "important");
+                // لا تزد العرض عن 100% أبداً — توسيط متماثل فقط
+                sheet.style.setProperty("width", "100%", "important");
+                sheet.style.setProperty("max-width", "100%", "important");
+                sheet.style.setProperty("margin", "0 auto", "important");
+                sheet.style.setProperty("margin-left", "auto", "important");
+                sheet.style.setProperty("margin-right", "auto", "important");
+                sheet.style.setProperty("box-sizing", "border-box", "important");
+            }} catch (e2) {{}}
         }} else {{
             try {{
                 sheet.style.removeProperty("zoom");
                 sheet.style.setProperty("width", "100%", "important");
-                sheet.style.setProperty("min-height", "283mm", "important");
-                sheet.classList.add("a4-short-fill");
-                const footer = sheet.querySelector(".sig-footer");
-                if (footer) footer.style.setProperty("margin-top", "auto", "important");
+                sheet.style.setProperty("max-width", "100%", "important");
+                sheet.style.setProperty("margin", "0 auto", "important");
+                sheet.style.setProperty("box-sizing", "border-box", "important");
+                if (!sheet.classList.contains("a4-ultra-fit")) {{
+                    sheet.style.setProperty("min-height", "283mm", "important");
+                    sheet.classList.add("a4-short-fill");
+                    const footer = sheet.querySelector(".sig-footer");
+                    if (footer) footer.style.setProperty("margin-top", "auto", "important");
+                }}
             }} catch (e5) {{}}
         }}
-        try {{ sheet.style.setProperty("max-width", "none", "important"); }} catch (e6) {{}}
         return z;
     }}
     try {{ window.fitSinglePageForPrint = fitSinglePageForPrint; }} catch (e) {{}}
@@ -5595,7 +5636,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         if (!paper) return;
         paper.style.setProperty("transform", "none", "important");
-        paper.style.setProperty("margin", "0", "important");
+        paper.style.setProperty("width", "100%", "important");
+        paper.style.setProperty("max-width", "100%", "important");
+        paper.style.setProperty("margin", "0 auto", "important");
+        paper.style.setProperty("box-sizing", "border-box", "important");
         paper.style.maxHeight = "none";
         paper.style.minHeight = "0";
         paper.style.height = "auto";
@@ -5612,12 +5656,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             viewport.style.overflow = "hidden";
         }}
         if (paper) {{
-            try {{ paper.classList.remove("a4-short-fill"); }} catch (e) {{}}
+            try {{
+                paper.classList.remove("a4-short-fill");
+                paper.classList.remove("a4-ultra-fit");
+            }} catch (e) {{}}
             paper.style.zoom = "";
             paper.style.removeProperty("transform");
             paper.style.margin = "";
             paper.style.width = "";
             paper.style.removeProperty("max-width");
+            paper.style.removeProperty("box-sizing");
             paper.style.removeProperty("height");
             paper.style.removeProperty("max-height");
             paper.style.removeProperty("min-height");
@@ -5658,47 +5706,52 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + '<title>وثيقة رسمية - قسم مرور العارضة</title>'
             + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap">'
             + styles
-            + '<style>@page{{size:A4 portrait;margin:3.5mm 4mm !important;}}'
-            + 'html,body{{margin:0;padding:0;background:#fff;direction:rtl;}}'
+            + '<style>@page{{size:A4 portrait;margin:5mm 6mm !important;}}'
+            + 'html,body{{width:100% !important;margin:0 !important;padding:0 !important;background:#fff;direction:rtl;overflow-x:hidden !important;}}'
             + '@media print{{.no-print{{display:none !important;}}'
-            + '.a4-sheet,.a4-paper,.a4-page,.print-area{{width:100% !important;max-width:none !important;margin:0 !important;'
-            + 'height:auto !important;min-height:0 !important;justify-content:flex-start !important;'
+            + '.a4-sheet,.a4-paper,.a4-page,.print-area{{width:100% !important;max-width:100% !important;margin:0 auto !important;'
+            + 'box-sizing:border-box !important;height:auto !important;min-height:0 !important;justify-content:flex-start !important;'
             + 'padding:3.5mm 4.5mm !important;page-break-after:avoid !important;break-after:avoid !important;}}'
             + '.a4-fit{{min-height:0 !important;flex:1 1 auto !important;}}'
+            + '.a4-ultra-fit table.data-tbl td,.a4-ultra-fit table.data-tbl th,.a4-ultra-fit .sig-tbl td,.a4-ultra-fit .sig-cell{{'
+            + 'padding-top:2.5px !important;padding-bottom:2.5px !important;line-height:1.32 !important;font-size:10.5px !important;}}'
+            + '.a4-ultra-fit .legal-box,.a4-ultra-fit .legal-box div{{padding-top:5px !important;padding-bottom:5px !important;'
+            + 'margin-bottom:4px !important;line-height:1.32 !important;font-size:11px !important;}}'
             + '.a4-short-fill{{min-height:283mm !important;}}'
             + '.a4-short-fill .sig-footer{{margin-top:auto !important;}}'
-            + '.footer-qr{{margin-top:8px !important;}}}}'
-            + '</style></head><body style="margin:0;padding:0;background:#fff;direction:rtl;">'
+            + '.hdr-left{{padding-left:6px !important;padding-right:10px !important;text-align:left !important;box-sizing:border-box !important;}}'
+            + '.footer-qr{{margin-top:8px !important;padding:5px 8px !important;width:100% !important;max-width:100% !important;'
+            + 'box-sizing:border-box !important;overflow:hidden !important;}}}}'
+            + '</style></head><body style="margin:0;padding:0;background:#fff;direction:rtl;width:100%;overflow-x:hidden;">'
             + topBar + sheetHtml
             + '<script>(function(){{'
             + 'function fitSinglePageForPrint(root){{'
-            + 'var SAFE_A4_PX=1068;'
+            + 'var SAFE_A4_PX=1045;'
             + 'var sheet=(root&&root.querySelector)?(root.querySelector("#a4Sheet")||root.querySelector(".a4-sheet")||root.querySelector(".a4-paper")||root)'
             + ':(document.getElementById("a4Sheet")||document.querySelector(".a4-sheet")||document.querySelector(".a4-paper"));'
             + 'if(!sheet)return 1;'
-            + 'try{{sheet.classList.remove("a4-short-fill");sheet.style.minHeight="0";sheet.style.height="auto";sheet.style.maxHeight="none";'
-            + 'sheet.style.overflow="visible";sheet.style.setProperty("transform","none","important");sheet.style.removeProperty("zoom");'
-            + 'sheet.style.setProperty("max-width","none","important");sheet.style.setProperty("width","100%","important");'
-            + 'sheet.style.setProperty("margin","0","important");}}catch(e){{}}'
-            + 'try{{var measureW=Math.max((document.documentElement&&document.documentElement.clientWidth)||0,'
-            + '(document.body&&document.body.clientWidth)||0,764);'
-            + 'sheet.style.setProperty("width",Math.min(measureW,764)+"px","important");}}catch(e0){{'
-            + 'try{{sheet.style.setProperty("width","764px","important");}}catch(e00){{}}}}'
+            + 'try{{sheet.classList.remove("a4-short-fill");sheet.classList.remove("a4-ultra-fit");'
+            + 'sheet.style.minHeight="0";sheet.style.height="auto";sheet.style.maxHeight="none";sheet.style.overflow="visible";'
+            + 'sheet.style.setProperty("transform","none","important");sheet.style.removeProperty("zoom");'
+            + 'sheet.style.setProperty("width","100%","important");sheet.style.setProperty("max-width","100%","important");'
+            + 'sheet.style.setProperty("margin","0 auto","important");sheet.style.setProperty("margin-left","auto","important");'
+            + 'sheet.style.setProperty("margin-right","auto","important");sheet.style.setProperty("box-sizing","border-box","important");}}catch(e){{}}'
             + 'void sheet.offsetHeight;'
             + 'var h=sheet.scrollHeight||sheet.offsetHeight||0;'
             + 'var z=1;'
+            + 'if(h>SAFE_A4_PX){{try{{sheet.classList.add("a4-ultra-fit");}}catch(e1){{}}void sheet.offsetHeight;'
+            + 'h=sheet.scrollHeight||sheet.offsetHeight||0;}}'
             + 'if(h>SAFE_A4_PX){{z=Math.max(0.74,Math.floor((SAFE_A4_PX/h)*1000)/1000);'
-            + 'try{{sheet.style.setProperty("zoom",String(z),"important");}}catch(e2){{}}'
-            + 'try{{var parentW=document.documentElement.clientWidth||document.body.clientWidth||0;'
-            + 'var rectW=sheet.getBoundingClientRect().width;'
-            + 'if(parentW>0&&rectW>0&&rectW<parentW*0.97){{sheet.style.setProperty("width",(100/z).toFixed(3)+"%","important");}}'
-            + 'else{{sheet.style.setProperty("width","100%","important");}}}}catch(e3){{'
-            + 'try{{sheet.style.setProperty("width","100%","important");}}catch(e4){{}}}}'
-            + '}}else{{try{{sheet.style.removeProperty("zoom");sheet.style.setProperty("width","100%","important");'
-            + 'sheet.style.setProperty("min-height","283mm","important");sheet.classList.add("a4-short-fill");'
-            + 'var footer=sheet.querySelector(".sig-footer");'
-            + 'if(footer)footer.style.setProperty("margin-top","auto","important");}}catch(e5){{}}}}'
-            + 'try{{sheet.style.setProperty("max-width","none","important");}}catch(e6){{}}'
+            + 'try{{sheet.style.setProperty("zoom",String(z),"important");'
+            + 'sheet.style.setProperty("width","100%","important");sheet.style.setProperty("max-width","100%","important");'
+            + 'sheet.style.setProperty("margin","0 auto","important");sheet.style.setProperty("margin-left","auto","important");'
+            + 'sheet.style.setProperty("margin-right","auto","important");sheet.style.setProperty("box-sizing","border-box","important");}}catch(e2){{}}'
+            + '}}else{{try{{sheet.style.removeProperty("zoom");'
+            + 'sheet.style.setProperty("width","100%","important");sheet.style.setProperty("max-width","100%","important");'
+            + 'sheet.style.setProperty("margin","0 auto","important");sheet.style.setProperty("box-sizing","border-box","important");'
+            + 'if(!sheet.classList.contains("a4-ultra-fit")){{sheet.style.setProperty("min-height","283mm","important");'
+            + 'sheet.classList.add("a4-short-fill");var footer=sheet.querySelector(".sig-footer");'
+            + 'if(footer)footer.style.setProperty("margin-top","auto","important");}}}}catch(e5){{}}}}'
             + 'return z;}}'
             + 'function go(){{try{{fitSinglePageForPrint(document);}}catch(e){{}}try{{window.focus();}}catch(e2){{}}try{{window.print();}}catch(e3){{}}}}'
             + 'if(document.fonts&&document.fonts.ready){{document.fonts.ready.then(function(){{setTimeout(go,450);}});}}'
