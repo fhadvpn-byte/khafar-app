@@ -4633,12 +4633,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     rows_cnt = rows_html.count("<tr")
     sigs_cnt = len(party_signers) + (1 if is_toxicology else 2)
     form_id_now = str(rec.get("form_id") or "")
+    # الصور المضغوطة لا تفرض dense إذا كان النص والجدول قصيرين
+    images_force_dense = image_count > 0 and not (rows_cnt <= 5 and text_len <= 480)
     if (
         form_id_now == "decl_settlement"
         or sigs_cnt >= 4
         or rows_cnt >= 8
         or text_len > 620
-        or image_count > 0
+        or images_force_dense
     ):
         tier = "dense"
     elif rows_cnt <= 5 and text_len <= 420:
@@ -5035,7 +5037,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         border: 1.4px solid #000000; border-radius: 4px; background: #fff; display: block; margin: 0 auto;
     }}
     .attachment-grid.atts-single .att-card img,
-    .attachment-grid.atts-multi .att-card img {{ max-height: 80px; }}
+    .attachment-grid.atts-multi .att-card img {{
+        max-height: 80px !important; height: auto !important;
+    }}
+    /* صور المرفقات ثابتة مضغوطة — لا تُكبَّر أبداً عبر expandLegal */
     .att-caption, .att-pdf-name {{ display: none !important; }}
     .att-pdf-card {{
         border: 1.4px solid #000000; border-radius: 4px; padding: 2px 6px; background: #fff;
@@ -5685,9 +5690,143 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }} catch (e6) {{}}
         return step;
     }}
+    function expandLegalToFillSpace(rootDoc) {{
+        const doc = rootDoc || document;
+        const frame = doc.getElementById("a4PageFrame") || doc.querySelector(".a4-page-frame");
+        const sheet = doc.getElementById("a4Sheet")
+            || doc.querySelector(".a4-sheet")
+            || doc.querySelector(".a4-paper");
+        if (!sheet) return 0;
+        const legal = sheet.querySelector(".legal-box");
+        if (!legal) return 0;
+        const win = doc.defaultView || window;
+
+        // أقفل الارتفاع الفيزيائي قبل القياس
+        try {{
+            sheet.style.setProperty("height", "285mm", "important");
+            sheet.style.setProperty("min-height", "285mm", "important");
+            sheet.style.setProperty("max-height", "285mm", "important");
+            sheet.style.setProperty("overflow", "hidden", "important");
+            sheet.style.setProperty("width", "100%", "important");
+            if (frame) frame.style.setProperty("overflow", "hidden", "important");
+        }} catch (e0) {{}}
+        void sheet.offsetHeight;
+
+        function frameInnerH() {{
+            try {{
+                if (!frame) return Math.round(285 * 96 / 25.4);
+                const cs = win.getComputedStyle(frame);
+                const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+                const h = (frame.clientHeight || 0) - padY;
+                if (h > 100) return h;
+            }} catch (e1) {{}}
+            return Math.round(285 * 96 / 25.4);
+        }}
+
+        function midEndEl() {{
+            const mid = sheet.querySelector(".legal-wrap-cell");
+            if (!mid) return legal;
+            const att = mid.querySelector(".attachment-section");
+            return att || legal;
+        }}
+
+        function gapToSig() {{
+            try {{
+                const endEl = midEndEl();
+                const sigEl = sheet.querySelector(".sig-footer")
+                    || sheet.querySelector(".sig-bottom-cell");
+                if (!endEl || !sigEl) return 0;
+                const a = endEl.getBoundingClientRect();
+                const b = sigEl.getBoundingClientRect();
+                return b.top - a.bottom;
+            }} catch (e2) {{
+                return 0;
+            }}
+        }}
+
+        function currentLegalMetrics() {{
+            const cs = win.getComputedStyle(legal);
+            const fs = parseFloat(cs.fontSize) || 12;
+            let lhRatio = NaN;
+            const lhRaw = cs.lineHeight;
+            if (lhRaw && lhRaw !== "normal") {{
+                const lhPx = parseFloat(lhRaw);
+                if (!isNaN(lhPx) && fs > 0) lhRatio = lhPx / fs;
+            }}
+            if (isNaN(lhRatio) || lhRatio < 1.05) lhRatio = 1.6;
+            return {{
+                fs: fs,
+                lh: lhRatio,
+                pt: parseFloat(cs.paddingTop) || 0,
+                pr: parseFloat(cs.paddingRight) || 0,
+                pb: parseFloat(cs.paddingBottom) || 0,
+                pl: parseFloat(cs.paddingLeft) || 0
+            }};
+        }}
+
+        function applyLegalMetrics(m) {{
+            const padY = Math.min(18, Math.max(m.pt, m.pb));
+            const padX = Math.min(20, Math.max(m.pr, m.pl));
+            legal.style.setProperty("font-size", m.fs.toFixed(2) + "px", "important");
+            legal.style.setProperty("line-height", m.lh.toFixed(3), "important");
+            legal.style.setProperty("padding", padY.toFixed(2) + "px " + padX.toFixed(2) + "px", "important");
+            legal.querySelectorAll(".legal-body, .legal-title, div").forEach(function(el) {{
+                el.style.setProperty("font-size", m.fs.toFixed(2) + "px", "important");
+                el.style.setProperty("line-height", m.lh.toFixed(3), "important");
+            }});
+        }}
+
+        function atCap(m) {{
+            return m.fs >= 16.5 - 0.01 && m.lh >= 2.25 - 0.01
+                && Math.max(m.pt, m.pb) >= 18 - 0.01
+                && Math.max(m.pr, m.pl) >= 20 - 0.01;
+        }}
+
+        let gap = gapToSig();
+        if (gap < 60) return 0;
+
+        let steps = 0;
+        const frameH = frameInnerH();
+        while (gap >= 60 && steps < 24) {{
+            const before = currentLegalMetrics();
+            if (atCap(before)) break;
+
+            const next = {{
+                fs: Math.min(16.5, before.fs + 0.35),
+                lh: Math.min(2.25, before.lh + 0.045),
+                pt: Math.min(18, before.pt + 0.55),
+                pr: Math.min(20, before.pr + 0.55),
+                pb: Math.min(18, before.pb + 0.55),
+                pl: Math.min(20, before.pl + 0.55)
+            }};
+            applyLegalMetrics(next);
+            void sheet.offsetHeight;
+
+            // لا تتجاوز صفحة واحدة ولا تقترب من التواقيع أكثر من هامش الأمان
+            const overflow = (sheet.scrollHeight > frameH + 1);
+            const newGap = gapToSig();
+            if (overflow || newGap < 18) {{
+                applyLegalMetrics(before);
+                void sheet.offsetHeight;
+                break;
+            }}
+            gap = newGap;
+            steps += 1;
+            if (next.fs >= 16.5 && next.lh >= 2.25 && next.pt >= 18 && next.pr >= 20) break;
+        }}
+        return steps;
+    }}
+
+    function balanceA4Page(rootDoc) {{
+        const down = stepDownFitA4(rootDoc);
+        const up = expandLegalToFillSpace(rootDoc);
+        return {{ down: down, up: up }};
+    }}
     try {{ window.stepDownFitA4 = stepDownFitA4; }} catch (e) {{}}
-    try {{ window.autoBalanceA4 = stepDownFitA4; }} catch (e) {{}}
-    try {{ window.fitSinglePageForPrint = stepDownFitA4; }} catch (e) {{}}
+    try {{ window.expandLegalToFillSpace = expandLegalToFillSpace; }} catch (e) {{}}
+    try {{ window.balanceA4Page = balanceA4Page; }} catch (e) {{}}
+    try {{ window.autoBalanceA4 = balanceA4Page; }} catch (e) {{}}
+    try {{ window.fitSinglePageForPrint = balanceA4Page; }} catch (e) {{}}
 
     function fitA4Preview() {{
         if (window.matchMedia && window.matchMedia("print").matches) return;
@@ -5713,6 +5852,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 paper.style.transform = "none";
             }}
         }} catch (e) {{}}
+        try {{ balanceA4Page(document); }} catch (eBal) {{}}
         const avail = Math.max(viewport.clientWidth || window.innerWidth || 794, 1);
         const natural = frame.offsetWidth || Math.round(210 * 96 / 25.4) || 794;
         const fitZoom = Math.max(0.35, Math.min(1, avail / Math.max(natural, 1)));
@@ -5762,7 +5902,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             paper.style.width = "100%";
             paper.style.margin = "0 auto";
         }}
-        stepDownFitA4(document);
+        balanceA4Page(document);
     }}
     try {{ window.prepareA4Print = prepareA4Print; }} catch (e) {{}}
 
@@ -5903,12 +6043,53 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + 'sheet.style.setProperty("margin-right","auto","important");'
             + 'frame.style.setProperty("overflow","hidden","important");}}catch(e6){{}}'
             + 'return step;}}'
-            + 'window.stepDownFitA4=stepDownFitA4;'
-            + 'function go(){{try{{stepDownFitA4(document);}}catch(e){{}}try{{window.focus();}}catch(e2){{}}try{{window.print();}}catch(e3){{}}}}'
+            + 'function expandLegalToFillSpace(rootDoc){{'
+            + 'var doc=rootDoc||document;'
+            + 'var frame=doc.getElementById("a4PageFrame")||doc.querySelector(".a4-page-frame");'
+            + 'var sheet=doc.getElementById("a4Sheet")||doc.querySelector(".a4-sheet")||doc.querySelector(".a4-paper");'
+            + 'if(!sheet)return 0;var legal=sheet.querySelector(".legal-box");if(!legal)return 0;'
+            + 'var win=doc.defaultView||window;'
+            + 'try{{sheet.style.setProperty("height","285mm","important");sheet.style.setProperty("min-height","285mm","important");'
+            + 'sheet.style.setProperty("max-height","285mm","important");sheet.style.setProperty("overflow","hidden","important");'
+            + 'sheet.style.setProperty("width","100%","important");'
+            + 'if(frame)frame.style.setProperty("overflow","hidden","important");}}catch(e0){{}}void sheet.offsetHeight;'
+            + 'function frameInnerH(){{try{{if(!frame)return Math.round(285*96/25.4);var cs=win.getComputedStyle(frame);'
+            + 'var padY=(parseFloat(cs.paddingTop)||0)+(parseFloat(cs.paddingBottom)||0);var h=(frame.clientHeight||0)-padY;'
+            + 'if(h>100)return h;}}catch(e1){{}}return Math.round(285*96/25.4);}}'
+            + 'function midEndEl(){{var mid=sheet.querySelector(".legal-wrap-cell");if(!mid)return legal;'
+            + 'var att=mid.querySelector(".attachment-section");return att||legal;}}'
+            + 'function gapToSig(){{try{{var endEl=midEndEl();var sigEl=sheet.querySelector(".sig-footer")||sheet.querySelector(".sig-bottom-cell");'
+            + 'if(!endEl||!sigEl)return 0;return sigEl.getBoundingClientRect().top-endEl.getBoundingClientRect().bottom;}}catch(e2){{return 0;}}}}'
+            + 'function currentLegalMetrics(){{var cs=win.getComputedStyle(legal);var fs=parseFloat(cs.fontSize)||12;var lhRatio=NaN;'
+            + 'var lhRaw=cs.lineHeight;if(lhRaw&&lhRaw!=="normal"){{var lhPx=parseFloat(lhRaw);if(!isNaN(lhPx)&&fs>0)lhRatio=lhPx/fs;}}'
+            + 'if(isNaN(lhRatio)||lhRatio<1.05)lhRatio=1.6;return {{fs:fs,lh:lhRatio,pt:parseFloat(cs.paddingTop)||0,'
+            + 'pr:parseFloat(cs.paddingRight)||0,pb:parseFloat(cs.paddingBottom)||0,pl:parseFloat(cs.paddingLeft)||0}};}}'
+            + 'function applyLegalMetrics(m){{var padY=Math.min(18,Math.max(m.pt,m.pb));var padX=Math.min(20,Math.max(m.pr,m.pl));'
+            + 'legal.style.setProperty("font-size",m.fs.toFixed(2)+"px","important");'
+            + 'legal.style.setProperty("line-height",m.lh.toFixed(3),"important");'
+            + 'legal.style.setProperty("padding",padY.toFixed(2)+"px "+padX.toFixed(2)+"px","important");'
+            + 'legal.querySelectorAll(".legal-body,.legal-title,div").forEach(function(el){{'
+            + 'el.style.setProperty("font-size",m.fs.toFixed(2)+"px","important");'
+            + 'el.style.setProperty("line-height",m.lh.toFixed(3),"important");}});}}'
+            + 'function atCap(m){{return m.fs>=16.49&&m.lh>=2.24&&Math.max(m.pt,m.pb)>=17.99&&Math.max(m.pr,m.pl)>=19.99;}}'
+            + 'var gap=gapToSig();if(gap<60)return 0;var steps=0;var frameH=frameInnerH();'
+            + 'while(gap>=60&&steps<24){{var before=currentLegalMetrics();if(atCap(before))break;'
+            + 'var next={{fs:Math.min(16.5,before.fs+0.35),lh:Math.min(2.25,before.lh+0.045),'
+            + 'pt:Math.min(18,before.pt+0.55),pr:Math.min(20,before.pr+0.55),'
+            + 'pb:Math.min(18,before.pb+0.55),pl:Math.min(20,before.pl+0.55)}};'
+            + 'applyLegalMetrics(next);void sheet.offsetHeight;'
+            + 'var overflow=(sheet.scrollHeight>frameH+1);var newGap=gapToSig();'
+            + 'if(overflow||newGap<18){{applyLegalMetrics(before);void sheet.offsetHeight;break;}}'
+            + 'gap=newGap;steps+=1;'
+            + 'if(next.fs>=16.5&&next.lh>=2.25&&next.pt>=18&&next.pr>=20)break;}}'
+            + 'return steps;}}'
+            + 'function balanceA4Page(rootDoc){{stepDownFitA4(rootDoc);expandLegalToFillSpace(rootDoc);}}'
+            + 'window.stepDownFitA4=stepDownFitA4;window.expandLegalToFillSpace=expandLegalToFillSpace;window.balanceA4Page=balanceA4Page;'
+            + 'function go(){{try{{balanceA4Page(document);}}catch(e){{}}try{{window.focus();}}catch(e2){{}}try{{window.print();}}catch(e3){{}}}}'
             + 'if(document.fonts&&document.fonts.ready){{document.fonts.ready.then(function(){{setTimeout(go,450);}});}}'
             + 'else{{setTimeout(go,450);}}'
             + 'window.addEventListener("load",function(){{setTimeout(go,700);}});'
-            + 'window.addEventListener("beforeprint",function(){{try{{stepDownFitA4(document);}}catch(e){{}}}});'
+            + 'window.addEventListener("beforeprint",function(){{try{{balanceA4Page(document);}}catch(e){{}}}});'
             + '}}());<\\/script>'
             + '</body></html>';
     }}
