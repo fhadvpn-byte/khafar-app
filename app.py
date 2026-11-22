@@ -5981,7 +5981,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }} catch (eBal) {{}}
         const avail = Math.max(viewport.clientWidth || window.innerWidth || 794, 1);
         const natural = frame.offsetWidth || Math.round(210 * 96 / 25.4) || 794;
-        const fitZoom = Math.max(0.35, Math.min(1, avail / Math.max(natural, 1)));
+        const fitZoom = Math.max(0.15, Math.min(1, avail / Math.max(natural, 1)));
         frame.style.zoom = String(fitZoom);
         viewport.style.overflow = "hidden";
         viewport.style.height = "auto";
@@ -6793,7 +6793,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
 
     function applyStageScale(val) {{
-      curScale = Math.max(0.35, Math.min(2.0, Math.round(val * 100) / 100));
+      curScale = Math.max(0.15, Math.min(2.0, Math.round(val * 100) / 100));
       sheetEl.style.setProperty('zoom', '1', 'important');
       sheetEl.style.setProperty('transform', 'none', 'important');
 
@@ -6822,7 +6822,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         ev.stopPropagation();
         var act = btn.getAttribute('data-kz');
         if (act === '+') applyStageScale(curScale + 0.12);
-        else if (act === '-') applyStageScale(curScale - 0.12);
+        else if (act === '-') applyStageScale(curScale - 0.08);
         else if (act === 'fit') fitStageToScreen();
         else applyStageScale(parseFloat(act) || 1);
       }});
