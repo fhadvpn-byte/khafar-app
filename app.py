@@ -2445,39 +2445,85 @@ def shift_light_payload(data: dict | None) -> dict:
 
 
 def make_ink_transparent_b64(raw_b64: str, max_w: int = 520, max_h: int = 180) -> str:
-    """حوّل التوقيع إلى PNG شفاف (إزالة الخلفية البيضاء) مع الإبقاء على الحبر."""
+    """توقيع حبري رسمي: خلفية بيضاء ناصعة + حبر أزرق قلم (15,45,130) بدون أي كحلي/أسود."""
     payload = str(raw_b64 or "").strip()
     if not payload:
         return ""
     if payload.startswith("data:"):
         payload = payload.split(",", 1)[-1]
     try:
+        ink = (15, 45, 130)
         img = Image.open(io.BytesIO(base64.b64decode(payload)))
         img = ImageOps.exif_transpose(img)
         if img.mode != "RGBA":
             img = img.convert("RGBA")
         img.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
-        pixels = img.load()
         w, h = img.size
+        src = img.load()
+
+        # تقدير لون الخلفية من الزوايا والحواف (يشمل الخلفيات الكحلية الشفافة/المعتمة)
+        samples = []
+        for (sx, sy) in (
+            (0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1),
+            (w // 2, 0), (w // 2, h - 1), (0, h // 2), (w - 1, h // 2),
+        ):
+            r, g, b, a = src[sx, sy]
+            if a < 40:
+                samples.append((13, 40, 55))  # خلفية واجهة داكنة شائعة خلف الشفافية
+            else:
+                samples.append((r, g, b))
+        bg_r = sum(c[0] for c in samples) / len(samples)
+        bg_g = sum(c[1] for c in samples) / len(samples)
+        bg_b = sum(c[2] for c in samples) / len(samples)
+        bg_bright = (bg_r + bg_g + bg_b) / 3.0
+
+        strength = [[0.0] * w for _ in range(h)]
         for y in range(h):
             for x in range(w):
-                r, g, b, a = pixels[x, y]
-                if a == 0:
+                r, g, b, a = src[x, y]
+                if a < 40:
+                    strength[y][x] = 0.0
                     continue
+                if r > 200 and g > 200 and b > 200:
+                    strength[y][x] = 0.0
+                    continue
+                dist = abs(r - bg_r) + abs(g - bg_g) + abs(b - bg_b)
                 brightness = (r + g + b) / 3.0
-                if brightness >= 248:
-                    pixels[x, y] = (255, 255, 255, 0)
-                elif brightness >= 210:
-                    alpha = int(max(0, min(255, (255 - brightness) * 4.2)))
-                    ink_r = min(r, 30)
-                    ink_g = min(g, 55)
-                    ink_b = min(b, 140)
-                    pixels[x, y] = (ink_r, ink_g, ink_b, alpha)
+                if bg_bright < 140:
+                    # خلفية داكنة/كحلية: الحبر هو ما يختلف عنها أو يكون أفتح/أزرق أوضح
+                    if dist < 55 and brightness < 150:
+                        strength[y][x] = 0.0
+                    else:
+                        strength[y][x] = max(0.0, min(1.0, dist / 220.0))
                 else:
-                    # تعزيز الحبر الداكن/الأزرق قليلاً ليبدو كتوقيع حبري
-                    pixels[x, y] = (min(r, 25), min(g, 50), min(max(b, 90), 160), 255)
+                    # خلفية فاتحة: الحبر هو البكسل الأغمق
+                    strength[y][x] = max(0.0, min(1.0, (235.0 - brightness) / 180.0))
+
+        out = Image.new("RGBA", (w, h), (255, 255, 255, 255))
+        out_px = out.load()
+        for y in range(h):
+            for x in range(w):
+                s = strength[y][x]
+                if 0 < x < w - 1 and 0 < y < h - 1:
+                    s = (
+                        s * 0.5
+                        + strength[y][x - 1] * 0.125
+                        + strength[y][x + 1] * 0.125
+                        + strength[y - 1][x] * 0.125
+                        + strength[y + 1][x] * 0.125
+                    )
+                if s < 0.10:
+                    out_px[x, y] = (255, 255, 255, 255)
+                else:
+                    t = max(0.18, min(1.0, s))
+                    out_px[x, y] = (
+                        int(255 + (ink[0] - 255) * t),
+                        int(255 + (ink[1] - 255) * t),
+                        int(255 + (ink[2] - 255) * t),
+                        255,
+                    )
         buf = io.BytesIO()
-        img.save(buf, format="PNG", optimize=True)
+        out.save(buf, format="PNG", optimize=True)
         return base64.b64encode(buf.getvalue()).decode("utf-8")
     except Exception:
         return payload[:250000]
@@ -2618,10 +2664,55 @@ def get_manager_signature_settings() -> dict:
         if (not out["manager_title"] or out["manager_title"] == DEFAULT_MANAGER_TITLE) and secrets_data.get("manager_title"):
             out["manager_title"] = secrets_data["manager_title"]
 
+    # نظّف التوقيع المحفوظ فوراً (خلفية بيضاء + حبر أزرق) دون إلزام بإعادة التوقيع
+    raw_sig = str(out.get("manager_sig_b64") or "").strip()
+    if raw_sig:
+        cleaned_now = make_ink_transparent_b64(raw_sig, max_w=520, max_h=200) or raw_sig
+        out["manager_sig_b64"] = cleaned_now
+        if _signature_has_dark_or_teal_bg(raw_sig):
+            try:
+                save_manager_signature_settings(
+                    out.get("manager_name", ""),
+                    out.get("manager_title", DEFAULT_MANAGER_TITLE),
+                    cleaned_now,
+                    bool(out.get("auto_insert", True)),
+                    write_backup=True,
+                )
+            except Exception:
+                pass
+
     name = (out["manager_name"] or "").strip()
     title = (out["manager_title"] or DEFAULT_MANAGER_TITLE).strip()
     out["display_name"] = f"{name} — {title}".strip(" —") if name else title
     return out
+
+
+def _signature_has_dark_or_teal_bg(raw_b64: str) -> bool:
+    """يكشف الخلفية الكحلية/الداكنة في التوقيع المحفوظ سابقاً لإعادة تنظيفه مرة واحدة."""
+    payload = str(raw_b64 or "").strip()
+    if not payload:
+        return False
+    if payload.startswith("data:"):
+        payload = payload.split(",", 1)[-1]
+    try:
+        img = Image.open(io.BytesIO(base64.b64decode(payload))).convert("RGBA")
+        img.thumbnail((160, 80), Image.Resampling.NEAREST)
+        pixels = list(img.getdata())
+        if not pixels:
+            return False
+        darkish = 0
+        for r, g, b, a in pixels:
+            if a < 40:
+                # شفافية فوق واجهة داكنة تظهر كحليّة في المعاينة
+                darkish += 1
+                continue
+            if r < 90 and g < 120 and b < 160:
+                darkish += 1
+            elif r < 60 and g < 90 and b > 80:
+                darkish += 1
+        return (darkish / max(len(pixels), 1)) > 0.12
+    except Exception:
+        return True
 
 
 def _write_manager_sig_backup(data: dict) -> None:
@@ -3227,16 +3318,20 @@ def render_hide_st_cloud_badges() -> None:
 # 5. قالب الطباعة الرسمي مقاس A4 بالترويسة الخماسية المعتمدة وشعار المرور
 # =====================================================================
 def _sig_slot_img(b64: str, slot_id: str) -> str:
+    slot_style = (
+        "max-height:58px; height:auto; max-width:98%; width:auto; object-fit:contain; "
+        "display:inline-block; background:#ffffff !important; mix-blend-mode:multiply; "
+        "border:none !important; box-shadow:none !important;"
+    )
     if b64:
         return (
             f"<img id='{slot_id}' class='sig-slot-img' "
             f"src='data:image/png;base64,{b64}' "
-            f"style='height:88px; max-width:98%; width:auto; object-fit:contain; "
-            f"display:inline-block; background:transparent;' />"
+            f"style='{slot_style}' />"
         )
     return (
         f"<img id='{slot_id}' class='sig-slot-img' src='' alt='' "
-        f"style='height:88px; max-width:98%; width:auto; object-fit:contain; display:none;' />"
+        f"style='{slot_style} display:none;' />"
     )
 
 
@@ -3409,19 +3504,25 @@ def render_manager_sig_pad_html() -> str:
     var tmp = document.createElement('canvas');
     tmp.width = w; tmp.height = h;
     var tctx = tmp.getContext('2d');
+    // خلفية بيضاء صافية ثم الحبر الأزرق الرسمي
+    tctx.fillStyle = '#ffffff';
+    tctx.fillRect(0, 0, w, h);
     tctx.drawImage(srcCanvas, 0, 0);
     var img = tctx.getImageData(0, 0, w, h);
     var d = img.data;
+    var inkR = 15, inkG = 45, inkB = 130;
     for (var i = 0; i < d.length; i += 4) {
-      var r = d[i], g = d[i+1], b = d[i+2];
-      var br = (r + g + b) / 3;
-      if (br >= 248) { d[i+3] = 0; }
-      else if (br >= 210) {
-        d[i] = Math.min(r, 30); d[i+1] = Math.min(g, 55); d[i+2] = Math.min(b, 140);
-        d[i+3] = Math.max(0, Math.min(255, Math.round((255 - br) * 4.2)));
-      } else {
-        d[i] = Math.min(r, 25); d[i+1] = Math.min(g, 50); d[i+2] = Math.min(Math.max(b, 90), 160); d[i+3] = 255;
+      var r = d[i], g = d[i+1], b = d[i+2], a = d[i+3];
+      if (a < 40 || (r > 200 && g > 200 && b > 200)) {
+        d[i] = 255; d[i+1] = 255; d[i+2] = 255; d[i+3] = 255;
+        continue;
       }
+      var br = (r + g + b) / 3;
+      var t = Math.max(0.15, Math.min(1, (235 - br) / 180));
+      d[i] = Math.round(255 + (inkR - 255) * t);
+      d[i+1] = Math.round(255 + (inkG - 255) * t);
+      d[i+2] = Math.round(255 + (inkB - 255) * t);
+      d[i+3] = 255;
     }
     tctx.putImageData(img, 0, 0);
     if (maxW && w > maxW) {
@@ -3429,7 +3530,10 @@ def render_manager_sig_pad_html() -> str:
       var out = document.createElement('canvas');
       out.width = Math.round(w * scale);
       out.height = Math.round(h * scale);
-      out.getContext('2d').drawImage(tmp, 0, 0, out.width, out.height);
+      var octx = out.getContext('2d');
+      octx.fillStyle = '#ffffff';
+      octx.fillRect(0, 0, out.width, out.height);
+      octx.drawImage(tmp, 0, 0, out.width, out.height);
       return out.toDataURL('image/png');
     }
     return tmp.toDataURL('image/png');
@@ -4351,16 +4455,26 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .sig-head {{
         background: #f1f5f3; color: #000000 !important; font-size: 13px; font-weight: 800; padding: 9px !important; line-height: 1.65 !important; border: 1.4px solid #000000 !important;
     }}
-    .sig-grid .sig-slot-img {{ height: 72px !important; max-width: 98%; width: auto; display: inline-block !important; }}
-    .sig-multi .sig-slot-img {{ height: 64px !important; max-width: 98%; width: auto; display: inline-block !important; }}
-    .sig-tbl .sig-slot-img {{ height: 88px !important; max-width: 98%; width: auto; display: inline-block !important; }}
     .sig-grid .sig-person {{ font-size: 9px; }}
     .sig-grid .sig-role {{ font-size: 8.5px; }}
-    .sig-slot-img {{ background: transparent; visibility: visible !important; }}
+    .sig-grid .sig-slot-img, .sig-multi .sig-slot-img, .sig-tbl .sig-slot-img,
+    img.sig-slot-img, #slot_duty, #slot_officer, #slot_citizen {{
+        max-height: 58px !important; height: auto !important; max-width: 98% !important;
+        width: auto !important; object-fit: contain !important; display: inline-block !important;
+        background: #ffffff !important; mix-blend-mode: multiply !important;
+        border: none !important; box-shadow: none !important; visibility: visible !important;
+    }}
+    td.sig-cell img.sig-slot-img, .sig-cell img.sig-slot-img {{
+        background: #ffffff !important; mix-blend-mode: multiply !important;
+    }}
+    .sig-guide {{ background: #ffffff !important; }}
     @media print {{
-        .sig-tbl .sig-slot-img, .sig-grid .sig-slot-img, .sig-multi .sig-slot-img {{
+        .sig-tbl .sig-slot-img, .sig-grid .sig-slot-img, .sig-multi .sig-slot-img, img.sig-slot-img {{
             display: inline-block !important; visibility: visible !important; opacity: 1 !important;
-            -webkit-print-color-adjust: exact; print-color-adjust: exact;
+            max-height: 52px !important; height: auto !important;
+            background: #ffffff !important; mix-blend-mode: multiply !important;
+            border: none !important; box-shadow: none !important;
+            -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
         }}
     }}
     @media screen {{
