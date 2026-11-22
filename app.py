@@ -5049,7 +5049,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         margin-bottom: 6px !important;
     }}
     @media print {{
-        @page {{ size: A4 portrait; margin: 5mm 6mm !important; }}
+        @page {{ size: A4 portrait; margin: 3.5mm 4mm !important; }}
         html, body {{
             margin: 0 !important; padding: 0 !important; height: auto !important;
             overflow: visible !important; background: #ffffff !important;
@@ -5070,12 +5070,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             direction: rtl !important;
             transform: none !important;
             width: 100% !important;
-            max-width: 198mm !important;
+            max-width: none !important;
             height: auto !important;
             min-height: 0 !important;
             max-height: none !important;
-            padding: 4mm 6mm !important;
-            margin: 0 auto !important;
+            padding: 3.5mm 4.5mm !important;
+            margin: 0 !important;
             display: flex !important;
             flex-direction: column !important;
             justify-content: flex-start !important;
@@ -5094,7 +5094,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             color-adjust: exact !important;
         }}
         .a4-fit {{
-            height: auto !important; min-height: 0 !important; flex: 0 1 auto !important;
+            height: auto !important; min-height: 0 !important; flex: 1 1 auto !important;
             transform: none !important;
             display: flex !important; flex-direction: column !important; justify-content: flex-start !important;
         }}
@@ -5124,7 +5124,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         .a4-sheet table.data-tbl th, .a4-sheet table.data-tbl td {{
             border: 1px solid #1e293b !important;
             padding: 4px 6px !important;
-            font-size: 11px !important;
+            font-size: 11.5px !important;
             line-height: 1.35 !important;
             white-space: normal !important;
             overflow-wrap: anywhere !important;
@@ -5144,7 +5144,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             text-align: justify !important;
             text-align-last: right !important;
             direction: rtl !important;
-            font-size: 11.5px !important;
+            font-size: 12px !important;
             line-height: 1.5 !important;
             padding: 7px 10px !important;
             margin-bottom: 6px !important;
@@ -5152,19 +5152,19 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         .a4-paper .legal-box div, .a4-sheet .legal-box div {{
             text-align: justify !important; text-align-last: right !important;
-            font-size: 11.5px !important; line-height: 1.5 !important; white-space: normal !important;
+            font-size: 12px !important; line-height: 1.5 !important; white-space: normal !important;
         }}
         .a4-dense-print .legal-box, .a4-compact .legal-box,
         .a4-paper.a4-dense-print .legal-box, .a4-sheet.a4-dense-print .legal-box {{
-            font-size: 11.5px !important; line-height: 1.5 !important;
+            font-size: 12px !important; line-height: 1.5 !important;
             padding: 7px 10px !important; margin-bottom: 6px !important;
         }}
         .a4-dense-print .legal-box div, .a4-compact .legal-box div {{
-            font-size: 11.5px !important; line-height: 1.5 !important;
+            font-size: 12px !important; line-height: 1.5 !important;
         }}
         .a4-dense-print table.data-tbl td, .a4-dense-print table.data-tbl td.val,
         .a4-compact table.data-tbl td, .a4-compact table.data-tbl td.val {{
-            padding: 4px 6px !important; font-size: 11px !important; line-height: 1.35 !important;
+            padding: 4px 6px !important; font-size: 11.5px !important; line-height: 1.35 !important;
         }}
         .a4-paper .hdr, .a4-sheet .hdr {{
             display: flex !important; justify-content: space-between !important; align-items: center !important;
@@ -5223,7 +5223,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         .a4-paper.a4-dense-print, .a4-paper.a4-compact,
         .a4-sheet.a4-dense-print, .a4-sheet.a4-compact {{
-            padding: 4mm 6mm !important;
+            padding: 3.5mm 4.5mm !important;
+            width: 100% !important; max-width: none !important; margin: 0 !important;
+        }}
+        .a4-sheet.a4-short-fill, .a4-paper.a4-short-fill {{
+            min-height: 283mm !important;
+            justify-content: flex-start !important;
+        }}
+        .a4-sheet.a4-short-fill .sig-footer,
+        .a4-paper.a4-short-fill .sig-footer {{
+            margin-top: auto !important;
         }}
     }}
 </style>
@@ -5516,30 +5525,62 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     try {{ window.syncAllLivePads = syncAllLivePads; }} catch (e) {{}}
 
     function fitSinglePageForPrint(root) {{
-        const SAFE_A4_PX = 950;
+        const SAFE_A4_PX = 1068;
         const sheet = (root && root.querySelector)
             ? (root.querySelector("#a4Sheet") || root.querySelector(".a4-sheet") || root.querySelector(".a4-paper") || root)
             : (document.getElementById("a4Sheet") || document.querySelector(".a4-sheet") || document.querySelector(".a4-paper"));
         if (!sheet) return 1;
         try {{
+            sheet.classList.remove("a4-short-fill");
             sheet.style.minHeight = "0";
             sheet.style.height = "auto";
             sheet.style.maxHeight = "none";
             sheet.style.overflow = "visible";
             sheet.style.setProperty("transform", "none", "important");
             sheet.style.removeProperty("zoom");
-            sheet.style.width = "710px";
+            sheet.style.setProperty("max-width", "none", "important");
+            sheet.style.setProperty("width", "100%", "important");
+            sheet.style.setProperty("margin", "0", "important");
         }} catch (e) {{}}
+        // قياس على العرض الكامل الفعلي (~764px) لتقليل التفاف الأسطر والهوامش الجانبية
+        try {{
+            const measureW = Math.max(
+                (document.documentElement && document.documentElement.clientWidth) || 0,
+                (document.body && document.body.clientWidth) || 0,
+                764
+            );
+            sheet.style.setProperty("width", Math.min(measureW, 764) + "px", "important");
+        }} catch (e0) {{
+            try {{ sheet.style.setProperty("width", "764px", "important"); }} catch (e00) {{}}
+        }}
         void sheet.offsetHeight;
         const h = sheet.scrollHeight || sheet.offsetHeight || 0;
         let z = 1;
         if (h > SAFE_A4_PX) {{
-            z = Math.max(0.68, Math.floor((SAFE_A4_PX / h) * 1000) / 1000);
+            z = Math.max(0.74, Math.floor((SAFE_A4_PX / h) * 1000) / 1000);
             try {{ sheet.style.setProperty("zoom", String(z), "important"); }} catch (e2) {{}}
+            try {{
+                const parentW = document.documentElement.clientWidth || document.body.clientWidth || 0;
+                const rectW = sheet.getBoundingClientRect().width;
+                if (parentW > 0 && rectW > 0 && rectW < parentW * 0.97) {{
+                    sheet.style.setProperty("width", (100 / z).toFixed(3) + "%", "important");
+                }} else {{
+                    sheet.style.setProperty("width", "100%", "important");
+                }}
+            }} catch (e3) {{
+                try {{ sheet.style.setProperty("width", "100%", "important"); }} catch (e4) {{}}
+            }}
         }} else {{
-            try {{ sheet.style.removeProperty("zoom"); }} catch (e3) {{}}
+            try {{
+                sheet.style.removeProperty("zoom");
+                sheet.style.setProperty("width", "100%", "important");
+                sheet.style.setProperty("min-height", "283mm", "important");
+                sheet.classList.add("a4-short-fill");
+                const footer = sheet.querySelector(".sig-footer");
+                if (footer) footer.style.setProperty("margin-top", "auto", "important");
+            }} catch (e5) {{}}
         }}
-        try {{ sheet.style.width = "100%"; }} catch (e4) {{}}
+        try {{ sheet.style.setProperty("max-width", "none", "important"); }} catch (e6) {{}}
         return z;
     }}
     try {{ window.fitSinglePageForPrint = fitSinglePageForPrint; }} catch (e) {{}}
@@ -5554,7 +5595,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         if (!paper) return;
         paper.style.setProperty("transform", "none", "important");
-        paper.style.margin = "0 auto";
+        paper.style.setProperty("margin", "0", "important");
         paper.style.maxHeight = "none";
         paper.style.minHeight = "0";
         paper.style.height = "auto";
@@ -5571,14 +5612,20 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             viewport.style.overflow = "hidden";
         }}
         if (paper) {{
+            try {{ paper.classList.remove("a4-short-fill"); }} catch (e) {{}}
             paper.style.zoom = "";
             paper.style.removeProperty("transform");
             paper.style.margin = "";
             paper.style.width = "";
+            paper.style.removeProperty("max-width");
             paper.style.removeProperty("height");
             paper.style.removeProperty("max-height");
             paper.style.removeProperty("min-height");
             paper.style.overflow = "";
+            try {{
+                const footer = paper.querySelector(".sig-footer");
+                if (footer) footer.style.removeProperty("margin-top");
+            }} catch (e2) {{}}
         }}
         scheduleA4Fit();
     }}
@@ -5611,31 +5658,47 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + '<title>وثيقة رسمية - قسم مرور العارضة</title>'
             + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap">'
             + styles
-            + '<style>@page{{size:A4 portrait;margin:5mm 6mm !important;}}'
+            + '<style>@page{{size:A4 portrait;margin:3.5mm 4mm !important;}}'
             + 'html,body{{margin:0;padding:0;background:#fff;direction:rtl;}}'
             + '@media print{{.no-print{{display:none !important;}}'
-            + '.a4-sheet,.a4-paper,.a4-page,.print-area{{height:auto !important;min-height:0 !important;'
-            + 'justify-content:flex-start !important;padding:4mm 6mm !important;'
-            + 'page-break-after:avoid !important;break-after:avoid !important;}}'
-            + '.a4-fit{{min-height:0 !important;}}'
+            + '.a4-sheet,.a4-paper,.a4-page,.print-area{{width:100% !important;max-width:none !important;margin:0 !important;'
+            + 'height:auto !important;min-height:0 !important;justify-content:flex-start !important;'
+            + 'padding:3.5mm 4.5mm !important;page-break-after:avoid !important;break-after:avoid !important;}}'
+            + '.a4-fit{{min-height:0 !important;flex:1 1 auto !important;}}'
+            + '.a4-short-fill{{min-height:283mm !important;}}'
+            + '.a4-short-fill .sig-footer{{margin-top:auto !important;}}'
             + '.footer-qr{{margin-top:8px !important;}}}}'
-            + '</style></head><body style="margin:0;padding:8px;background:#fff;direction:rtl;">'
+            + '</style></head><body style="margin:0;padding:0;background:#fff;direction:rtl;">'
             + topBar + sheetHtml
             + '<script>(function(){{'
             + 'function fitSinglePageForPrint(root){{'
-            + 'var SAFE_A4_PX=950;'
+            + 'var SAFE_A4_PX=1068;'
             + 'var sheet=(root&&root.querySelector)?(root.querySelector("#a4Sheet")||root.querySelector(".a4-sheet")||root.querySelector(".a4-paper")||root)'
             + ':(document.getElementById("a4Sheet")||document.querySelector(".a4-sheet")||document.querySelector(".a4-paper"));'
             + 'if(!sheet)return 1;'
-            + 'try{{sheet.style.minHeight="0";sheet.style.height="auto";sheet.style.maxHeight="none";sheet.style.overflow="visible";'
-            + 'sheet.style.setProperty("transform","none","important");sheet.style.removeProperty("zoom");sheet.style.width="710px";}}catch(e){{}}'
+            + 'try{{sheet.classList.remove("a4-short-fill");sheet.style.minHeight="0";sheet.style.height="auto";sheet.style.maxHeight="none";'
+            + 'sheet.style.overflow="visible";sheet.style.setProperty("transform","none","important");sheet.style.removeProperty("zoom");'
+            + 'sheet.style.setProperty("max-width","none","important");sheet.style.setProperty("width","100%","important");'
+            + 'sheet.style.setProperty("margin","0","important");}}catch(e){{}}'
+            + 'try{{var measureW=Math.max((document.documentElement&&document.documentElement.clientWidth)||0,'
+            + '(document.body&&document.body.clientWidth)||0,764);'
+            + 'sheet.style.setProperty("width",Math.min(measureW,764)+"px","important");}}catch(e0){{'
+            + 'try{{sheet.style.setProperty("width","764px","important");}}catch(e00){{}}}}'
             + 'void sheet.offsetHeight;'
             + 'var h=sheet.scrollHeight||sheet.offsetHeight||0;'
             + 'var z=1;'
-            + 'if(h>SAFE_A4_PX){{z=Math.max(0.68,Math.floor((SAFE_A4_PX/h)*1000)/1000);'
-            + 'try{{sheet.style.setProperty("zoom",String(z),"important");}}catch(e2){{}}}}'
-            + 'else{{try{{sheet.style.removeProperty("zoom");}}catch(e3){{}}}}'
-            + 'try{{sheet.style.width="100%";}}catch(e4){{}}'
+            + 'if(h>SAFE_A4_PX){{z=Math.max(0.74,Math.floor((SAFE_A4_PX/h)*1000)/1000);'
+            + 'try{{sheet.style.setProperty("zoom",String(z),"important");}}catch(e2){{}}'
+            + 'try{{var parentW=document.documentElement.clientWidth||document.body.clientWidth||0;'
+            + 'var rectW=sheet.getBoundingClientRect().width;'
+            + 'if(parentW>0&&rectW>0&&rectW<parentW*0.97){{sheet.style.setProperty("width",(100/z).toFixed(3)+"%","important");}}'
+            + 'else{{sheet.style.setProperty("width","100%","important");}}}}catch(e3){{'
+            + 'try{{sheet.style.setProperty("width","100%","important");}}catch(e4){{}}}}'
+            + '}}else{{try{{sheet.style.removeProperty("zoom");sheet.style.setProperty("width","100%","important");'
+            + 'sheet.style.setProperty("min-height","283mm","important");sheet.classList.add("a4-short-fill");'
+            + 'var footer=sheet.querySelector(".sig-footer");'
+            + 'if(footer)footer.style.setProperty("margin-top","auto","important");}}catch(e5){{}}}}'
+            + 'try{{sheet.style.setProperty("max-width","none","important");}}catch(e6){{}}'
             + 'return z;}}'
             + 'function go(){{try{{fitSinglePageForPrint(document);}}catch(e){{}}try{{window.focus();}}catch(e2){{}}try{{window.print();}}catch(e3){{}}}}'
             + 'if(document.fonts&&document.fonts.ready){{document.fonts.ready.then(function(){{setTimeout(go,450);}});}}'
