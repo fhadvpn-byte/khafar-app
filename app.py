@@ -6341,62 +6341,101 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   @media screen {{
     #zoomBar, .zoom-bar {{
       display: flex !important;
-      visibility: visible !important;
-      opacity: 1 !important;
-      flex-wrap: wrap !important;
+      flex-wrap: nowrap !important;
       justify-content: center !important;
       align-items: center !important;
-      gap: 6px !important;
+      gap: 5px !important;
       width: fit-content !important;
-      max-width: 98% !important;
-      margin: 10px auto 14px auto !important;
-      padding: 6px 10px !important;
+      max-width: 99% !important;
+      margin: 8px auto 10px auto !important;
+      padding: 5px 8px !important;
       background: linear-gradient(135deg, #0d3b2e 0%, #07231b 100%) !important;
       border: 1.5px solid #d4a853 !important;
       border-radius: 999px !important;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32) !important;
+      box-shadow: 0 5px 14px rgba(0, 0, 0, 0.28) !important;
       direction: rtl !important;
+      white-space: nowrap !important;
     }}
-    #zoomBar button, .zoom-bar button, .khafar-z-btn {{
-      background: rgba(255, 255, 255, 0.1) !important;
+    #zoomBar .khafar-z-btn {{
+      background: rgba(255, 255, 255, 0.10) !important;
       color: #ffffff !important;
       border: 1px solid rgba(212, 168, 83, 0.45) !important;
       border-radius: 999px !important;
-      padding: 5px 13px !important;
+      padding: 4px 10px !important;
       font-family: 'Cairo', Tahoma, sans-serif !important;
-      font-size: 12.5px !important;
+      font-size: 12px !important;
       font-weight: 800 !important;
       cursor: pointer !important;
       line-height: 1.3 !important;
       margin: 0 !important;
+      white-space: nowrap !important;
     }}
-    #zoomBar button:hover, .zoom-bar button:hover, .khafar-z-btn:hover {{
+    #zoomBar .khafar-z-btn:active, #zoomBar .khafar-z-btn:hover {{
       background: #15805c !important;
       border-color: #fde68a !important;
     }}
-    .khafar-z-fit {{
+    #zoomBar .khafar-z-fit {{
       background: linear-gradient(135deg, #d4a853 0%, #b08532 100%) !important;
       color: #0b1512 !important;
       border: none !important;
       font-weight: 900 !important;
     }}
-    .khafar-z-pct, #zoomPctLabel {{
+    #zoomBar #zoomPctLabel {{
       background: #ffffff !important;
       color: #092c20 !important;
       border-radius: 999px !important;
-      padding: 4px 12px !important;
-      font-size: 12.5px !important;
+      padding: 3px 10px !important;
+      font-size: 12px !important;
       font-weight: 900 !important;
-      min-width: 54px !important;
+      min-width: 48px !important;
       text-align: center !important;
       cursor: pointer !important;
     }}
+    #khafarZoomViewport {{
+      width: 100% !important;
+      overflow-x: auto !important;
+      overflow-y: hidden !important;
+      direction: rtl !important;
+      padding-bottom: 6px !important;
+      -webkit-overflow-scrolling: touch !important;
+    }}
+    #khafarZoomSizer {{
+      margin: 0 auto !important;
+      position: relative !important;
+      overflow: hidden !important;
+    }}
+    #khafarZoomCanvas {{
+      width: 794px !important;
+      min-width: 794px !important;
+      max-width: 794px !important;
+      position: absolute !important;
+      top: 0 !important;
+      right: 0 !important;
+      transform-origin: top right !important;
+    }}
+    #khafarZoomCanvas > #a4Sheet {{
+      width: 794px !important;
+      min-width: 794px !important;
+      max-width: 794px !important;
+      zoom: 1 !important;
+      transform: none !important;
+      margin: 0 !important;
+    }}
   }}
   @media print {{
-    #zoomBar, .zoom-bar, #khafarPreviewZoomBar {{ display: none !important; }}
+    #zoomBar, .zoom-bar {{ display: none !important; }}
+    #khafarZoomViewport, #khafarZoomSizer, #khafarZoomCanvas {{
+      position: static !important;
+      width: 100% !important;
+      min-width: 0 !important;
+      max-width: none !important;
+      height: auto !important;
+      overflow: visible !important;
+      transform: none !important;
+    }}
   }}
 /* KHAFAR_SLEEK_ZOOM_END */
-  .legal-box {{
+.legal-box {{
     display: flex !important;
     flex-direction: column !important;
     justify-content: center !important;
@@ -6696,71 +6735,114 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
   // --- KHAFAR_INJECT_PREVIEW_ZOOM_START ---
   (function() {{
+    // إيقاف أي مستمع resize قديم يعيد تكبير الورقة تلقائياً بعد ضغط الأزرار
+    window.addEventListener('resize', function(ev) {{
+      ev.stopImmediatePropagation();
+    }}, true);
+
     var sheetEl = document.getElementById('a4Sheet');
     if (!sheetEl) return;
 
-    // إزالة أي شريط قديم معطل وبناء شريط كبسولي موحد فوق ورقة المعاينة مباشرة
-    var oldBars = document.querySelectorAll('#zoomBar, .zoom-bar, #khafarPreviewZoomBar');
-    oldBars.forEach(function(b) {{ b.remove(); }});
+    document.querySelectorAll('#zoomBar, .zoom-bar, #khafarPreviewZoomBar').forEach(function(b) {{ b.remove(); }});
 
     var bar = document.createElement('div');
     bar.id = 'zoomBar';
     bar.className = 'zoom-bar no-print';
     bar.innerHTML = ''
       + '<button type="button" class="khafar-z-btn" data-kz="-"> تصغير</button>'
-      + '<span class="khafar-z-pct" id="zoomPctLabel" data-kz="1" title="اضغط للعودة إلى 100%">100%</span>'
+      + '<span id="zoomPctLabel" data-kz="1" title="اضغط للعودة إلى 100%">100%</span>'
       + '<button type="button" class="khafar-z-btn" data-kz="+"> تكبير</button>'
-      + '<button type="button" class="khafar-z-btn" data-kz="1.3">130%</button>'
-      + '<button type="button" class="khafar-z-btn khafar-z-fit" data-kz="fit"> ملاءمة الشاشة</button>';
+      + '<button type="button" class="khafar-z-btn khafar-z-fit" data-kz="fit"> ملاءمة</button>';
 
-    sheetEl.parentNode.insertBefore(bar, sheetEl);
+    var viewport = document.getElementById('khafarZoomViewport');
+    var sizer = document.getElementById('khafarZoomSizer');
+    var canvasWrap = document.getElementById('khafarZoomCanvas');
 
-    var ZKEY = 'khafar_a4_preview_zoom';
-    var curZ = 1;
-    try {{
-      var sv = parseFloat(localStorage.getItem(ZKEY) || '');
-      if (sv >= 0.4 && sv <= 2.2) curZ = sv;
-    }} catch (e) {{}}
+    if (!viewport) {{
+      viewport = document.createElement('div');
+      viewport.id = 'khafarZoomViewport';
+      sizer = document.createElement('div');
+      sizer.id = 'khafarZoomSizer';
+      canvasWrap = document.createElement('div');
+      canvasWrap.id = 'khafarZoomCanvas';
 
-    function applyPreviewZoom(val) {{
-      curZ = Math.max(0.4, Math.min(2.2, Math.round(val * 100) / 100));
-      sheetEl.style.transformOrigin = 'top center';
-      sheetEl.style.setProperty('zoom', String(curZ), 'important');
-      var lbl = document.getElementById('zoomPctLabel');
-      if (lbl) lbl.textContent = Math.round(curZ * 100) + '%';
-      try {{ localStorage.setItem(ZKEY, String(curZ)); }} catch (e) {{}}
+      var parent = sheetEl.parentNode;
+      parent.insertBefore(bar, sheetEl);
+      parent.insertBefore(viewport, sheetEl);
+      canvasWrap.appendChild(sheetEl);
+      sizer.appendChild(canvasWrap);
+      viewport.appendChild(sizer);
+    }}
+
+    // إعادة وزن خطوط وتباعد A4 على العرض القياسي 794px لتظهر الورقة متكاملة
+    try {{ balanceSheetTypography(document, 1045, false, false); }} catch (e) {{}}
+
+    var curScale = 1;
+    var lastWinW = window.innerWidth || 0;
+
+    function syncIframeHeight() {{
       try {{
         if (window.frameElement) {{
-          setTimeout(function() {{
-            var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-            if (h > 400) window.frameElement.style.height = Math.ceil(h + 45) + 'px';
-          }}, 60);
+          var rect = viewport.getBoundingClientRect();
+          var totalH = Math.ceil((window.pageYOffset || document.documentElement.scrollTop || 0) + rect.top + sizer.offsetHeight + 28);
+          if (totalH > 350) {{
+            window.frameElement.style.height = totalH + 'px';
+          }}
         }}
       }} catch (e) {{}}
     }}
 
-    function fitPreviewToScreen() {{
+    function applyStageScale(val) {{
+      curScale = Math.max(0.35, Math.min(2.0, Math.round(val * 100) / 100));
       sheetEl.style.setProperty('zoom', '1', 'important');
-      var availW = (document.documentElement.clientWidth || window.innerWidth || 794) - 24;
-      var sheetW = sheetEl.offsetWidth || 794;
-      applyPreviewZoom(availW / Math.max(sheetW, 1));
+      sheetEl.style.setProperty('transform', 'none', 'important');
+
+      var natW = 794;
+      var natH = Math.max(sheetEl.offsetHeight || 0, sheetEl.scrollHeight || 0, 1045);
+
+      canvasWrap.style.setProperty('transform', 'scale(' + curScale + ')', 'important');
+      sizer.style.setProperty('width', Math.ceil(natW * curScale) + 'px', 'important');
+      sizer.style.setProperty('height', Math.ceil(natH * curScale + 6) + 'px', 'important');
+
+      var lbl = document.getElementById('zoomPctLabel');
+      if (lbl) lbl.textContent = Math.round(curScale * 100) + '%';
+
+      setTimeout(syncIframeHeight, 40);
+    }}
+
+    function fitStageToScreen() {{
+      var availW = (viewport.clientWidth || document.documentElement.clientWidth || window.innerWidth || 794) - 8;
+      var ratio = Math.min(1.0, availW / 794);
+      applyStageScale(ratio);
     }}
 
     bar.querySelectorAll('[data-kz]').forEach(function(btn) {{
-      btn.addEventListener('click', function() {{
+      btn.addEventListener('click', function(ev) {{
+        ev.preventDefault();
+        ev.stopPropagation();
         var act = btn.getAttribute('data-kz');
-        if (act === '+') applyPreviewZoom(curZ + 0.12);
-        else if (act === '-') applyPreviewZoom(curZ - 0.12);
-        else if (act === 'fit') fitPreviewToScreen();
-        else applyPreviewZoom(parseFloat(act) || 1);
+        if (act === '+') applyStageScale(curScale + 0.12);
+        else if (act === '-') applyStageScale(curScale - 0.12);
+        else if (act === 'fit') fitStageToScreen();
+        else applyStageScale(parseFloat(act) || 1);
       }});
     }});
 
-    if (window.innerWidth < 820 && !localStorage.getItem(ZKEY)) {{
-      setTimeout(fitPreviewToScreen, 150);
+    // على الجوال يفتح تلقائياً بملاءمة الورقة كاملة، وعلى الكمبيوتر 100%
+    if ((window.innerWidth || 900) < 820) {{
+      setTimeout(fitStageToScreen, 80);
     }} else {{
-      setTimeout(function() {{ applyPreviewZoom(curZ); }}, 120);
+      setTimeout(function() {{ applyStageScale(1.0); }}, 80);
     }}
+
+    window.addEventListener('orientationchange', function() {{
+      setTimeout(function() {{
+        if (Math.abs((window.innerWidth || 0) - lastWinW) > 40) {{
+          lastWinW = window.innerWidth || 0;
+          if (lastWinW < 820) fitStageToScreen();
+        }}
+      }}, 220);
+    }});
   }})();
   // --- KHAFAR_INJECT_PREVIEW_ZOOM_END ---
 
