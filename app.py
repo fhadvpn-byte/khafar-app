@@ -4681,18 +4681,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         padding: 12px 18px; font-size: 15px; font-weight: 800; border-radius: 8px; cursor: pointer;
         text-align: center;
     }}
-    .zoom-bar {{
-        max-width: 210mm; margin: 0 auto 12px; display: flex; flex-wrap: wrap; gap: 6px;
-        justify-content: center; align-items: center;
-    }}
-    .z-btn {{
-        background: #112924; color: #fff; border: 1px solid #d4a853; border-radius: 8px;
-        padding: 6px 10px; font-weight: 800; cursor: pointer; font-size: 12.5px;
-    }}
-    .z-pct {{
-        background: #fff; color: #000; border-radius: 8px; padding: 6px 10px;
-        font-weight: 900; min-width: 58px; text-align: center;
-    }}
     .live-sig-dock {{
         max-width: 794px; margin: 0 auto 14px auto; background: #101820; border: 1px solid #1e6b50;
         border-radius: 12px; padding: 12px 14px 16px 14px;
@@ -5209,15 +5197,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     <div class="toolbar no-print">
         <button class="print-btn" type="button" id="printOfficialBtn">🖨️ طباعة الوثيقة الرسمية / حفظ ومشاركة A4 PDF</button>
     </div>
-    <div class="zoom-bar no-print" id="zoomBar">
-        <button type="button" class="z-btn" data-z="-">➖ تصغير</button>
-        <button type="button" class="z-btn" data-z="+">➕ تكبير</button>
-        <span class="z-pct" id="zoomPct">100%</span>
-        <button type="button" class="z-btn" data-z="1">100%</button>
-        <button type="button" class="z-btn" data-z="1.3">130%</button>
-        <button type="button" class="z-btn" data-z="1.6">160%</button>
-        <button type="button" class="z-btn" data-z="fit">↔️ ملاءمة الشاشة</button>
-    </div>
 
     {live_dock_html}
 
@@ -5462,68 +5441,34 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         if (b64) restoreLivePad(padId, b64);
     }});
 
-    var ZOOM_KEY = "khafar_preview_zoom";
-    var userZoom = 1;
-    try {{
-        var savedZ = parseFloat(localStorage.getItem(ZOOM_KEY) || "");
-        if (savedZ >= 0.55 && savedZ <= 2.2) userZoom = savedZ;
-    }} catch (e) {{}}
-
-    function clampZoom(v) {{
-        return Math.max(0.55, Math.min(2.2, Math.round(v * 100) / 100));
-    }}
-
     function fitA4Preview() {{
         if (window.matchMedia && window.matchMedia("print").matches) return;
         const viewport = document.getElementById("a4PreviewViewport");
         const paper = document.getElementById("a4Sheet");
-        const pctEl = document.getElementById("zoomPct");
         if (!viewport || !paper) return;
         paper.style.width = "794px";
         paper.style.margin = "0 auto";
         paper.style.direction = "rtl";
-        paper.style.transformOrigin = "top right";
+        paper.style.transformOrigin = "top center";
         paper.style.transform = "";
-        paper.style.zoom = String(userZoom);
-        viewport.style.overflow = "auto";
+        paper.style.zoom = "1";
+        const avail = Math.max(viewport.clientWidth || window.innerWidth || 794, 1);
+        const natural = Math.max(paper.offsetWidth || 794, 1);
+        const fitZoom = Math.max(0.35, Math.min(1, avail / natural));
+        paper.style.zoom = String(fitZoom);
+        viewport.style.overflow = "hidden";
         viewport.style.height = "auto";
-        if (pctEl) pctEl.textContent = Math.round(userZoom * 100) + "%";
-        try {{ localStorage.setItem(ZOOM_KEY, String(userZoom)); }} catch (e) {{}}
         try {{
             if (window.frameElement) {{
                 const dock = document.querySelector(".live-sig-dock");
                 const dockH = dock ? dock.offsetHeight + 18 : 0;
-                const zoomBar = document.getElementById("zoomBar");
-                const zH = zoomBar ? zoomBar.offsetHeight + 12 : 0;
-                const viewH = viewport.scrollHeight || paper.offsetHeight * userZoom;
-                window.frameElement.style.height = Math.ceil(viewH + 120 + dockH + zH) + "px";
+                const toolbar = document.querySelector(".toolbar");
+                const tH = toolbar ? toolbar.offsetHeight + 12 : 0;
+                const viewH = viewport.scrollHeight || (paper.offsetHeight * fitZoom);
+                window.frameElement.style.height = Math.ceil(viewH + 120 + dockH + tH) + "px";
             }}
         }} catch (e) {{}}
     }}
-
-    function setUserZoom(v) {{
-        userZoom = clampZoom(v);
-        fitA4Preview();
-    }}
-
-    function fitToScreenZoom() {{
-        const viewport = document.getElementById("a4PreviewViewport");
-        const paper = document.getElementById("a4Sheet");
-        if (!viewport || !paper) return;
-        paper.style.zoom = "1";
-        const avail = viewport.clientWidth || 794;
-        setUserZoom(avail / Math.max(paper.offsetWidth || 794, 1));
-    }}
-
-    document.querySelectorAll("#zoomBar [data-z]").forEach(function(btn) {{
-        btn.addEventListener("click", function() {{
-            var v = btn.getAttribute("data-z");
-            if (v === "+") setUserZoom(userZoom + 0.15);
-            else if (v === "-") setUserZoom(userZoom - 0.15);
-            else if (v === "fit") fitToScreenZoom();
-            else setUserZoom(parseFloat(v) || 1);
-        }});
-    }});
 
     function syncAllLivePads() {{
         try {{
