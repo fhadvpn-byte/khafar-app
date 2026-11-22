@@ -5192,10 +5192,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-tier-dense .sig-bottom-cell {{ padding: 0 2.5mm 2mm 2.5mm !important; }}
 
     @media print {{
-        @page {{ size: A4 portrait; margin: 0mm !important; }}
+        /* لا تثبت 297mm: US Letter على الآيفون = 279.4mm فقط مع هوامش AirPrint */
+        @page {{ margin: 5mm 6mm !important; }}
         html, body {{
-            width: 210mm !important;
-            height: 297mm !important;
+            width: 100% !important;
+            height: auto !important;
             margin: 0 !important;
             padding: 0 !important;
             overflow: hidden !important;
@@ -5205,7 +5206,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             transform: none !important;
         }}
         .a4-preview-viewport, .a4-preview-wrapper {{
-            margin: 0 !important; padding: 0 !important; width: 210mm !important; height: 297mm !important;
+            margin: 0 !important; padding: 0 !important; width: 100% !important; height: auto !important;
             overflow: hidden !important; background: #ffffff !important; direction: rtl !important;
         }}
         .toolbar, .no-print, .zoom-bar, .live-sig-dock, .clear-sig-btn, .sig-guide-hint, .sig-mode-note,
@@ -5215,13 +5216,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         .live-pad-canvas {{ display: none !important; border: none !important; }}
 
+        /* قاعدة آمنة افتراضية = سقف الآيفون (US Letter) */
         .a4-page-frame {{
-            width: 210mm !important;
-            height: 297mm !important;
-            padding: 6mm 7mm !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: 254mm !important;
+            max-height: 254mm !important;
+            min-height: 0 !important;
+            padding: 4mm 5mm !important;
             box-sizing: border-box !important;
             overflow: hidden !important;
-            margin: 0 !important;
+            margin: 0 auto !important;
             position: relative !important;
             background: #ffffff !important;
             page-break-after: avoid !important;
@@ -5230,14 +5235,18 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             break-inside: avoid !important;
             box-shadow: none !important;
         }}
+        html.a4-print-desktop .a4-page-frame, body.a4-print-desktop .a4-page-frame {{
+            height: 276mm !important;
+            max-height: 276mm !important;
+        }}
         .a4-sheet, .a4-paper, .a4-page, .print-area, .report-container {{
             direction: rtl !important;
             transform: none !important;
             width: 100% !important;
             max-width: 100% !important;
-            height: 285mm !important;
-            min-height: 285mm !important;
-            max-height: 285mm !important;
+            height: 945px !important;
+            min-height: 0 !important;
+            max-height: 945px !important;
             margin: 0 auto !important;
             display: table !important;
             table-layout: fixed !important;
@@ -5255,6 +5264,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             color-adjust: exact !important;
+        }}
+        html.a4-print-desktop .a4-sheet, html.a4-print-desktop .a4-paper,
+        body.a4-print-desktop .a4-sheet, body.a4-print-desktop .a4-paper {{
+            height: 1035px !important;
+            max-height: 1035px !important;
         }}
         .a4-row {{ display: table-row !important; }}
         .a4-cell {{ display: table-cell !important; width: 100% !important; }}
@@ -5580,13 +5594,94 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         if (b64) restoreLivePad(padId, b64);
     }});
 
+    const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+        || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    try {{ window.__khafarIsIOS = IS_IOS; }} catch (eIOS) {{}}
+
+    function getPrintHeightTargets(win) {{
+        const w = win || window;
+        let ios = false;
+        try {{
+            ios = !!(w.__khafarIsIOS)
+                || /iPad|iPhone|iPod/.test(w.navigator.userAgent)
+                || (w.navigator.platform === "MacIntel" && w.navigator.maxTouchPoints > 1);
+        }} catch (e) {{
+            ios = IS_IOS;
+        }}
+        // TARGET_H_PX: سقف محتوى الورقة الداخلي (الجدول الخارجي)
+        // FRAME: الغلاف الفيزيائي الآمن لـ US Letter / A4
+        return {{
+            isIOS: ios,
+            TARGET_H_PX: ios ? 945 : 1035,
+            FRAME_H_PX: ios ? 960 : 1040,
+            FRAME_H_MM: ios ? "254mm" : "276mm"
+        }};
+    }}
+
+    function applyPrintPhysicalSize(rootDoc, forPrint) {{
+        const doc = rootDoc || document;
+        const win = doc.defaultView || window;
+        const t = getPrintHeightTargets(win);
+        const frame = doc.getElementById("a4PageFrame") || doc.querySelector(".a4-page-frame");
+        const sheet = doc.getElementById("a4Sheet")
+            || doc.querySelector(".a4-sheet")
+            || doc.querySelector(".a4-paper");
+        try {{
+            const rootEl = doc.documentElement;
+            const bodyEl = doc.body;
+            if (t.isIOS) {{
+                if (rootEl) rootEl.classList.remove("a4-print-desktop");
+                if (bodyEl) bodyEl.classList.remove("a4-print-desktop");
+                if (rootEl) rootEl.classList.add("a4-print-ios");
+                if (bodyEl) bodyEl.classList.add("a4-print-ios");
+            }} else {{
+                if (rootEl) rootEl.classList.remove("a4-print-ios");
+                if (bodyEl) bodyEl.classList.remove("a4-print-ios");
+                if (rootEl) rootEl.classList.add("a4-print-desktop");
+                if (bodyEl) bodyEl.classList.add("a4-print-desktop");
+            }}
+        }} catch (eCls) {{}}
+        if (frame) {{
+            try {{
+                frame.style.setProperty("width", "100%", "important");
+                frame.style.setProperty("max-width", "100%", "important");
+                frame.style.setProperty("height", (forPrint ? t.FRAME_H_MM : t.FRAME_H_PX + "px"), "important");
+                frame.style.setProperty("max-height", (forPrint ? t.FRAME_H_MM : t.FRAME_H_PX + "px"), "important");
+                frame.style.setProperty("min-height", "0", "important");
+                frame.style.setProperty("overflow", "hidden", "important");
+                frame.style.setProperty("page-break-after", "avoid", "important");
+                frame.style.setProperty("page-break-inside", "avoid", "important");
+                frame.style.setProperty("box-sizing", "border-box", "important");
+                frame.style.setProperty("margin", "0 auto", "important");
+            }} catch (eF) {{}}
+        }}
+        if (sheet) {{
+            try {{
+                sheet.style.setProperty("width", "100%", "important");
+                sheet.style.setProperty("max-width", "100%", "important");
+                sheet.style.setProperty("height", t.TARGET_H_PX + "px", "important");
+                sheet.style.setProperty("min-height", "0", "important");
+                sheet.style.setProperty("max-height", t.TARGET_H_PX + "px", "important");
+                sheet.style.setProperty("overflow", "hidden", "important");
+                sheet.style.setProperty("margin-left", "auto", "important");
+                sheet.style.setProperty("margin-right", "auto", "important");
+                sheet.style.setProperty("box-sizing", "border-box", "important");
+                sheet.style.setProperty("page-break-after", "avoid", "important");
+                sheet.style.setProperty("page-break-inside", "avoid", "important");
+            }} catch (eS) {{}}
+        }}
+        return t;
+    }}
+
     function stepDownFitA4(rootDoc) {{
         const doc = rootDoc || document;
         const frame = doc.getElementById("a4PageFrame") || doc.querySelector(".a4-page-frame");
         const sheet = doc.getElementById("a4Sheet")
             || doc.querySelector(".a4-sheet")
             || doc.querySelector(".a4-paper");
-        if (!frame || !sheet) return 0;
+        if (!sheet) return 0;
+        const t = getPrintHeightTargets(doc.defaultView || window);
+        const TARGET_H_PX = t.TARGET_H_PX;
 
         try {{
             sheet.style.removeProperty("zoom");
@@ -5605,17 +5700,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             sheet.style.setProperty("max-height", "none", "important");
             sheet.style.setProperty("overflow", "visible", "important");
         }} catch (e2) {{}}
-
-        function frameInnerH() {{
-            try {{
-                const cs = (doc.defaultView || window).getComputedStyle(frame);
-                const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-                const h = (frame.clientHeight || 0) - padY;
-                if (h > 100) return h;
-            }} catch (e3) {{}}
-            // 285mm ≈ 1077px عند 96dpi
-            return Math.round(285 * 96 / 25.4);
-        }}
 
         function bumpDown(node, fontDelta, padDelta) {{
             if (!node || !node.style) return;
@@ -5668,28 +5752,21 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
 
         let step = 0;
-        let frameH = frameInnerH();
         void sheet.offsetHeight;
-        while ((sheet.scrollHeight > frameH + 1) && step < 8) {{
+        while ((sheet.scrollHeight > TARGET_H_PX) && step < 10) {{
             shrinkOnce();
             void sheet.offsetHeight;
-            frameH = frameInnerH();
             step += 1;
         }}
 
-        // أعد قفل الارتفاع الفيزيائي لصفحة واحدة
-        try {{
-            sheet.style.setProperty("height", "285mm", "important");
-            sheet.style.setProperty("min-height", "285mm", "important");
-            sheet.style.setProperty("max-height", "285mm", "important");
-            sheet.style.setProperty("overflow", "hidden", "important");
-            sheet.style.setProperty("width", "100%", "important");
-            sheet.style.setProperty("margin-left", "auto", "important");
-            sheet.style.setProperty("margin-right", "auto", "important");
-            frame.style.setProperty("overflow", "hidden", "important");
-        }} catch (e6) {{}}
+        // أقفل على السقف الدقيق للجهاز
+        applyPrintPhysicalSize(doc, true);
+        if (frame) {{
+            try {{ frame.style.setProperty("overflow", "hidden", "important"); }} catch (e6) {{}}
+        }}
         return step;
     }}
+
     function expandLegalToFillSpace(rootDoc) {{
         const doc = rootDoc || document;
         const frame = doc.getElementById("a4PageFrame") || doc.querySelector(".a4-page-frame");
@@ -5700,28 +5777,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         const legal = sheet.querySelector(".legal-box");
         if (!legal) return 0;
         const win = doc.defaultView || window;
+        const t = getPrintHeightTargets(win);
+        const TARGET_H_PX = t.TARGET_H_PX;
+        const SAFE_CAP = TARGET_H_PX - 16;
 
-        // أقفل الارتفاع الفيزيائي قبل القياس
-        try {{
-            sheet.style.setProperty("height", "285mm", "important");
-            sheet.style.setProperty("min-height", "285mm", "important");
-            sheet.style.setProperty("max-height", "285mm", "important");
-            sheet.style.setProperty("overflow", "hidden", "important");
-            sheet.style.setProperty("width", "100%", "important");
-            if (frame) frame.style.setProperty("overflow", "hidden", "important");
-        }} catch (e0) {{}}
+        applyPrintPhysicalSize(doc, true);
         void sheet.offsetHeight;
-
-        function frameInnerH() {{
-            try {{
-                if (!frame) return Math.round(285 * 96 / 25.4);
-                const cs = win.getComputedStyle(frame);
-                const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-                const h = (frame.clientHeight || 0) - padY;
-                if (h > 100) return h;
-            }} catch (e1) {{}}
-            return Math.round(285 * 96 / 25.4);
-        }}
 
         function midEndEl() {{
             const mid = sheet.querySelector(".legal-wrap-cell");
@@ -5782,11 +5843,22 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 && Math.max(m.pr, m.pl) >= 20 - 0.01;
         }}
 
+        // قياس الفراغ مع ارتفاع مؤقت auto ثم إعادة القفل
+        try {{
+            sheet.style.setProperty("height", "auto", "important");
+            sheet.style.setProperty("max-height", "none", "important");
+            sheet.style.setProperty("overflow", "visible", "important");
+        }} catch (eAuto) {{}}
+        void sheet.offsetHeight;
+        let naturalH = sheet.scrollHeight || 0;
+        applyPrintPhysicalSize(doc, true);
+        void sheet.offsetHeight;
+
         let gap = gapToSig();
-        if (gap < 60) return 0;
+        // إن كان المحتوى أصلاً قريباً من السقف فلا توسّع
+        if (naturalH > SAFE_CAP || gap < 60) return 0;
 
         let steps = 0;
-        const frameH = frameInnerH();
         while (gap >= 60 && steps < 24) {{
             const before = currentLegalMetrics();
             if (atCap(before)) break;
@@ -5800,13 +5872,20 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 pl: Math.min(20, before.pl + 0.55)
             }};
             applyLegalMetrics(next);
+            // قيس الارتفاع الطبيعي بعد التكبير
+            try {{
+                sheet.style.setProperty("height", "auto", "important");
+                sheet.style.setProperty("max-height", "none", "important");
+                sheet.style.setProperty("overflow", "visible", "important");
+            }} catch (eM) {{}}
             void sheet.offsetHeight;
-
-            // لا تتجاوز صفحة واحدة ولا تقترب من التواقيع أكثر من هامش الأمان
-            const overflow = (sheet.scrollHeight > frameH + 1);
+            const hNow = sheet.scrollHeight || 0;
+            applyPrintPhysicalSize(doc, true);
+            void sheet.offsetHeight;
             const newGap = gapToSig();
-            if (overflow || newGap < 18) {{
+            if (hNow > SAFE_CAP || newGap < 18) {{
                 applyLegalMetrics(before);
+                applyPrintPhysicalSize(doc, true);
                 void sheet.offsetHeight;
                 break;
             }}
@@ -5814,14 +5893,20 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             steps += 1;
             if (next.fs >= 16.5 && next.lh >= 2.25 && next.pt >= 18 && next.pr >= 20) break;
         }}
+        applyPrintPhysicalSize(doc, true);
         return steps;
     }}
 
     function balanceA4Page(rootDoc) {{
-        const down = stepDownFitA4(rootDoc);
-        const up = expandLegalToFillSpace(rootDoc);
+        const doc = rootDoc || document;
+        applyPrintPhysicalSize(doc, true);
+        const down = stepDownFitA4(doc);
+        const up = expandLegalToFillSpace(doc);
+        applyPrintPhysicalSize(doc, true);
         return {{ down: down, up: up }};
     }}
+    try {{ window.getPrintHeightTargets = getPrintHeightTargets; }} catch (e) {{}}
+    try {{ window.applyPrintPhysicalSize = applyPrintPhysicalSize; }} catch (e) {{}}
     try {{ window.stepDownFitA4 = stepDownFitA4; }} catch (e) {{}}
     try {{ window.expandLegalToFillSpace = expandLegalToFillSpace; }} catch (e) {{}}
     try {{ window.balanceA4Page = balanceA4Page; }} catch (e) {{}}
@@ -5834,9 +5919,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         const frame = document.getElementById("a4PageFrame");
         const paper = document.getElementById("a4Sheet");
         if (!viewport || !frame) return;
+        // المعاينة على الشاشة تبقى بمظهر A4 الكامل؛ الطباعة تضبط السقف الآمن لاحقاً
         try {{
             frame.style.width = "210mm";
             frame.style.height = "297mm";
+            frame.style.maxHeight = "297mm";
             frame.style.margin = "0 auto";
             frame.style.direction = "rtl";
             frame.style.transformOrigin = "top center";
@@ -5852,7 +5939,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 paper.style.transform = "none";
             }}
         }} catch (e) {{}}
-        try {{ balanceA4Page(document); }} catch (eBal) {{}}
+        try {{
+            // للمعاينة: استخدم سقف الجهاز حتى يظهر نفس توازن الطباعة
+            balanceA4Page(document);
+        }} catch (eBal) {{}}
         const avail = Math.max(viewport.clientWidth || window.innerWidth || 794, 1);
         const natural = frame.offsetWidth || Math.round(210 * 96 / 25.4) || 794;
         const fitZoom = Math.max(0.35, Math.min(1, avail / Math.max(natural, 1)));
@@ -5891,8 +5981,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         if (frame) {{
             frame.style.zoom = "";
             frame.style.transform = "none";
-            frame.style.width = "210mm";
-            frame.style.height = "297mm";
+            frame.style.width = "100%";
             frame.style.overflow = "hidden";
             frame.style.margin = "0 auto";
         }}
@@ -5901,6 +5990,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             paper.style.transform = "none";
             paper.style.width = "100%";
             paper.style.margin = "0 auto";
+        }}
+        const t = getPrintHeightTargets(window);
+        const TARGET_H_PX = t.TARGET_H_PX;
+        applyPrintPhysicalSize(document, true);
+        if (paper) {{
+            try {{
+                paper.style.setProperty("height", TARGET_H_PX + "px", "important");
+                paper.style.setProperty("max-height", TARGET_H_PX + "px", "important");
+            }} catch (eH) {{}}
         }}
         balanceA4Page(document);
     }}
@@ -5978,52 +6076,74 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + '<title>وثيقة رسمية - قسم مرور العارضة</title>'
             + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap">'
             + styles
-            + '<style>@page{{size:A4 portrait;margin:0mm !important;}}'
-            + 'html,body{{width:210mm !important;height:297mm !important;margin:0 !important;padding:0 !important;'
+            + '<style>@page{{margin:5mm 6mm !important;}}'
+            + 'html,body{{width:100% !important;height:auto !important;margin:0 !important;padding:0 !important;'
             + 'overflow:hidden !important;background:#fff !important;direction:rtl !important;}}'
-            + '.a4-page-frame{{width:210mm !important;height:297mm !important;padding:6mm 7mm !important;'
-            + 'box-sizing:border-box !important;overflow:hidden !important;margin:0 !important;background:#fff !important;'
-            + 'page-break-after:avoid !important;page-break-inside:avoid !important;position:relative !important;}}'
-            + '.a4-sheet,.a4-paper{{width:100% !important;height:285mm !important;min-height:285mm !important;'
-            + 'max-height:285mm !important;display:table !important;table-layout:fixed !important;'
+            + '.a4-page-frame{{width:100% !important;max-width:100% !important;height:254mm !important;max-height:254mm !important;'
+            + 'padding:4mm 5mm !important;box-sizing:border-box !important;overflow:hidden !important;margin:0 auto !important;'
+            + 'background:#fff !important;page-break-after:avoid !important;page-break-inside:avoid !important;position:relative !important;}}'
+            + 'html.a4-print-desktop .a4-page-frame,body.a4-print-desktop .a4-page-frame{{height:276mm !important;max-height:276mm !important;}}'
+            + '.a4-sheet,.a4-paper{{width:100% !important;height:945px !important;min-height:0 !important;'
+            + 'max-height:945px !important;display:table !important;table-layout:fixed !important;'
             + 'box-sizing:border-box !important;overflow:hidden !important;margin:0 auto !important;'
-            + 'border:1.8px solid #0f3d2e !important;border-radius:4px !important;background:#fff !important;}}'
+            + 'border:1.8px solid #0f3d2e !important;border-radius:4px !important;background:#fff !important;'
+            + 'page-break-after:avoid !important;page-break-inside:avoid !important;}}'
+            + 'html.a4-print-desktop .a4-sheet,html.a4-print-desktop .a4-paper,'
+            + 'body.a4-print-desktop .a4-sheet,body.a4-print-desktop .a4-paper{{height:1035px !important;max-height:1035px !important;}}'
             + '.a4-row{{display:table-row !important;}}.a4-cell{{display:table-cell !important;width:100% !important;}}'
             + '.a4-row-mid{{height:100% !important;}}.legal-wrap-cell{{vertical-align:top !important;}}'
             + '.sig-bottom-cell{{vertical-align:bottom !important;}}'
             + '@media print{{.no-print{{display:none !important;}}'
-            + 'html,body{{width:210mm !important;height:297mm !important;margin:0 !important;padding:0 !important;overflow:hidden !important;}}'
-            + '.a4-page-frame{{width:210mm !important;height:297mm !important;overflow:hidden !important;'
+            + 'html,body{{width:100% !important;height:auto !important;margin:0 !important;padding:0 !important;overflow:hidden !important;}}'
+            + '.a4-page-frame{{width:100% !important;height:254mm !important;max-height:254mm !important;overflow:hidden !important;'
             + 'page-break-after:avoid !important;page-break-inside:avoid !important;}}'
-            + '.a4-sheet,.a4-paper{{height:285mm !important;min-height:285mm !important;max-height:285mm !important;'
-            + 'overflow:hidden !important;width:100% !important;margin:0 auto !important;}}}}'
-            + '</style></head><body style="margin:0;padding:0;background:#fff;direction:rtl;width:210mm;height:297mm;overflow:hidden;">'
+            + 'html.a4-print-desktop .a4-page-frame,body.a4-print-desktop .a4-page-frame{{height:276mm !important;max-height:276mm !important;}}'
+            + '.a4-sheet,.a4-paper{{height:945px !important;max-height:945px !important;overflow:hidden !important;width:100% !important;margin:0 auto !important;}}'
+            + 'html.a4-print-desktop .a4-sheet,html.a4-print-desktop .a4-paper,'
+            + 'body.a4-print-desktop .a4-sheet,body.a4-print-desktop .a4-paper{{height:1035px !important;max-height:1035px !important;}}}}'
+            + '</style></head><body style="margin:0;padding:0;background:#fff;direction:rtl;width:100%;height:auto;overflow:hidden;">'
             + topBar + frameHtml
             + '<script>(function(){{'
             + 'window.__khafarPrintWin=true;document.__khafarPrintWin=true;'
-            + 'function stepDownFitA4(rootDoc){{'
-            + 'var doc=rootDoc||document;'
+            + 'var IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);'
+            + 'window.__khafarIsIOS=IS_IOS;'
+            + 'function getPrintHeightTargets(){{var ios=IS_IOS;return {{isIOS:ios,TARGET_H_PX:ios?945:1035,FRAME_H_PX:ios?960:1040,FRAME_H_MM:ios?"254mm":"276mm"}};}}'
+            + 'function applyPrintPhysicalSize(doc){{doc=doc||document;var t=getPrintHeightTargets();'
+            + 'try{{var root=doc.documentElement,body=doc.body;'
+            + 'if(t.isIOS){{if(root){{root.classList.remove("a4-print-desktop");root.classList.add("a4-print-ios");}}'
+            + 'if(body){{body.classList.remove("a4-print-desktop");body.classList.add("a4-print-ios");}}'
+            + '}}else{{if(root){{root.classList.remove("a4-print-ios");root.classList.add("a4-print-desktop");}}'
+            + 'if(body){{body.classList.remove("a4-print-ios");body.classList.add("a4-print-desktop");}}}}catch(e){{}}'
             + 'var frame=doc.getElementById("a4PageFrame")||doc.querySelector(".a4-page-frame");'
             + 'var sheet=doc.getElementById("a4Sheet")||doc.querySelector(".a4-sheet")||doc.querySelector(".a4-paper");'
-            + 'if(!frame||!sheet)return 0;'
+            + 'if(frame){{try{{frame.style.setProperty("width","100%","important");frame.style.setProperty("height",t.FRAME_H_MM,"important");'
+            + 'frame.style.setProperty("max-height",t.FRAME_H_MM,"important");frame.style.setProperty("overflow","hidden","important");'
+            + 'frame.style.setProperty("page-break-after","avoid","important");frame.style.setProperty("page-break-inside","avoid","important");'
+            + 'frame.style.setProperty("margin","0 auto","important");}}catch(e2){{}}}}'
+            + 'if(sheet){{try{{sheet.style.setProperty("width","100%","important");'
+            + 'sheet.style.setProperty("height",t.TARGET_H_PX+"px","important");'
+            + 'sheet.style.setProperty("max-height",t.TARGET_H_PX+"px","important");'
+            + 'sheet.style.setProperty("min-height","0","important");sheet.style.setProperty("overflow","hidden","important");'
+            + 'sheet.style.setProperty("margin-left","auto","important");sheet.style.setProperty("margin-right","auto","important");'
+            + 'sheet.style.setProperty("page-break-after","avoid","important");sheet.style.setProperty("page-break-inside","avoid","important");'
+            + '}}catch(e3){{}}}}return t;}}'
+            + 'function stepDownFitA4(rootDoc){{'
+            + 'var doc=rootDoc||document;var t=getPrintHeightTargets();var TARGET_H_PX=t.TARGET_H_PX;'
+            + 'var frame=doc.getElementById("a4PageFrame")||doc.querySelector(".a4-page-frame");'
+            + 'var sheet=doc.getElementById("a4Sheet")||doc.querySelector(".a4-sheet")||doc.querySelector(".a4-paper");'
+            + 'if(!sheet)return 0;'
             + 'try{{sheet.style.removeProperty("zoom");sheet.style.setProperty("transform","none","important");'
             + 'sheet.style.setProperty("width","100%","important");sheet.style.setProperty("max-width","100%","important");'
             + 'sheet.style.setProperty("margin-left","auto","important");sheet.style.setProperty("margin-right","auto","important");'
             + 'sheet.style.setProperty("box-sizing","border-box","important");}}catch(e){{}}'
             + 'try{{sheet.style.setProperty("height","auto","important");sheet.style.setProperty("min-height","0","important");'
             + 'sheet.style.setProperty("max-height","none","important");sheet.style.setProperty("overflow","visible","important");}}catch(e2){{}}'
-            + 'function frameInnerH(){{try{{var cs=(doc.defaultView||window).getComputedStyle(frame);'
-            + 'var padY=(parseFloat(cs.paddingTop)||0)+(parseFloat(cs.paddingBottom)||0);'
-            + 'var h=(frame.clientHeight||0)-padY;if(h>100)return h;}}catch(e3){{}}return Math.round(285*96/25.4);}}'
             + 'function bumpDown(node,fontDelta,padDelta){{if(!node||!node.style)return;try{{'
             + 'var cs=(doc.defaultView||window).getComputedStyle(node);var fs=parseFloat(cs.fontSize)||0;'
             + 'if(fs>8.5)node.style.setProperty("font-size",Math.max(8.5,fs-fontDelta).toFixed(2)+"px","important");'
             + 'var pt=parseFloat(cs.paddingTop)||0;var pb=parseFloat(cs.paddingBottom)||0;'
             + 'if(pt>1||pb>1){{node.style.setProperty("padding-top",Math.max(1,pt-padDelta).toFixed(2)+"px","important");'
             + 'node.style.setProperty("padding-bottom",Math.max(1,pb-padDelta).toFixed(2)+"px","important");}}'
-            + 'var mt=parseFloat(cs.marginTop)||0;var mb=parseFloat(cs.marginBottom)||0;'
-            + 'if(mt>1)node.style.setProperty("margin-top",Math.max(0,mt-Math.min(padDelta,0.6)).toFixed(2)+"px","important");'
-            + 'if(mb>1)node.style.setProperty("margin-bottom",Math.max(0,mb-Math.min(padDelta,0.6)).toFixed(2)+"px","important");'
             + '}}catch(e4){{}}}}'
             + 'function shrinkOnce(){{'
             + 'var targets=sheet.querySelectorAll(".legal-box,.legal-box .legal-body,.legal-box .legal-title,.legal-box div,'
@@ -6035,27 +6155,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + 'if(h>28){{var nh=Math.max(28,h-2);img.style.setProperty("height",nh+"px","important");'
             + 'img.style.setProperty("width",nh+"px","important");img.style.setProperty("max-height",nh+"px","important");'
             + 'img.style.setProperty("max-width",nh+"px","important");}}}});}}catch(e5){{}}}}'
-            + 'var step=0;var frameH=frameInnerH();void sheet.offsetHeight;'
-            + 'while((sheet.scrollHeight>frameH+1)&&step<8){{shrinkOnce();void sheet.offsetHeight;frameH=frameInnerH();step+=1;}}'
-            + 'try{{sheet.style.setProperty("height","285mm","important");sheet.style.setProperty("min-height","285mm","important");'
-            + 'sheet.style.setProperty("max-height","285mm","important");sheet.style.setProperty("overflow","hidden","important");'
-            + 'sheet.style.setProperty("width","100%","important");sheet.style.setProperty("margin-left","auto","important");'
-            + 'sheet.style.setProperty("margin-right","auto","important");'
-            + 'frame.style.setProperty("overflow","hidden","important");}}catch(e6){{}}'
+            + 'var step=0;void sheet.offsetHeight;'
+            + 'while((sheet.scrollHeight>TARGET_H_PX)&&step<10){{shrinkOnce();void sheet.offsetHeight;step+=1;}}'
+            + 'applyPrintPhysicalSize(doc);'
+            + 'if(frame){{try{{frame.style.setProperty("overflow","hidden","important");}}catch(e6){{}}}}'
             + 'return step;}}'
             + 'function expandLegalToFillSpace(rootDoc){{'
-            + 'var doc=rootDoc||document;'
+            + 'var doc=rootDoc||document;var t=getPrintHeightTargets();var TARGET_H_PX=t.TARGET_H_PX;var SAFE_CAP=TARGET_H_PX-16;'
             + 'var frame=doc.getElementById("a4PageFrame")||doc.querySelector(".a4-page-frame");'
             + 'var sheet=doc.getElementById("a4Sheet")||doc.querySelector(".a4-sheet")||doc.querySelector(".a4-paper");'
             + 'if(!sheet)return 0;var legal=sheet.querySelector(".legal-box");if(!legal)return 0;'
-            + 'var win=doc.defaultView||window;'
-            + 'try{{sheet.style.setProperty("height","285mm","important");sheet.style.setProperty("min-height","285mm","important");'
-            + 'sheet.style.setProperty("max-height","285mm","important");sheet.style.setProperty("overflow","hidden","important");'
-            + 'sheet.style.setProperty("width","100%","important");'
-            + 'if(frame)frame.style.setProperty("overflow","hidden","important");}}catch(e0){{}}void sheet.offsetHeight;'
-            + 'function frameInnerH(){{try{{if(!frame)return Math.round(285*96/25.4);var cs=win.getComputedStyle(frame);'
-            + 'var padY=(parseFloat(cs.paddingTop)||0)+(parseFloat(cs.paddingBottom)||0);var h=(frame.clientHeight||0)-padY;'
-            + 'if(h>100)return h;}}catch(e1){{}}return Math.round(285*96/25.4);}}'
+            + 'var win=doc.defaultView||window;applyPrintPhysicalSize(doc);void sheet.offsetHeight;'
             + 'function midEndEl(){{var mid=sheet.querySelector(".legal-wrap-cell");if(!mid)return legal;'
             + 'var att=mid.querySelector(".attachment-section");return att||legal;}}'
             + 'function gapToSig(){{try{{var endEl=midEndEl();var sigEl=sheet.querySelector(".sig-footer")||sheet.querySelector(".sig-bottom-cell");'
@@ -6072,18 +6182,23 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + 'el.style.setProperty("font-size",m.fs.toFixed(2)+"px","important");'
             + 'el.style.setProperty("line-height",m.lh.toFixed(3),"important");}});}}'
             + 'function atCap(m){{return m.fs>=16.49&&m.lh>=2.24&&Math.max(m.pt,m.pb)>=17.99&&Math.max(m.pr,m.pl)>=19.99;}}'
-            + 'var gap=gapToSig();if(gap<60)return 0;var steps=0;var frameH=frameInnerH();'
+            + 'try{{sheet.style.setProperty("height","auto","important");sheet.style.setProperty("max-height","none","important");'
+            + 'sheet.style.setProperty("overflow","visible","important");}}catch(eA){{}}void sheet.offsetHeight;'
+            + 'var naturalH=sheet.scrollHeight||0;applyPrintPhysicalSize(doc);void sheet.offsetHeight;'
+            + 'var gap=gapToSig();if(naturalH>SAFE_CAP||gap<60)return 0;var steps=0;'
             + 'while(gap>=60&&steps<24){{var before=currentLegalMetrics();if(atCap(before))break;'
             + 'var next={{fs:Math.min(16.5,before.fs+0.35),lh:Math.min(2.25,before.lh+0.045),'
             + 'pt:Math.min(18,before.pt+0.55),pr:Math.min(20,before.pr+0.55),'
             + 'pb:Math.min(18,before.pb+0.55),pl:Math.min(20,before.pl+0.55)}};'
-            + 'applyLegalMetrics(next);void sheet.offsetHeight;'
-            + 'var overflow=(sheet.scrollHeight>frameH+1);var newGap=gapToSig();'
-            + 'if(overflow||newGap<18){{applyLegalMetrics(before);void sheet.offsetHeight;break;}}'
-            + 'gap=newGap;steps+=1;'
-            + 'if(next.fs>=16.5&&next.lh>=2.25&&next.pt>=18&&next.pr>=20)break;}}'
-            + 'return steps;}}'
-            + 'function balanceA4Page(rootDoc){{stepDownFitA4(rootDoc);expandLegalToFillSpace(rootDoc);}}'
+            + 'applyLegalMetrics(next);'
+            + 'try{{sheet.style.setProperty("height","auto","important");sheet.style.setProperty("max-height","none","important");'
+            + 'sheet.style.setProperty("overflow","visible","important");}}catch(eM){{}}void sheet.offsetHeight;'
+            + 'var hNow=sheet.scrollHeight||0;applyPrintPhysicalSize(doc);void sheet.offsetHeight;var newGap=gapToSig();'
+            + 'if(hNow>SAFE_CAP||newGap<18){{applyLegalMetrics(before);applyPrintPhysicalSize(doc);void sheet.offsetHeight;break;}}'
+            + 'gap=newGap;steps+=1;if(next.fs>=16.5&&next.lh>=2.25&&next.pt>=18&&next.pr>=20)break;}}'
+            + 'applyPrintPhysicalSize(doc);return steps;}}'
+            + 'function balanceA4Page(rootDoc){{var doc=rootDoc||document;applyPrintPhysicalSize(doc);'
+            + 'stepDownFitA4(doc);expandLegalToFillSpace(doc);applyPrintPhysicalSize(doc);}}'
             + 'window.stepDownFitA4=stepDownFitA4;window.expandLegalToFillSpace=expandLegalToFillSpace;window.balanceA4Page=balanceA4Page;'
             + 'function go(){{try{{balanceA4Page(document);}}catch(e){{}}try{{window.focus();}}catch(e2){{}}try{{window.print();}}catch(e3){{}}}}'
             + 'if(document.fonts&&document.fonts.ready){{document.fonts.ready.then(function(){{setTimeout(go,450);}});}}'
