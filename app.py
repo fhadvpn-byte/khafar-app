@@ -953,53 +953,56 @@ def render_print_button(report_html: str, btn_label: str = "🖨️ طباعة /
     </div>
     <script>
     function openIosSafePrint() {{
-        const printWin = window.open('', '_blank');
-        if (!printWin || printWin.closed || typeof printWin.closed === 'undefined') {{
-            document.getElementById('ios-msg').style.display = 'block';
-            return;
+        try {{
+            const binary = atob("{b64_report}");
+            const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+            let htmlContent = new TextDecoder("utf-8").decode(bytes);
+            const topBar = `
+                <style>
+                    @media print {{ .no-print-bar {{ display: none !important; }} }}
+                    .no-print-bar {{
+                        position: sticky; top: 0; z-index: 9999;
+                        background: #14532d; color: #fff; padding: 12px;
+                        display: flex; justify-content: space-around; align-items: center;
+                        font-family: sans-serif; direction: rtl; margin-bottom: 10px;
+                        font-weight: bold;
+                    }}
+                    .no-print-bar button {{
+                        padding: 8px 16px; border: none; border-radius: 6px;
+                        font-weight: bold; font-size: 15px; cursor: pointer;
+                        background: #eab308; color: #000;
+                    }}
+                </style>
+                <div class="no-print-bar">
+                    <span>جاهز للطباعة أو الحفظ عبر زر المشاركة (⬆️) بالأسفل</span>
+                    <button type="button" onclick="window.print()">🖨️ أمر الطباعة</button>
+                </div>
+            `;
+            if (/<body[^>]*>/i.test(htmlContent)) {{
+                htmlContent = htmlContent.replace(/(<body[^>]*>)/i, "$1" + topBar);
+            }} else {{
+                htmlContent = topBar + htmlContent;
+            }}
+            const autoPrint = "<script>window.addEventListener('load',function(){{setTimeout(function(){{try{{window.print();}}catch(e){{}}}},700);}});<\\/script>";
+            if (/<\\/body>/i.test(htmlContent)) {{
+                htmlContent = htmlContent.replace(/<\\/body>/i, autoPrint + "</body>");
+            }} else {{
+                htmlContent += autoPrint;
+            }}
+            const blob = new Blob([htmlContent], {{ type: "text/html;charset=utf-8" }});
+            const blobUrl = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = blobUrl;
+            link.target = "_blank";
+            link.rel = "noopener";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            document.getElementById("ios-msg").style.display = "none";
+            setTimeout(function() {{ try {{ URL.revokeObjectURL(blobUrl); }} catch (e) {{}} }}, 8000);
+        }} catch (err) {{
+            document.getElementById("ios-msg").style.display = "block";
         }}
-        document.getElementById('ios-msg').style.display = 'none';
-        const binary = atob("{b64_report}");
-        const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
-        let htmlContent = new TextDecoder("utf-8").decode(bytes);
-        const topBar = `
-            <style>
-                @media print {{ .no-print-bar {{ display: none !important; }} }}
-                .no-print-bar {{
-                    position: sticky; top: 0; z-index: 9999;
-                    background: #1e293b; color: #fff; padding: 10px 14px;
-                    display: flex; justify-content: space-between; align-items: center;
-                    font-family: sans-serif; direction: rtl; margin-bottom: 10px;
-                }}
-                .no-print-bar button {{
-                    padding: 8px 16px; border: none; border-radius: 6px;
-                    font-weight: bold; font-size: 14px; cursor: pointer;
-                }}
-            </style>
-            <div class="no-print-bar">
-                <button type="button" onclick="window.print()" style="background:#16a34a; color:#fff;">🖨️ طباعة / مشاركة PDF</button>
-                <span style="font-size:12px;">في الآيفون: اضغط مشاركة (⬆️) لحفظ أو إرسال الـ PDF</span>
-                <button type="button" onclick="window.close()" style="background:#dc2626; color:#fff;">✖ إغلاق</button>
-            </div>
-        `;
-        if (htmlContent.includes('<body')) {{
-            htmlContent = htmlContent.replace(/(<body[^>]*>)/i, '$1' + topBar);
-        }} else {{
-            htmlContent = topBar + htmlContent;
-        }}
-        printWin.document.open();
-        printWin.document.write(htmlContent);
-        printWin.document.close();
-        printWin.onload = function() {{
-            setTimeout(function() {{
-                try {{
-                    if (typeof printWin.syncAllLivePads === 'function') printWin.syncAllLivePads();
-                    if (typeof printWin.prepareA4Print === 'function') printWin.prepareA4Print();
-                }} catch (e) {{}}
-                try {{ printWin.focus(); }} catch (e) {{}}
-                try {{ printWin.print(); }} catch (e) {{}}
-            }}, 700);
-        }};
     }}
     </script>
     """
@@ -4570,7 +4573,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         legal_box_title = f"الصيغة النظامية المعتمدة ({rec['category']}):"
     cleaned_legal_text = normalize_official_legal_text(rec.get("legal_text") or "")
     banner_title = (form_def or {}).get("official_title") or rec["form_title"]
-    sheet_cls = "a4-sheet a4-paper dense-fit"
+    sheet_cls = "a4-sheet a4-paper a4-page print-area dense-fit"
     table_rows = rows_html.count("<tr")
     if (
         len(party_signers) >= 3
@@ -5220,7 +5223,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     {live_dock_html}
 
-    <div class="a4-preview-viewport" id="a4PreviewViewport"><div class="{sheet_cls}" id="a4Sheet">
+    <div class="a4-preview-viewport" id="a4PreviewViewport"><div class="{sheet_cls}" id="a4Sheet" data-print-root="1">
         <div class="a4-fit" id="a4Fit">
         <div>
             <div class="hdr">
@@ -5516,12 +5519,95 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         scheduleA4Fit();
     }}
 
+    async function printOrDownloadIOS() {{
+        try {{
+            if (typeof syncAllLivePads === "function") syncAllLivePads();
+            if (typeof prepareA4Print === "function") prepareA4Print();
+        }} catch (e) {{}}
+        const reportElement =
+            document.getElementById("print-area") ||
+            document.getElementById("a4Sheet") ||
+            document.querySelector(".a4-page") ||
+            document.querySelector(".a4-paper");
+        if (!reportElement) {{
+            alert("لم يتم العثور على حاوية الورقة");
+            return;
+        }}
+        const headStyles = Array.from(document.querySelectorAll("style, link[rel='stylesheet']"))
+            .map(function(node) {{ return node.outerHTML; }})
+            .join("\\n");
+        const cleanHTML = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="format-detection" content="telephone=no">
+<title>وثيقة رسمية - قسم مرور العارضة</title>
+<style>
+@page {{ size: A4 portrait; margin: 6mm 8mm; }}
+body {{ margin: 0; padding: 0; background: #fff; font-family: Cairo, Tahoma, Arial, sans-serif; direction: rtl; }}
+.ios-bar {{
+    position: sticky; top: 0; z-index: 9999; background: #14532d; color: #fff;
+    padding: 12px; text-align: center; font-weight: bold;
+    display: flex; justify-content: space-around; align-items: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}}
+.ios-bar button {{
+    background: #eab308; color: #000; border: none;
+    padding: 8px 16px; border-radius: 6px; font-weight: bold; font-size: 15px;
+}}
+@media print {{
+    .ios-bar, .no-print, .toolbar, .zoom-bar, .live-sig-dock,
+    .live-pad-actions, .live-pad-canvas {{ display: none !important; }}
+}}
+.live-pad-canvas, .live-pad-actions, .live-sig-dock, .toolbar, .zoom-bar, .no-print {{
+    display: none !important;
+}}
+.a4-preview-viewport, .a4-fit {{
+    height: auto !important; overflow: visible !important; transform: none !important;
+}}
+.a4-sheet, .a4-paper, .a4-page, .print-area {{
+    width: 100% !important; max-width: 210mm !important; margin: 0 auto !important;
+    transform: none !important; zoom: 1 !important; box-shadow: none !important;
+}}
+</style>
+${{headStyles}}
+</head>
+<body>
+<div class="ios-bar">
+    <span>جاهز للطباعة أو الحفظ عبر زر المشاركة (⬆️) بالأسفل</span>
+    <button type="button" onclick="window.print()">🖨️ أمر الطباعة</button>
+</div>
+${{reportElement.outerHTML}}
+<script>
+window.onload = function() {{
+    setTimeout(function() {{ window.print(); }}, 600);
+}};
+<\\/script>
+</body>
+</html>`;
+        const blob = new Blob([cleanHTML], {{ type: "text/html;charset=utf-8" }});
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.target = "_blank";
+        link.rel = "noopener";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(function() {{
+            try {{ URL.revokeObjectURL(blobUrl); }} catch (e) {{}}
+            try {{ restoreA4Preview(); }} catch (e) {{}}
+        }}, 4000);
+    }}
+    try {{ window.printOrDownloadIOS = printOrDownloadIOS; }} catch (e) {{}}
+
     var printBtn = document.getElementById("printOfficialBtn");
     if (printBtn) {{
         printBtn.addEventListener("click", function(ev) {{
             ev.preventDefault();
-            prepareA4Print();
-            window.print();
+            printOrDownloadIOS();
         }});
     }}
 
