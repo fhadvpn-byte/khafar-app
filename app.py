@@ -6334,6 +6334,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 </script>
 
 
+
 <style id="khafar-final-a4-fix">
   .legal-box {{
     display: flex !important;
@@ -6351,7 +6352,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     font-weight: 800 !important;
     color: #000000 !important;
     text-align: right !important;
-    margin-bottom: 8px !important;
+    margin-bottom: 6px !important;
   }}
   .legal-box .legal-box-body {{
     direction: rtl !important;
@@ -6367,21 +6368,21 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   img.sig-slot-img {{
     background: #ffffff !important;
     mix-blend-mode: normal !important;
-    max-height: 58px !important;
+    max-height: 54px !important;
     width: auto !important;
     max-width: 95% !important;
     object-fit: contain !important;
     margin: 2px auto !important;
   }}
   @media print {{
-    @page {{ margin: 5mm 6mm !important; }}
+    @page {{ size: A4 portrait; margin: 4.5mm 6mm !important; }}
     html, body {{
       margin: 0 !important;
       padding: 0 !important;
       background: #ffffff !important;
       width: 100% !important;
       height: auto !important;
-      overflow: hidden !important;
+      overflow: visible !important;
     }}
     .no-print, .toolbar, .zoom-bar, .live-sig-dock {{ display: none !important; }}
     #a4Sheet {{
@@ -6389,15 +6390,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       flex-direction: column !important;
       justify-content: space-between !important;
       width: 100% !important;
+      margin: 0 auto !important;
       box-sizing: border-box !important;
       border: 1.8px solid #0f3d2e !important;
       border-radius: 4px !important;
-      padding: 5mm 6mm !important;
+      padding: 4mm 5.5mm !important;
       background: #ffffff !important;
       page-break-after: avoid !important;
       page-break-inside: avoid !important;
       break-inside: avoid !important;
-      overflow: hidden !important;
     }}
   }}
 </style>
@@ -6452,7 +6453,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     octx.drawImage(canvas, 0, 0);
     var dataUrl = out.toDataURL('image/png');
     slot.setAttribute('src', dataUrl);
-    slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; max-height:58px !important; width:auto !important; max-width:95% !important; margin:2px auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
+    slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; max-height:52px !important; width:auto !important; max-width:95% !important; margin:2px auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
     try {{
       var b64 = (dataUrl.split(',')[1] || '');
       if (b64 && typeof padStorageKey === 'function') localStorage.setItem(padStorageKey(padId), b64);
@@ -6465,66 +6466,112 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
   }};
 
-  function balanceSheetTypography(docRoot, targetH) {{
+  function balanceSheetTypography(docRoot, targetH, isPrintMode) {{
     var sheet = docRoot.getElementById('a4Sheet');
     if (!sheet) return;
     sheet.style.setProperty('display', 'flex', 'important');
     sheet.style.setProperty('flex-direction', 'column', 'important');
     sheet.style.setProperty('justify-content', 'space-between', 'important');
-    sheet.style.setProperty('height', targetH + 'px', 'important');
-    sheet.style.setProperty('max-height', targetH + 'px', 'important');
+    sheet.style.setProperty('box-sizing', 'border-box', 'important');
+    sheet.style.setProperty('zoom', '1', 'important');
+    // Measure natural height first without clipping!
+    sheet.style.setProperty('height', 'auto', 'important');
+    sheet.style.setProperty('min-height', targetH + 'px', 'important');
+    sheet.style.setProperty('max-height', 'none', 'important');
+    sheet.style.setProperty('overflow', 'visible', 'important');
 
+    var hdr = sheet.querySelector('.hdr');
+    var logo = sheet.querySelector('.hdr-logo') || sheet.querySelector('.hdr-center img');
+    var hdrCenter = sheet.querySelector('.hdr-center');
+    var banner = sheet.querySelector('.doc-banner');
+    var dataTbl = sheet.querySelector('table.data-tbl');
     var legal = sheet.querySelector('.legal-box');
     var legalBody = sheet.querySelector('.legal-box-body') || (legal && legal.lastElementChild);
     var legalTitle = sheet.querySelector('.legal-box-title') || (legal && legal.firstElementChild);
     var tblCells = sheet.querySelectorAll('table.data-tbl td');
-    var sigCells = sheet.querySelectorAll('table.sig-tbl td');
+    var sigHeads = sheet.querySelectorAll('table.sig-tbl th, .sig-head');
+    var sigCells = sheet.querySelectorAll('table.sig-tbl td, .sig-cell');
+    var sigImgs = sheet.querySelectorAll('img.sig-slot-img');
+    var attImgs = sheet.querySelectorAll('.att-card img');
+    var attSec = sheet.querySelector('.attachment-section');
+    var footerQr = sheet.querySelector('.footer-qr');
 
     var rowsCnt = sheet.querySelectorAll('table.data-tbl tr').length;
     var textLen = legalBody ? (legalBody.textContent || '').trim().length : 0;
+    var hasAtts = attImgs && attImgs.length > 0;
 
-    if (rowsCnt <= 6 && textLen <= 520) {{
+    // 1) Expand short forms so middle whitespace is filled nicely
+    if (rowsCnt <= 6 && textLen <= 520 && sigCells.length <= 3) {{
       tblCells.forEach(function(td) {{
         td.style.setProperty('font-size', '13.5px', 'important');
         td.style.setProperty('padding', '9px 11px', 'important');
         td.style.setProperty('line-height', '1.6', 'important');
       }});
       if (legal) {{
-        legal.style.setProperty('padding', '20px 22px', 'important');
-        legal.style.setProperty('margin', '10px 0 14px 0', 'important');
+        legal.style.setProperty('padding', '18px 20px', 'important');
+        legal.style.setProperty('margin', '8px 0 12px 0', 'important');
       }}
-      if (legalTitle) legalTitle.style.setProperty('font-size', '16px', 'important');
+      if (legalTitle) legalTitle.style.setProperty('font-size', '15.5px', 'important');
       if (legalBody) {{
-        legalBody.style.setProperty('font-size', '16.5px', 'important');
-        legalBody.style.setProperty('line-height', '2.25', 'important');
+        legalBody.style.setProperty('font-size', hasAtts ? '15px' : '16.5px', 'important');
+        legalBody.style.setProperty('line-height', hasAtts ? '2.0' : '2.25', 'important');
       }}
       sigCells.forEach(function(td) {{
-        td.style.setProperty('height', '105px', 'important');
+        td.style.setProperty('height', hasAtts ? '90px' : '105px', 'important');
         td.style.setProperty('padding', '8px', 'important');
       }});
-    }} else if (rowsCnt <= 8 && textLen <= 700) {{
+    }} else if (rowsCnt <= 8 && textLen <= 700 && sigCells.length <= 4) {{
       tblCells.forEach(function(td) {{
-        td.style.setProperty('font-size', '12.5px', 'important');
-        td.style.setProperty('padding', '6px 9px', 'important');
+        td.style.setProperty('font-size', '12px', 'important');
+        td.style.setProperty('padding', '5px 8px', 'important');
       }});
-      if (legal) legal.style.setProperty('padding', '14px 16px', 'important');
+      if (legal) legal.style.setProperty('padding', '12px 14px', 'important');
       if (legalBody) {{
-        legalBody.style.setProperty('font-size', '14.5px', 'important');
-        legalBody.style.setProperty('line-height', '1.9', 'important');
+        legalBody.style.setProperty('font-size', '13.5px', 'important');
+        legalBody.style.setProperty('line-height', '1.8', 'important');
       }}
     }}
 
-    var fs = parseFloat((legalBody && legalBody.style.fontSize) || '12') || 12;
-    var lh = parseFloat((legalBody && legalBody.style.lineHeight) || '1.55') || 1.55;
-    var tfs = 11.5;
+    // 2) Step-down compression for ultra-heavy forms (e.g. 5 parties + wakala + 4 photos + 2 sig rows)
+    var fs = parseFloat((legalBody && legalBody.style.fontSize) || '11.5') || 11.5;
+    var lh = parseFloat((legalBody && legalBody.style.lineHeight) || '1.45') || 1.45;
+    var tfs = 11.0;
     var step = 0;
-    while (sheet.scrollHeight > targetH && step < 10) {{
-      fs = Math.max(10.2, fs - 0.5);
-      lh = Math.max(1.32, lh - 0.08);
-      tfs = Math.max(10.0, tfs - 0.35);
+
+    while (sheet.scrollHeight > targetH && step < 14) {{
+      fs = Math.max(9.4, fs - 0.35);
+      lh = Math.max(1.22, lh - 0.05);
+      tfs = Math.max(9.3, tfs - 0.25);
+
+      if (hdr) {{
+        hdr.style.setProperty('padding', '0 0 3px 0', 'important');
+        hdr.style.setProperty('margin-bottom', '4px', 'important');
+      }}
+      if (logo) {{
+        logo.style.setProperty('width', '56px', 'important');
+        logo.style.setProperty('height', '56px', 'important');
+        logo.style.setProperty('max-width', '56px', 'important');
+        logo.style.setProperty('max-height', '56px', 'important');
+      }}
+      if (hdrCenter) {{
+        hdrCenter.style.setProperty('width', '56px', 'important');
+        hdrCenter.style.setProperty('height', '56px', 'important');
+        hdrCenter.style.setProperty('min-height', '56px', 'important');
+      }}
+      if (banner) {{
+        banner.style.setProperty('padding', '3px 8px', 'important');
+        banner.style.setProperty('margin', '0 0 4px 0', 'important');
+        banner.style.setProperty('font-size', '12px', 'important');
+      }}
+      if (dataTbl) dataTbl.style.setProperty('margin-bottom', '4px', 'important');
       if (legal) {{
-        legal.style.setProperty('padding', '6px 8px', 'important');
-        legal.style.setProperty('margin', '4px 0 6px 0', 'important');
+        legal.style.setProperty('flex', '0 1 auto', 'important');
+        legal.style.setProperty('padding', '4px 7px', 'important');
+        legal.style.setProperty('margin', '2px 0 4px 0', 'important');
+      }}
+      if (legalTitle) {{
+        legalTitle.style.setProperty('font-size', (fs + 0.5) + 'px', 'important');
+        legalTitle.style.setProperty('margin-bottom', '2px', 'important');
       }}
       if (legalBody) {{
         legalBody.style.setProperty('font-size', fs + 'px', 'important');
@@ -6532,19 +6579,50 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       }}
       tblCells.forEach(function(td) {{
         td.style.setProperty('font-size', tfs + 'px', 'important');
-        td.style.setProperty('padding', '3px 5px', 'important');
-        td.style.setProperty('line-height', '1.3', 'important');
+        td.style.setProperty('padding', '2px 5px', 'important');
+        td.style.setProperty('line-height', '1.22', 'important');
+      }});
+      if (attSec) {{
+        attSec.style.setProperty('margin', '2px 0', 'important');
+        attSec.style.setProperty('padding', '2px 5px', 'important');
+      }}
+      attImgs.forEach(function(im) {{
+        im.style.setProperty('max-height', (step > 5 ? '48px' : '58px'), 'important');
+      }});
+      sigHeads.forEach(function(th) {{
+        th.style.setProperty('font-size', '9.5px', 'important');
+        th.style.setProperty('padding', '2px 4px', 'important');
+        th.style.setProperty('line-height', '1.2', 'important');
       }});
       sigCells.forEach(function(td) {{
         td.style.setProperty('height', 'auto', 'important');
-        td.style.setProperty('min-height', '46px', 'important');
-        td.style.setProperty('padding', '3px 5px', 'important');
+        td.style.setProperty('min-height', '38px', 'important');
+        td.style.setProperty('padding', '2px 4px', 'important');
+        td.style.setProperty('line-height', '1.2', 'important');
       }});
+      sigImgs.forEach(function(im) {{
+        im.style.setProperty('max-height', '34px', 'important');
+      }});
+      if (footerQr) {{
+        footerQr.style.setProperty('margin-top', '4px', 'important');
+        footerQr.style.setProperty('padding', '3px 6px', 'important');
+      }}
       step++;
+    }}
+
+    // 3) Zero-clipping safety net: if STILL taller than 1 page, scale gently instead of cutting off the bottom!
+    var naturalH = sheet.scrollHeight;
+    if (isPrintMode && naturalH > targetH) {{
+      var z = Math.max(0.75, Math.floor((targetH / naturalH) * 1000) / 1000);
+      sheet.style.setProperty('min-height', '0', 'important');
+      sheet.style.setProperty('zoom', String(z), 'important');
+      sheet.style.setProperty('margin', '0 auto', 'important');
+    }} else if (isPrintMode) {{
+      sheet.style.setProperty('height', targetH + 'px', 'important');
     }}
   }}
 
-  balanceSheetTypography(document, 1035);
+  balanceSheetTypography(document, 1045, false);
 
   var oldBtn = document.querySelector('#printOfficialBtn') || document.querySelector('.print-btn');
   if (oldBtn) {{
@@ -6556,7 +6634,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       window.syncAllLivePads();
 
       var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      var targetH = isIOS ? 940 : 1030;
+      var targetH = isIOS ? 945 : 1042;
 
       var sheetClone = document.getElementById('a4Sheet').cloneNode(true);
       sheetClone.style.zoom = '1';
@@ -6568,7 +6646,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
           var cloneSlot = sheetClone.querySelector('#slot_' + padId);
           if (liveSlot && cloneSlot && liveSlot.getAttribute('src')) {{
             cloneSlot.setAttribute('src', liveSlot.getAttribute('src'));
-            cloneSlot.setAttribute('style', liveSlot.getAttribute('style') || 'display:block !important; max-height:58px !important;');
+            cloneSlot.setAttribute('style', liveSlot.getAttribute('style') || 'display:block !important; max-height:52px !important;');
           }}
         }});
       }}
@@ -6593,14 +6671,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         if (ifr) ifr.remove();
         ifr = document.createElement('iframe');
         ifr.id = 'khafarHiddenPrintFrame';
-        ifr.style.cssText = 'position:fixed;right:0;bottom:0;width:794px;height:1123px;opacity:0;pointer-events:none;border:0;z-index:-9999;';
+        ifr.style.cssText = 'position:fixed;right:0;bottom:0;width:748px;height:1123px;opacity:0;pointer-events:none;border:0;z-index:-9999;';
         document.body.appendChild(ifr);
         var idoc = ifr.contentWindow.document;
         idoc.open();
         idoc.write(printDocHtml);
         idoc.close();
         setTimeout(function() {{
-          try {{ balanceSheetTypography(idoc, targetH); }} catch (e) {{}}
+          try {{ balanceSheetTypography(idoc, targetH, true); }} catch (e) {{}}
           ifr.contentWindow.focus();
           ifr.contentWindow.print();
         }}, 420);
@@ -6611,7 +6689,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
           w.document.write(printDocHtml);
           w.document.close();
           setTimeout(function() {{
-            try {{ balanceSheetTypography(w.document, targetH); }} catch (e) {{}}
+            try {{ balanceSheetTypography(w.document, targetH, true); }} catch (e) {{}}
             w.focus();
             w.print();
           }}, 500);
