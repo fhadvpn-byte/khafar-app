@@ -3284,6 +3284,20 @@ def gps_header_line(coords: str) -> str:
     )
 
 
+def doc_exists_in_archive(doc_no: str, device_hash: str) -> bool:
+    """هل الرقم المرجعي محفوظ مسبقاً في أرشيف هذا الجهاز؟"""
+    ref = str(doc_no or "").strip()
+    if not ref or not device_hash:
+        return False
+    conn = sqlite3.connect(DB_PATH)
+    row = conn.execute(
+        "SELECT 1 FROM records WHERE device_hash=? AND doc_no=? LIMIT 1",
+        (device_hash, ref),
+    ).fetchone()
+    conn.close()
+    return bool(row)
+
+
 def save_record_to_db(rec: dict, device_hash: str) -> bool:
     if not device_hash:
         return False
@@ -3311,6 +3325,26 @@ def save_record_to_db(rec: dict, device_hash: str) -> bool:
     conn.commit()
     conn.close()
     return True
+
+
+def auto_save_to_archive(rec: dict, device_hash: str) -> bool:
+    """حفظ تلقائي مرة واحدة لكل رقم مرجعي قبل عرض زر الطباعة."""
+    ref = str((rec or {}).get("doc_no") or "").strip()
+    if not ref or not device_hash:
+        return False
+    archived = st.session_state.setdefault("auto_archived_refs", set())
+    if not isinstance(archived, set):
+        archived = set(archived or [])
+        st.session_state.auto_archived_refs = archived
+    if ref in archived or doc_exists_in_archive(ref, device_hash):
+        archived.add(ref)
+        return False
+    ok = save_record_to_db(rec, device_hash)
+    if ok:
+        archived.add(ref)
+        st.session_state.auto_archived_refs = archived
+        st.session_state.last_auto_archive_ref = ref
+    return ok
 
 
 def search_records_db(q: str = "", device_hash: str = "") -> list:
@@ -6663,10 +6697,14 @@ if st.session_state.nav_tab == "النماذج الميدانية":
 
                 a4_html = build_official_a4_html(ready_record, form_def, logo_b64_global, interactive_sig=True)
                 st.write("")
-                if st.button("💾 حفظ الوثيقة نهائياً في الأرشيف المحلي", type="primary", use_container_width=True):
-                    _, hash_now = ensure_device_identity()
-                    save_record_to_db(ready_record, hash_now)
-                    st.success(f"تم حفظ الوثيقة ({ready_record['doc_no']}) في أرشيف هذا الجهاز فقط.")
+
+                # حفظ تلقائي بمجرد اكتمال البيانات وقبل عرض زر الطباعة
+                _, hash_now = ensure_device_identity()
+                ref_number = str(ready_record.get("doc_no") or "").strip()
+                if auto_save_to_archive(ready_record, hash_now):
+                    st.success(f"تم حفظ الوثيقة تلقائياً في الأرشيف المحلي ({ref_number}).")
+                elif ref_number:
+                    st.caption(f"📁 السجل محفوظ في الأرشيف المحلي: {ref_number}")
 
                 st.markdown("#### 📄 المعاينة الرسمية مقاس A4 (جاهزة للطباعة أو الحفظ كـ PDF)")
                 st.caption(
