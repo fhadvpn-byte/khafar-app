@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 *.db
 takmeel_backup*.json
+manager_sig_backup.json

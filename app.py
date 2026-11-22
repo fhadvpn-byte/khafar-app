@@ -5,6 +5,7 @@ import json
 import base64
 import io
 import html
+import os
 import random
 import hashlib
 import re
@@ -2277,6 +2278,9 @@ BLANK_SHIFT = {
 # مفتاح صورة توقيع ضابط الخفر — يُحفظ في SQLite وlocalStorage فقط (ليس في الكوكيز)
 DUTY_SIG_KEY = "duty_sig_b64"
 DUTY_SIG_LS_KEY = "khafar_duty_sig"
+MANAGER_SIG_BACKUP = "manager_sig_backup.json"
+MANAGER_AUTH_MODE = "توقيع مدير وحدة الحوادث المعتمد مركزياً"
+DEFAULT_MANAGER_TITLE = "مدير وحدة الحوادث بقسم مرور العارضة"
 DEVICE_COOKIE = "khafar_device_uid"
 SHIFT_COOKIE = "khafar_shift"
 _SHIFT_TEXT_KEYS = ("dept_name", "officer_rank", "officer_name", "duty_rank", "duty_name", "default_gps")
@@ -2284,6 +2288,14 @@ _UUID4_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     re.IGNORECASE,
 )
+
+
+def _manager_pin() -> str:
+    try:
+        pin = st.secrets.get("MANAGER_PIN", "4411")
+    except Exception:
+        pin = "4411"
+    return str(pin or "4411").strip() or "4411"
 
 
 def init_db():
@@ -2325,6 +2337,25 @@ def init_db():
     device_shift_cols = {row[1] for row in c.execute("PRAGMA table_info(device_shifts)").fetchall()}
     if "duty_sig_b64" not in device_shift_cols:
         c.execute("ALTER TABLE device_shifts ADD COLUMN duty_sig_b64 TEXT")
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS manager_settings (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            manager_name TEXT,
+            manager_title TEXT,
+            manager_sig_b64 TEXT,
+            auto_insert INTEGER DEFAULT 1,
+            updated_at TEXT
+        )
+    """)
+    if c.execute("SELECT COUNT(*) FROM manager_settings").fetchone()[0] == 0:
+        c.execute(
+            """
+            INSERT INTO manager_settings (id, manager_name, manager_title, manager_sig_b64, auto_insert, updated_at)
+            VALUES (1, ?, ?, '', 1, ?)
+            """,
+            ("", DEFAULT_MANAGER_TITLE, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        )
 
     c.execute("""
         CREATE TABLE IF NOT EXISTS records (
@@ -2412,8 +2443,8 @@ def shift_light_payload(data: dict | None) -> dict:
     return {key: cleaned.get(key, "") for key in _SHIFT_TEXT_KEYS}
 
 
-def compress_signature_b64(raw_b64: str) -> str:
-    """ضغط توقيع ضابط الخفر إلى PNG صغير مناسب للطباعة A4."""
+def make_ink_transparent_b64(raw_b64: str, max_w: int = 520, max_h: int = 180) -> str:
+    """حوّل التوقيع إلى PNG شفاف (إزالة الخلفية البيضاء) مع الإبقاء على الحبر."""
     payload = str(raw_b64 or "").strip()
     if not payload:
         return ""
@@ -2422,17 +2453,193 @@ def compress_signature_b64(raw_b64: str) -> str:
     try:
         img = Image.open(io.BytesIO(base64.b64decode(payload)))
         img = ImageOps.exif_transpose(img)
-        if img.mode not in ("RGB", "RGBA", "L"):
-            img = img.convert("RGBA")
-        img.thumbnail((480, 160), Image.Resampling.LANCZOS)
-        # خلفية شفافة إن أمكن مع الحفاظ على الحبر الداكن
         if img.mode != "RGBA":
             img = img.convert("RGBA")
+        img.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
+        pixels = img.load()
+        w, h = img.size
+        for y in range(h):
+            for x in range(w):
+                r, g, b, a = pixels[x, y]
+                if a == 0:
+                    continue
+                brightness = (r + g + b) / 3.0
+                if brightness >= 248:
+                    pixels[x, y] = (255, 255, 255, 0)
+                elif brightness >= 210:
+                    alpha = int(max(0, min(255, (255 - brightness) * 4.2)))
+                    ink_r = min(r, 30)
+                    ink_g = min(g, 55)
+                    ink_b = min(b, 140)
+                    pixels[x, y] = (ink_r, ink_g, ink_b, alpha)
+                else:
+                    # تعزيز الحبر الداكن/الأزرق قليلاً ليبدو كتوقيع حبري
+                    pixels[x, y] = (min(r, 25), min(g, 50), min(max(b, 90), 160), 255)
         buf = io.BytesIO()
         img.save(buf, format="PNG", optimize=True)
         return base64.b64encode(buf.getvalue()).decode("utf-8")
     except Exception:
         return payload[:250000]
+
+
+def compress_signature_b64(raw_b64: str) -> str:
+    """ضغط توقيع ضابط الخفر إلى PNG شفاف صغير مناسب للطباعة A4."""
+    return make_ink_transparent_b64(raw_b64, max_w=480, max_h=160)
+
+
+def _default_manager_settings() -> dict:
+    return {
+        "manager_name": "",
+        "manager_title": DEFAULT_MANAGER_TITLE,
+        "manager_sig_b64": "",
+        "auto_insert": True,
+        "updated_at": "",
+        "display_name": DEFAULT_MANAGER_TITLE,
+    }
+
+
+def get_manager_signature_settings() -> dict:
+    """اقرأ توقيع مدير وحدة الحوادث المعتمد مركزياً من SQLite (مع استعادة من النسخة الاحتياطية إن لزم)."""
+    out = _default_manager_settings()
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        row = conn.execute(
+            "SELECT manager_name, manager_title, manager_sig_b64, auto_insert, updated_at "
+            "FROM manager_settings WHERE id=1"
+        ).fetchone()
+        conn.close()
+        if row:
+            out["manager_name"] = str(row[0] or "")
+            out["manager_title"] = str(row[1] or DEFAULT_MANAGER_TITLE) or DEFAULT_MANAGER_TITLE
+            out["manager_sig_b64"] = str(row[2] or "")
+            out["auto_insert"] = bool(int(row[3] if row[3] is not None else 1))
+            out["updated_at"] = str(row[4] or "")
+    except Exception:
+        pass
+
+    if not out["manager_sig_b64"]:
+        try:
+            if os.path.exists(MANAGER_SIG_BACKUP):
+                with open(MANAGER_SIG_BACKUP, "r", encoding="utf-8") as fh:
+                    backup = json.load(fh)
+                if isinstance(backup, dict) and backup.get("manager_sig_b64"):
+                    out["manager_name"] = str(backup.get("manager_name") or out["manager_name"])
+                    out["manager_title"] = str(backup.get("manager_title") or out["manager_title"]) or DEFAULT_MANAGER_TITLE
+                    out["manager_sig_b64"] = str(backup.get("manager_sig_b64") or "")
+                    out["auto_insert"] = bool(backup.get("auto_insert", out["auto_insert"]))
+                    out["updated_at"] = str(backup.get("updated_at") or out["updated_at"])
+                    # أعد حقن النسخة الاحتياطية في قاعدة البيانات المشتركة
+                    save_manager_signature_settings(
+                        out["manager_name"],
+                        out["manager_title"],
+                        out["manager_sig_b64"],
+                        out["auto_insert"],
+                        write_backup=False,
+                    )
+        except Exception:
+            pass
+
+    name = (out["manager_name"] or "").strip()
+    title = (out["manager_title"] or DEFAULT_MANAGER_TITLE).strip()
+    out["display_name"] = f"{name} — {title}".strip(" —") if name else title
+    return out
+
+
+def _write_manager_sig_backup(data: dict) -> None:
+    payload = {
+        "manager_name": str(data.get("manager_name") or ""),
+        "manager_title": str(data.get("manager_title") or DEFAULT_MANAGER_TITLE),
+        "manager_sig_b64": str(data.get("manager_sig_b64") or ""),
+        "auto_insert": bool(data.get("auto_insert", True)),
+        "updated_at": str(data.get("updated_at") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+    }
+    with open(MANAGER_SIG_BACKUP, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, ensure_ascii=False, indent=2)
+
+
+def save_manager_signature_settings(
+    manager_name: str,
+    manager_title: str,
+    manager_sig_b64: str,
+    auto_insert: bool = True,
+    write_backup: bool = True,
+) -> dict:
+    cleaned_sig = make_ink_transparent_b64(manager_sig_b64) if manager_sig_b64 else ""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    name = str(manager_name or "")[:180]
+    title = str(manager_title or DEFAULT_MANAGER_TITLE)[:180] or DEFAULT_MANAGER_TITLE
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute(
+        """
+        INSERT INTO manager_settings (id, manager_name, manager_title, manager_sig_b64, auto_insert, updated_at)
+        VALUES (1, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            manager_name=excluded.manager_name,
+            manager_title=excluded.manager_title,
+            manager_sig_b64=excluded.manager_sig_b64,
+            auto_insert=excluded.auto_insert,
+            updated_at=excluded.updated_at
+        """,
+        (name, title, cleaned_sig[:350000], 1 if auto_insert else 0, now),
+    )
+    conn.commit()
+    conn.close()
+    data = {
+        "manager_name": name,
+        "manager_title": title,
+        "manager_sig_b64": cleaned_sig,
+        "auto_insert": bool(auto_insert),
+        "updated_at": now,
+    }
+    if write_backup:
+        try:
+            _write_manager_sig_backup(data)
+        except Exception:
+            pass
+    data["display_name"] = f"{name} — {title}".strip(" —") if name.strip() else title
+    return data
+
+
+def clear_manager_signature_settings(keep_meta: bool = True) -> dict:
+    current = get_manager_signature_settings()
+    name = current.get("manager_name", "") if keep_meta else ""
+    title = current.get("manager_title", DEFAULT_MANAGER_TITLE) if keep_meta else DEFAULT_MANAGER_TITLE
+    auto = current.get("auto_insert", True) if keep_meta else True
+    return save_manager_signature_settings(name, title, "", auto_insert=auto)
+
+
+def export_manager_signature_backup_bytes() -> bytes:
+    data = get_manager_signature_settings()
+    payload = {
+        "manager_name": data.get("manager_name", ""),
+        "manager_title": data.get("manager_title", DEFAULT_MANAGER_TITLE),
+        "manager_sig_b64": data.get("manager_sig_b64", ""),
+        "auto_insert": bool(data.get("auto_insert", True)),
+        "updated_at": data.get("updated_at", ""),
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def import_manager_signature_backup(raw: bytes | str) -> dict:
+    if isinstance(raw, bytes):
+        text = raw.decode("utf-8", errors="ignore")
+    else:
+        text = str(raw or "")
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError("ملف النسخة الاحتياطية غير صالح")
+    return save_manager_signature_settings(
+        str(data.get("manager_name") or ""),
+        str(data.get("manager_title") or DEFAULT_MANAGER_TITLE),
+        str(data.get("manager_sig_b64") or ""),
+        bool(data.get("auto_insert", True)),
+    )
+
+
+def manager_auto_signature_active() -> tuple[bool, dict]:
+    mgr = get_manager_signature_settings()
+    active = bool(mgr.get("auto_insert")) and bool(str(mgr.get("manager_sig_b64") or "").strip())
+    return active, mgr
 
 
 def device_hash_for(uid: str) -> str:
@@ -3012,6 +3219,120 @@ def render_officer_sig_pad_html() -> str:
 </body></html>"""
 
 
+def render_manager_sig_pad_html() -> str:
+    """لوحة توقيع حي لمدير وحدة الحوادث — تُحفظ مركزياً لجميع الأفراد."""
+    return """<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<style>
+  body{margin:0;padding:8px;background:#0d1316;font-family:Cairo,Tahoma,sans-serif;color:#e2e8f0}
+  .wrap{background:#101820;border:1px solid #c9a227;border-radius:12px;padding:10px}
+  .title{font-weight:800;color:#f3cc7a;font-size:13px;margin-bottom:6px;text-align:center}
+  canvas{width:100%;height:180px;border:1.5px dashed #c9a227;border-radius:8px;background:#ffffff;touch-action:none;cursor:crosshair;display:block}
+  .actions{display:flex;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap}
+  button{border:1px solid #d4a853;background:#112924;color:#fff;border-radius:8px;padding:7px 12px;font-weight:800;cursor:pointer}
+  .ok{color:#34d399;font-size:12px;font-weight:700;text-align:center;margin-top:6px;min-height:18px}
+</style></head><body>
+<div class="wrap">
+  <div class="title">توقيع مدير وحدة الحوادث (إصبع أو قلم) — مرة واحدة لجميع الأفراد</div>
+  <canvas id="pad_manager_settings" width="900" height="220"></canvas>
+  <div class="actions">
+    <button type="button" id="btnMgrClear">مسح اللوحة</button>
+    <button type="button" id="btnMgrAdopt">✅ اعتماد التوقيع في الجلسة</button>
+  </div>
+  <div class="ok" id="mgrPadStatus"></div>
+</div>
+<script>
+(function(){
+  var canvas = document.getElementById('pad_manager_settings');
+  var ctx = canvas.getContext('2d');
+  var drawing = false;
+  function pos(e){
+    var r = canvas.getBoundingClientRect();
+    var src = (e.touches && e.touches[0]) ? e.touches[0] : e;
+    return { x: (src.clientX - r.left) * (canvas.width / r.width), y: (src.clientY - r.top) * (canvas.height / r.height) };
+  }
+  function start(e){ e.preventDefault(); drawing = true; var p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }
+  function move(e){
+    if (!drawing) return; e.preventDefault();
+    var p = pos(e);
+    ctx.lineWidth = 3.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#0d47a1'; ctx.lineTo(p.x, p.y); ctx.stroke();
+  }
+  function end(){ drawing = false; }
+  canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', move);
+  canvas.addEventListener('mouseup', end); canvas.addEventListener('mouseleave', end);
+  canvas.addEventListener('touchstart', start, {passive:false});
+  canvas.addEventListener('touchmove', move, {passive:false});
+  canvas.addEventListener('touchend', end);
+  document.getElementById('btnMgrClear').onclick = function(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    document.getElementById('mgrPadStatus').textContent = '';
+    try { parent.postMessage({ type: 'khafar_manager_sig', b64: '' }, '*'); } catch (e) {}
+  };
+  document.getElementById('btnMgrAdopt').onclick = function(){
+    var blank = document.createElement('canvas');
+    blank.width = canvas.width; blank.height = canvas.height;
+    if (canvas.toDataURL() === blank.toDataURL()) {
+      document.getElementById('mgrPadStatus').textContent = 'ارسم التوقيع أولاً';
+      return;
+    }
+    var dataUrl = canvas.toDataURL('image/png');
+    var b64 = dataUrl.split(',')[1] || '';
+    try { parent.postMessage({ type: 'khafar_manager_sig', b64: b64 }, '*'); } catch (e) {}
+    document.getElementById('mgrPadStatus').textContent = 'تم اعتماد التوقيع مؤقتاً — اضغط حفظ واعتماد لجميع الأفراد';
+  };
+})();
+</script>
+</body></html>"""
+
+
+def render_manager_sig_bridge_listener() -> None:
+    """جسر postMessage لتوقيع مدير وحدة الحوادث داخل قسم الإعدادات المحمي."""
+    st.html(
+        """
+<style>
+textarea[placeholder*="MANAGER_SIG_BRIDGE"],
+div[data-testid="stTextArea"]:has(textarea[placeholder*="MANAGER_SIG_BRIDGE"]) {
+  height: 0 !important; min-height: 0 !important; max-height: 0 !important;
+  padding: 0 !important; margin: 0 !important; border: none !important;
+  opacity: 0 !important; overflow: hidden !important; pointer-events: none !important;
+}
+</style>
+<script>
+(function(){
+  function fillMgrBridge(payload) {
+    if (payload === undefined || payload === null) return false;
+    var nodes = document.querySelectorAll('textarea');
+    for (var i = 0; i < nodes.length; i++) {
+      var ph = (nodes[i].getAttribute('placeholder') || '');
+      if (ph.indexOf('MANAGER_SIG_BRIDGE') === -1) continue;
+      var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+      setter.call(nodes[i], String(payload));
+      nodes[i].dispatchEvent(new Event('input', { bubbles: true }));
+      nodes[i].dispatchEvent(new Event('change', { bubbles: true }));
+      try { nodes[i].focus(); nodes[i].blur(); } catch (e) {}
+      return true;
+    }
+    return false;
+  }
+  if (!window.__khafarManagerSigBridge) {
+    window.__khafarManagerSigBridge = true;
+    window.addEventListener('message', function(ev){
+      try {
+        var data = ev.data || {};
+        if (!data || data.type !== 'khafar_manager_sig') return;
+        fillMgrBridge(data.b64 || '');
+      } catch (e) {}
+    });
+  }
+})();
+</script>
+""",
+        unsafe_allow_javascript=True,
+    )
+
+
 def render_live_sig_bridge_listener() -> None:
     """جسر postMessage لحفظ تواقيع اللوحات الحية (citizen/p1..p5/officer/duty) في الجلسة."""
     st.html(
@@ -3059,7 +3380,7 @@ div[data-testid="stTextArea"]:has(textarea[placeholder*="LIVE_SIG_BRIDGE"]) {
 
 
 def _consume_live_sig_bridge() -> None:
-    """استهلاك جسر التوقيع الحي مبكراً حتى تبقى التواقيع في الجلسة قبل الحفظ/التنزيل."""
+    """استهلاك جسر التوقيع الحي مبكراً: ثبّت PNG شفافاً في session_state فوراً."""
     raw = st.session_state.get("live_sig_bridge") or ""
     if not str(raw).strip():
         return
@@ -3069,6 +3390,8 @@ def _consume_live_sig_bridge() -> None:
         b64 = str(payload.get("b64") or "").strip()
         if not pad_id:
             return
+        if b64:
+            b64 = make_ink_transparent_b64(b64) or b64
         pads = dict(st.session_state.get("live_sig_pads") or {})
         prev = str(pads.get(pad_id) or "")
         if prev == b64:
@@ -3078,15 +3401,18 @@ def _consume_live_sig_bridge() -> None:
         else:
             pads.pop(pad_id, None)
         st.session_state.live_sig_pads = pads
-        if pad_id == "citizen" and b64:
+        if pad_id == "citizen":
             st.session_state.citizen_stamp_b64 = b64
-        elif pad_id == "officer" and b64:
+        elif pad_id == "officer":
             st.session_state.officer_stamp_b64 = b64
-        elif pad_id == "duty" and b64:
+        elif pad_id == "duty":
             st.session_state.duty_stamp_b64 = b64
-        elif pad_id.startswith("p") and b64:
+        elif pad_id.startswith("p"):
             party_stamps = dict(st.session_state.get("party_stamps") or {})
-            party_stamps[pad_id] = b64
+            if b64:
+                party_stamps[pad_id] = b64
+            else:
+                party_stamps.pop(pad_id, None)
             st.session_state.party_stamps = party_stamps
     except Exception:
         pass
@@ -3467,10 +3793,19 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         fields_early.get("__sig_duty"),
     )
 
+    # توقيع مدير وحدة الحوادث المعتمد مركزياً يُدرج تلقائياً لجميع الأفراد (غير قابل للتعديل بدون الرمز السري)
+    manager_auto, manager_cfg = manager_auto_signature_active()
+    manager_duty_full = ""
+    if manager_auto:
+        duty_stamp_now = str(manager_cfg.get("manager_sig_b64") or "").strip()
+        manager_duty_full = str(manager_cfg.get("display_name") or DEFAULT_MANAGER_TITLE)
+        duty_mode = MANAGER_AUTH_MODE
+
     # تبقى لوحة التوقيع ظاهرة أثناء وضع التوقيع الحي حتى لا يُفقد الرسم عند التحديث
     needs_citizen_pad = interactive_sig and ("توقيع حي" in citizen_mode)
     needs_officer_pad = interactive_sig and ("توقيع حي" in officer_mode)
-    needs_duty_pad = interactive_sig and ("توقيع حي" in duty_mode)
+    # لا تُعرض لوحة توقيع وحدة الحوادث للأفراد عند تفعيل التوقيع المركزي للمدير
+    needs_duty_pad = (not manager_auto) and interactive_sig and ("توقيع حي" in duty_mode)
 
     # إرشاد التوقيع يبقى في لوحة الرسم فوق الورقة، لا داخل خلايا المحضر
     guide_hint = ""
@@ -3623,11 +3958,13 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             else:
                 inner = _sig_slot_img("", f"slot_{pad}")
             sig_slots.append((signer["header"], signer["name"], signer["role"], inner))
+        duty_name_now = manager_duty_full or str(rec.get("duty_full") or "")
         if not is_toxicology:
             sig_slots.append(("ضابط الخفر", str(rec.get("officer_full") or ""), "", officer_box_inner))
-            sig_slots.append(("وحدة الحوادث", str(rec.get("duty_full") or ""), "", duty_box_inner))
+            sig_slots.append(("وحدة الحوادث", duty_name_now, "", duty_box_inner))
         else:
-            sig_slots.append(("مصادقة إدارة مرور منطقة جازان", "", "", duty_box_inner))
+            tox_duty_header = "وحدة الحوادث" if manager_auto else "مصادقة إدارة مرور منطقة جازان"
+            sig_slots.append((tox_duty_header, duty_name_now if manager_auto else "", "", duty_box_inner))
         grid_cols = 3 if len(sig_slots) <= 3 else 4
         sig_rows = []
         for start in range(0, len(sig_slots), grid_cols):
@@ -3651,58 +3988,66 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + "".join(sig_rows)
             + "</tbody></table>"
         )
-    elif is_toxicology:
-        sig_table_html = f"""
-            <table class="sig-tbl">
-                <thead>
-                    <tr>
-                        <th style="width:50%;">{html.escape(col1_header)}</th>
-                        <th style="width:50%;">مصادقة إدارة مرور منطقة جازان</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td style="width:50%;">
-                            {col1_name_html}
-                            {col1_role_html}
-                            {citizen_box_inner}
-                        </td>
-                        <td style="width:50%;">
-                            {duty_box_inner}
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        """
     else:
-        sig_table_html = f"""
-            <table class="sig-tbl">
-                <thead>
-                    <tr>
-                        <th>{html.escape(col1_header)}</th>
-                        <th>ضابط الخفر</th>
-                        <th>وحدة الحوادث</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td style="width:{col_width};">
-                            {col1_name_html}
-                            {col1_role_html}
-                            {citizen_box_inner}
-                        </td>
-                        <td style="width:{col_width};">
-                            <div class="sig-person">{html.escape(str(rec['officer_full']))}</div>
-                            {officer_box_inner}
-                        </td>
-                        <td style="width:{col_width};">
-                            <div class="sig-person">{html.escape(str(rec['duty_full']))}</div>
-                            {duty_box_inner}
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        """
+        duty_name_display = manager_duty_full or str(rec.get("duty_full") or "")
+        duty_name_html = (
+            f'<div class="sig-person">{html.escape(duty_name_display)}</div>'
+            if duty_name_display else ""
+        )
+        if is_toxicology:
+            tox_right_header = "وحدة الحوادث" if manager_auto else "مصادقة إدارة مرور منطقة جازان"
+            sig_table_html = f"""
+                <table class="sig-tbl">
+                    <thead>
+                        <tr>
+                            <th style="width:50%;">{html.escape(col1_header)}</th>
+                            <th style="width:50%;">{html.escape(tox_right_header)}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="width:50%;">
+                                {col1_name_html}
+                                {col1_role_html}
+                                {citizen_box_inner}
+                            </td>
+                            <td style="width:50%;">
+                                {duty_name_html if manager_auto else ""}
+                                {duty_box_inner}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            """
+        else:
+            sig_table_html = f"""
+                <table class="sig-tbl">
+                    <thead>
+                        <tr>
+                            <th>{html.escape(col1_header)}</th>
+                            <th>ضابط الخفر</th>
+                            <th>وحدة الحوادث</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="width:{col_width};">
+                                {col1_name_html}
+                                {col1_role_html}
+                                {citizen_box_inner}
+                            </td>
+                            <td style="width:{col_width};">
+                                <div class="sig-person">{html.escape(str(rec['officer_full']))}</div>
+                                {officer_box_inner}
+                            </td>
+                            <td style="width:{col_width};">
+                                {duty_name_html}
+                                {duty_box_inner}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            """
 
     live_pad_ids = []
     dock_cards = []
@@ -4344,7 +4689,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     const PEN_COLOR = '#0d47a1';
     const LIVE_PADS = {json.dumps(live_pad_ids, ensure_ascii=False)};
     const PRELOADED_SIGS = {json.dumps(preloaded_live_sigs, ensure_ascii=False)};
-    const DOC_SIG_KEY = {json.dumps(str(rec.get("auto_doc_no") or rec.get("doc_no") or "doc"), ensure_ascii=False)};
+    const DOC_SIG_KEY = {json.dumps(
+        f"{rec.get('form_id') or 'form'}_{rec.get('auto_doc_no') or rec.get('doc_no') or 'doc'}",
+        ensure_ascii=False,
+    )};
 
     function padStorageKey(padId) {{
         return 'khafar_pad_' + DOC_SIG_KEY + '_' + padId;
@@ -5537,7 +5885,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     st.markdown("#### 2️⃣ توثيق ضابط الخفر ومصادقة وحدة الحوادث")
                     st.caption(f"الإعدادات الافتراضية: {unit_display}  •  {duty_display}")
 
-                officer_name_key = f"officer_full_input_{st.session_state.doc_no}"
+                _auth_sk = _stable_form_session_key()
+                officer_name_key = f"officer_full_input_{_auth_sk}"
                 if officer_name_key not in st.session_state:
                     st.session_state[officer_name_key] = st.session_state.officer_full_override or unit_display
 
@@ -5551,7 +5900,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 chosen_officer_auth = st.session_state.officer_auth_mode or "توقيع حي على الشاشة بالإصبع (لضابط الخفر)"
                 use_saved_officer_sig = False
                 if not is_toxicology_form:
-                    manual_sig_key = f"manual_officer_sig_{st.session_state.doc_no}"
+                    manual_sig_key = f"manual_officer_sig_{_auth_sk}"
                     if saved_officer_sig:
                         st.success("✅ تم إدراج توقيع ضابط الخفر المحفوظ من الإعدادات تلقائياً")
                         st.checkbox(
@@ -5580,11 +5929,22 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                             "وسيلة توثيق ضابط الخفر:",
                             officer_auth_opts,
                             index=officer_default_idx,
-                            key=f"officer_auth_radio_{st.session_state.doc_no}",
+                            key=f"officer_auth_radio_{_auth_sk}",
                             disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
                         )
 
-                if is_toxicology_form:
+                _form_sk = _stable_form_session_key()
+                manager_auto_now, manager_cfg_now = manager_auto_signature_active()
+                if manager_auto_now:
+                    chosen_duty_auth = MANAGER_AUTH_MODE
+                    st.session_state.duty_auth_mode = MANAGER_AUTH_MODE
+                    st.session_state.duty_stamp_b64 = str(manager_cfg_now.get("manager_sig_b64") or "")
+                    st.success(
+                        f"✅ توقيع مدير وحدة الحوادث يُدرج تلقائياً في خانة الاعتماد: "
+                        f"{manager_cfg_now.get('display_name') or DEFAULT_MANAGER_TITLE}"
+                    )
+                    st.caption("التعديل أو المسح متاح فقط لحامل الرمز السري من تبويب الإعدادات.")
+                elif is_toxicology_form:
                     duty_auth_opts = [
                         "ختم المصادقة النظامي لإدارة مرور منطقة جازان",
                         "توقيع حي على الشاشة لمصادقة إدارة مرور منطقة جازان",
@@ -5600,7 +5960,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         "وسيلة مصادقة إدارة مرور منطقة جازان:",
                         duty_auth_opts,
                         index=duty_default_idx,
-                        key=f"duty_auth_radio_tox_{st.session_state.doc_no}",
+                        key=f"duty_auth_radio_tox_{_form_sk}",
                         disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
                     )
                 else:
@@ -5616,7 +5976,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         "وسيلة مصادقة وحدة الحوادث:",
                         duty_auth_opts,
                         index=duty_default_idx,
-                        key=f"duty_auth_radio_{st.session_state.doc_no}",
+                        key=f"duty_auth_radio_{_form_sk}",
                         disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
                     )
 
@@ -5625,7 +5985,10 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         officer_label = (st.session_state.get(officer_name_key) or "").strip() or unit_display
                         st.session_state.officer_full_override = officer_label
                         st.session_state.duty_auth_mode = chosen_duty_auth
-                        st.session_state.duty_stamp_b64 = ""
+                        if manager_auto_now:
+                            st.session_state.duty_stamp_b64 = str(manager_cfg_now.get("manager_sig_b64") or "")
+                        else:
+                            st.session_state.duty_stamp_b64 = ""
                         if is_toxicology_form:
                             # تحليل السموم فقط: لا يُشترط توقيع/بصمة ضابط الخفر ولا يُدرج التوقيع المحفوظ
                             st.session_state.officer_auth_mode = "توثيق نصي لضابط الخفر (بدون توقيع)"
@@ -5700,6 +6063,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 )
                 officer_b64 = _resolve_stamp_b64(st.session_state.officer_stamp_b64, live_pads.get("officer"))
                 duty_b64 = _resolve_stamp_b64(st.session_state.duty_stamp_b64, live_pads.get("duty"))
+                mgr_active, mgr_cfg = manager_auto_signature_active()
+                if mgr_active:
+                    duty_b64 = str(mgr_cfg.get("manager_sig_b64") or "")
+                    st.session_state.duty_stamp_b64 = duty_b64
+                    st.session_state.duty_auth_mode = MANAGER_AUTH_MODE
                 if citizen_b64:
                     st.session_state.citizen_stamp_b64 = citizen_b64
                 ready_record = {
@@ -5721,11 +6089,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     "attachment_b64": st.session_state.attachment_b64,
                     "show_attachments_in_print": bool(st.session_state.get("show_attachments_in_print", True)),
                     "officer_full": officer_full_final,
-                    "duty_full": duty_display,
+                    "duty_full": (mgr_cfg.get("display_name") if mgr_active else duty_display),
                     "dept_name": shift["dept_name"],
                     "verify_hash": verify_hash,
                     "officer_auth_mode": st.session_state.officer_auth_mode,
-                    "duty_auth_mode": st.session_state.duty_auth_mode,
+                    "duty_auth_mode": MANAGER_AUTH_MODE if mgr_active else st.session_state.duty_auth_mode,
                     "duty_stamp_b64": duty_b64,
                     "receiver_name": st.session_state.receiver_name if (is_med_form or is_letter_form) else "",
                     "receiver_role": st.session_state.receiver_role if (is_med_form or is_letter_form) else "",
@@ -5855,7 +6223,11 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
     </div>
     """, unsafe_allow_html=True)
 
-    sett_tab, otg_tab = st.tabs(["👮 مناوبة الخفر", "🧬 بصمة الشحن OTG"])
+    sett_tab, mgr_tab, otg_tab = st.tabs([
+        "👮 مناوبة الخفر",
+        "✍️ توقيع مدير الحوادث",
+        "🧬 بصمة الشحن OTG",
+    ])
 
     with sett_tab:
         st.caption("إعدادات المناوبة والموقع تُحفظ على هذا الجوال فقط، ولا يراها من يفتح الرابط من جهاز آخر.")
@@ -6015,6 +6387,186 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 st.caption("تعذّر عرض معاينة التوقيع المحفوظ.")
         else:
             st.info("لا يوجد توقيع محفوظ حالياً — ارسم على اللوحة أو ارفع صورة ثم احفظ.")
+
+    with mgr_tab:
+        st.markdown("### ✍️ اعتماد التوقيع الحي لمدير وحدة الحوادث")
+        st.caption(
+            "هذا القسم محمي برمز سري خاص بالمدير. التوقيع يُحفظ مركزياً في قاعدة SQLite المشتركة "
+            "مع نسخة احتياطية محلية، ويظهر تلقائياً لجميع الأفراد في خانة الاعتماد أسفل يسار الوثائق الرسمية."
+        )
+        if "manager_pin_ok" not in st.session_state:
+            st.session_state.manager_pin_ok = False
+        if not st.session_state.manager_pin_ok:
+            pin_in = st.text_input(
+                "الرمز السري لمدير وحدة الحوادث",
+                type="password",
+                key="manager_pin_input",
+                placeholder="أدخل الرمز السري",
+            )
+            if st.button("🔓 دخول قسم المدير", type="primary", use_container_width=True, key="manager_pin_unlock"):
+                if str(pin_in or "").strip() == _manager_pin():
+                    st.session_state.manager_pin_ok = True
+                    st.success("تم فتح قسم اعتماد توقيع المدير.")
+                    safe_rerun()
+                else:
+                    st.error("الرمز السري غير صحيح.")
+        else:
+            mgr_now = get_manager_signature_settings()
+            lock_c, _ = st.columns([1, 2])
+            with lock_c:
+                if st.button("🔒 إغلاق قسم المدير", use_container_width=True, key="manager_pin_lock"):
+                    st.session_state.manager_pin_ok = False
+                    safe_rerun()
+
+            mgr_name = st.text_input(
+                "الاسم والرتبة",
+                value=str(mgr_now.get("manager_name") or ""),
+                key="manager_name_input",
+                placeholder="مثال: الرائد / ...",
+            )
+            mgr_title = st.text_input(
+                "المسمى الوظيفي",
+                value=str(mgr_now.get("manager_title") or DEFAULT_MANAGER_TITLE),
+                key="manager_title_input",
+            )
+            mgr_auto = st.toggle(
+                "تفعيل ظهور التوقيع التلقائي على الخطابات الرسمية",
+                value=bool(mgr_now.get("auto_insert", True)),
+                key="manager_auto_insert_toggle",
+                help="أوقف هذا الخيار مؤقتاً أثناء الإجازات أو عند الحاجة لإخفاء التوقيع المركزي.",
+            )
+
+            render_manager_sig_bridge_listener()
+            components.html(render_manager_sig_pad_html(), height=300, scrolling=False)
+            if st.session_state.pop("_clear_manager_sig_bridge", False):
+                st.session_state["manager_sig_bridge"] = ""
+            mgr_bridge = st.text_area(
+                "جسر توقيع المدير",
+                key="manager_sig_bridge",
+                height=68,
+                placeholder="MANAGER_SIG_BRIDGE",
+                label_visibility="collapsed",
+            )
+            if mgr_bridge and str(mgr_bridge).strip():
+                staged = make_ink_transparent_b64(str(mgr_bridge).strip())
+                if staged and staged != st.session_state.get("manager_sig_staged"):
+                    st.session_state.manager_sig_staged = staged
+                    st.session_state["_clear_manager_sig_bridge"] = True
+                    st.toast("تم التقاط توقيع المدير من اللوحة", icon="✅")
+                    safe_rerun()
+
+            staged_preview = str(
+                st.session_state.get("manager_sig_staged")
+                or mgr_now.get("manager_sig_b64")
+                or ""
+            ).strip()
+            if staged_preview:
+                try:
+                    st.image(
+                        base64.b64decode(staged_preview),
+                        caption="معاينة التوقيع (خلفية شفافة)",
+                        width=280,
+                    )
+                except Exception:
+                    st.caption("تعذّر عرض معاينة التوقيع.")
+
+            save_c, clear_c = st.columns(2)
+            with save_c:
+                if st.button(
+                    "💾 حفظ واعتماد التوقيع لجميع الأفراد",
+                    type="primary",
+                    use_container_width=True,
+                    key="manager_sig_save_all",
+                ):
+                    payload = str(
+                        st.session_state.get("manager_sig_staged")
+                        or mgr_now.get("manager_sig_b64")
+                        or ""
+                    ).strip()
+                    if not payload:
+                        st.warning("ارسم التوقيع على اللوحة واعتمده أولاً.")
+                    else:
+                        saved = save_manager_signature_settings(
+                            mgr_name,
+                            mgr_title or DEFAULT_MANAGER_TITLE,
+                            payload,
+                            auto_insert=bool(mgr_auto),
+                        )
+                        st.session_state.manager_sig_staged = saved.get("manager_sig_b64", "")
+                        st.success("تم حفظ توقيع المدير مركزياً وسيظهر لجميع الأفراد تلقائياً.")
+                        safe_rerun()
+            with clear_c:
+                if st.button(
+                    "🗑️ مسح/تغيير التوقيع المعتمد",
+                    use_container_width=True,
+                    key="manager_sig_clear_all",
+                ):
+                    clear_manager_signature_settings(keep_meta=True)
+                    st.session_state.manager_sig_staged = ""
+                    st.session_state["_clear_manager_sig_bridge"] = True
+                    # حفظ الاسم/المسمى/التفعيل الحالي بدون صورة
+                    save_manager_signature_settings(
+                        mgr_name,
+                        mgr_title or DEFAULT_MANAGER_TITLE,
+                        "",
+                        auto_insert=bool(mgr_auto),
+                    )
+                    st.success("تم مسح التوقيع المعتمد. يمكن إعادة الرسم الآن.")
+                    safe_rerun()
+
+            if st.button(
+                "💾 حفظ الاسم/المسمى وخيار الظهور فقط",
+                use_container_width=True,
+                key="manager_meta_save_only",
+            ):
+                save_manager_signature_settings(
+                    mgr_name,
+                    mgr_title or DEFAULT_MANAGER_TITLE,
+                    str(mgr_now.get("manager_sig_b64") or ""),
+                    auto_insert=bool(mgr_auto),
+                )
+                st.success("تم تحديث بيانات المدير وخيار الظهور التلقائي.")
+                safe_rerun()
+
+            st.markdown("#### 📥 تنزيل / 📤 استعادة النسخة الاحتياطية")
+            dl_c, up_c = st.columns(2)
+            with dl_c:
+                st.download_button(
+                    "📥 تنزيل نسخة احتياطية من التوقيع المعتمد",
+                    data=export_manager_signature_backup_bytes(),
+                    file_name="manager_sig_backup.json",
+                    mime="application/json",
+                    use_container_width=True,
+                    key="manager_sig_backup_dl",
+                )
+            with up_c:
+                backup_file = st.file_uploader(
+                    "📤 استعادة النسخة الاحتياطية",
+                    type=["json"],
+                    key="manager_sig_backup_upload",
+                )
+                if backup_file is not None and st.button(
+                    "📤 استعادة التوقيع من الملف",
+                    use_container_width=True,
+                    key="manager_sig_backup_restore",
+                ):
+                    try:
+                        restored = import_manager_signature_backup(backup_file.getvalue())
+                        st.session_state.manager_sig_staged = restored.get("manager_sig_b64", "")
+                        st.success("تمت استعادة توقيع المدير من النسخة الاحتياطية.")
+                        safe_rerun()
+                    except Exception as exc:
+                        st.error(f"تعذّرت الاستعادة: {exc}")
+
+            if mgr_now.get("manager_sig_b64") and mgr_now.get("auto_insert"):
+                st.success(
+                    f"✅ التوقيع المركزي مفعّل حالياً: {mgr_now.get('display_name') or DEFAULT_MANAGER_TITLE}"
+                    + (f" — آخر تحديث: {mgr_now.get('updated_at')}" if mgr_now.get("updated_at") else "")
+                )
+            elif mgr_now.get("manager_sig_b64"):
+                st.warning("التوقيع محفوظ لكن الظهور التلقائي متوقف مؤقتاً.")
+            else:
+                st.info("لا يوجد توقيع مدير معتمد حالياً.")
 
     with otg_tab:
         st.caption("وضع المحاكاة الصوري معزول حتى توصيل القارئ الفعلي عبر Type-C.")
