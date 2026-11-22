@@ -4393,12 +4393,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         text-align: center !important;
     }}
     .toolbar {{
-        max-width: 210mm; margin: 0 auto 8px auto; display: flex; gap: 10px;
-        justify-content: center; background: #0f3d2e; border: 1px solid #d4a853; padding: 10px; border-radius: 10px;
+        max-width: 210mm; margin: 0 auto 8px auto; display: block;
+        background: #0f3d2e; border: 1px solid #d4a853; padding: 10px; border-radius: 10px;
+        box-sizing: border-box;
     }}
     .print-btn {{
-        background: linear-gradient(135deg, #d4a853 0%, #a37a2c 100%); color: #fff; border: none; padding: 8px 24px;
-        font-size: 14px; font-weight: 800; border-radius: 8px; cursor: pointer;
+        width: 100% !important; max-width: none !important; display: block; box-sizing: border-box;
+        background: linear-gradient(135deg, #d4a853 0%, #a37a2c 100%); color: #fff; border: none;
+        padding: 12px 18px; font-size: 15px; font-weight: 800; border-radius: 8px; cursor: pointer;
+        text-align: center;
     }}
     .zoom-bar {{
         max-width: 210mm; margin: 0 auto 12px; display: flex; flex-wrap: wrap; gap: 6px;
@@ -4480,7 +4483,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     @media screen {{
         body {{ padding: 8px !important; overflow-x: hidden; }}
         .toolbar {{ width: 100%; padding: 8px; }}
-        .print-btn {{ width: 100%; max-width: 360px; font-size: 13px; padding: 8px 14px; }}
+        .print-btn {{ width: 100% !important; max-width: none !important; font-size: 14px; padding: 12px 14px; }}
         .a4-preview-viewport {{
             direction: rtl !important;
             width: 100% !important;
@@ -4844,7 +4847,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 <body>
     <div class="toolbar no-print">
         <button class="print-btn" type="button" id="printOfficialBtn">🖨️ طباعة الوثيقة الرسمية / حفظ كملف A4 PDF</button>
-        <button class="print-btn" type="button" id="downloadSignedBtn" style="margin-right:8px;background:linear-gradient(135deg,#1f6f5b,#145a48);">⬇️ تنزيل الوثيقة شاملة التواقيع المرسومة</button>
     </div>
     <div class="zoom-bar no-print" id="zoomBar">
         <button type="button" class="z-btn" data-z="-">➖ تصغير</button>
@@ -5158,29 +5160,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             ev.preventDefault();
             prepareA4Print();
             window.print();
-        }});
-    }}
-
-    var dlBtn = document.getElementById("downloadSignedBtn");
-    if (dlBtn) {{
-        dlBtn.addEventListener("click", function(ev) {{
-            ev.preventDefault();
-            syncAllLivePads();
-            try {{
-              var paper = document.getElementById("a4Sheet");
-              if (!paper) return;
-              var htmlDoc = "<!DOCTYPE html><html lang='ar' dir='rtl'><head><meta charset='UTF-8'><title>وثيقة موقعة</title>"
-                + "<style>body{{margin:0;background:#fff;}} .live-sig-dock,.toolbar,.zoom-bar,.no-print{{display:none!important;}}</style>"
-                + "</head><body>" + paper.outerHTML + "</body></html>";
-              var blob = new Blob([htmlDoc], {{ type: "text/html;charset=utf-8" }});
-              var url = URL.createObjectURL(blob);
-              var a = document.createElement("a");
-              a.href = url;
-              a.download = "khafar-signed-doc.html";
-              document.body.appendChild(a);
-              a.click();
-              setTimeout(function(){{ URL.revokeObjectURL(url); a.remove(); }}, 400);
-            }} catch (e) {{}}
         }});
     }}
 
@@ -6344,43 +6323,16 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 }
 
                 a4_html = build_official_a4_html(ready_record, form_def, logo_b64_global, interactive_sig=True)
-                a4_html_signed = build_official_a4_html(
-                    {**ready_record, "citizen_stamp_b64": citizen_b64, "officer_stamp_b64": officer_b64, "duty_stamp_b64": duty_b64},
-                    form_def,
-                    logo_b64_global,
-                    interactive_sig=False,
-                )
                 st.write("")
-                act1, act2, act3 = st.columns(3)
-                with act1:
-                    if not _cookie_uid_ready:
-                        st.caption("⏳ تتم مزامنة تعريف الجهاز مع المتصفح في الخلفية — الحفظ متاح الآن بالمعرّف الاحتياطي.")
-                    if st.button("💾 حفظ الوثيقة نهائياً في الأرشيف المحلي", type="primary", use_container_width=True):
-                        _, hash_now = ensure_device_identity()
-                        save_record_to_db(ready_record, hash_now)
-                        st.success(f"تم حفظ الوثيقة ({ready_record['doc_no']}) في أرشيف هذا الجهاز فقط.")
-                with act2:
-                    st.download_button(
-                        "⬇️ تنزيل الوثيقة الرسمية للطباعة والمشاركة",
-                        data=a4_html_signed.encode("utf-8"),
-                        file_name=f"{ready_record['doc_no']}.html",
-                        mime="text/html",
-                        use_container_width=True,
-                    )
-                with act3:
-                    st.download_button(
-                        "⬇️ تنزيل شاملة التواقيع المرسومة",
-                        data=a4_html_signed.encode("utf-8"),
-                        file_name=f"{ready_record['doc_no']}_signed.html",
-                        mime="text/html",
-                        use_container_width=True,
-                        key=f"dl_signed_{ready_record.get('auto_doc_no') or ready_record['doc_no']}",
-                    )
+                if st.button("💾 حفظ الوثيقة نهائياً في الأرشيف المحلي", type="primary", use_container_width=True):
+                    _, hash_now = ensure_device_identity()
+                    save_record_to_db(ready_record, hash_now)
+                    st.success(f"تم حفظ الوثيقة ({ready_record['doc_no']}) في أرشيف هذا الجهاز فقط.")
 
                 st.markdown("#### 📄 المعاينة الرسمية مقاس A4 (جاهزة للطباعة أو الحفظ كـ PDF)")
                 st.caption(
-                    "التواقيع تُرسم وتُحفظ محلياً داخل المعاينة (بدون كيبورد وبدون تحديث للصفحة). "
-                    "للطباعة أو التنزيل الشامل استخدم الأزرار داخل إطار المعاينة."
+                    "التواقيع تُرسم وتُحفظ محلياً داخل المعاينة. "
+                    "بعد التوقيع اضغط زر (طباعة الوثيقة الرسمية / حفظ كملف A4 PDF) بالأسفل."
                 )
                 preview_h = 1480 if (
                     ("توقيع حي" in ready_record.get("citizen_auth_mode", ""))
