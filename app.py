@@ -890,7 +890,7 @@ iframe[data-testid="stIFrame"],
     word-break: normal !important; white-space: normal !important; color: #e2e8f0 !important;
 }
 @media print {
-    @page { size: A4 portrait; margin: 4mm !important; }
+    @page { size: A4 portrait; margin: 6mm 8mm !important; }
     html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], .main, .block-container {
         direction: rtl !important;
         transform: none !important;
@@ -898,10 +898,8 @@ iframe[data-testid="stIFrame"],
         min-height: 0 !important;
         max-height: none !important;
         overflow: visible !important;
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
-        margin-top: 0 !important;
-        margin-bottom: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
         background: #ffffff !important;
     }
     .stButton, [data-testid="stHorizontalBlock"], [data-testid="stVerticalBlockBorderWrapper"],
@@ -4835,18 +4833,26 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-compact .footer-qr, .a4-dense-print .footer-qr {{ padding: 4px 8px !important; }}
     .a4-compact .footer-qr img, .a4-dense-print .footer-qr img {{ width: 32px !important; height: 32px !important; }}
     @media print {{
-        @page {{ size: A4 portrait; margin: 6mm !important; }}
-        html, body, .a4-preview-viewport, .a4-preview-wrapper {{
-            direction: rtl !important;
-            text-align: right !important;
-            transform: none !important;
+        @page {{ size: A4 portrait; margin: 6mm 8mm !important; }}
+        html, body {{
             margin: 0 !important;
             padding: 0 !important;
-            background: #ffffff !important;
             height: auto !important;
             min-height: 0 !important;
             max-height: none !important;
             overflow: visible !important;
+            background: #ffffff !important;
+            direction: rtl !important;
+            text-align: right !important;
+            transform: none !important;
+        }}
+        .a4-preview-viewport, .a4-preview-wrapper {{
+            margin: 0 !important;
+            padding: 0 !important;
+            height: auto !important;
+            overflow: visible !important;
+            background: #ffffff !important;
+            direction: rtl !important;
         }}
         .toolbar, .no-print, .zoom-bar, .live-sig-dock, .clear-sig-btn, .sig-guide-hint, .sig-mode-note,
         .live-pad-actions, .live-sig-dock-head {{ display: none !important; }}
@@ -4854,7 +4860,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             border: none !important; padding: 0 !important; margin: 0 !important; background: transparent !important;
         }}
         .live-pad-canvas {{ display: none !important; border: none !important; }}
-        .a4-sheet, .a4-paper {{
+
+        /* حاوية الورقة الرئيسية */
+        .a4-sheet, .a4-paper, .a4-page, .print-area, .report-container {{
             direction: rtl !important;
             transform: none !important;
             zoom: 1 !important;
@@ -4863,11 +4871,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             height: auto !important;
             min-height: 0 !important;
             max-height: none !important;
-            padding: 4mm 8mm !important;
+            padding: 4mm 5mm !important;
             margin: 0 auto !important;
             display: block !important;
             box-sizing: border-box !important;
             page-break-inside: avoid !important;
+            break-inside: avoid !important;
             box-shadow: none !important;
             border: none !important;
             overflow: visible !important;
@@ -4887,7 +4896,30 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             color: #ffffff !important;
             background-color: #0f3d2e !important;
         }}
+
+        /* تقليص حشوة الجداول لتوفير مساحة لجدول التواقيع */
+        .a4-paper table, .a4-sheet table {{
+            width: 100% !important;
+            border-collapse: collapse !important;
+            margin-bottom: 6px !important;
+            table-layout: fixed !important;
+        }}
+        .a4-paper th, .a4-paper td, .a4-sheet th, .a4-sheet td {{
+            padding: 4px 6px !important;
+            font-size: 11.5px !important;
+            line-height: 1.35 !important;
+            word-wrap: break-word !important;
+            overflow-wrap: break-word !important;
+        }}
         .a4-paper table.data-tbl td.lbl {{ background: #f4f7f6 !important; }}
+        .a4-paper table.sig-tbl th, .a4-paper .sig-head {{ background: #f1f5f3 !important; }}
+
+        /* ضبط صندوق الخطاب ومنع خروج الأرقام */
+        .a4-paper p, .a4-paper div, .a4-sheet p, .a4-sheet div {{
+            line-height: 1.45 !important;
+            overflow-wrap: break-word !important;
+            word-break: break-word !important;
+        }}
         .a4-paper .legal-box {{
             background: #f8fafc !important;
             border-right: 5px solid #0f3d2e !important;
@@ -4896,86 +4928,90 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             text-justify: inter-word !important;
             text-align-last: right !important;
             direction: rtl !important;
-            line-height: 1.9 !important;
+            line-height: 1.45 !important;
             overflow-wrap: break-word !important;
-            word-break: normal !important;
+            word-break: break-word !important;
             white-space: normal !important;
-            word-spacing: normal !important;
             width: 100% !important;
             max-width: 100% !important;
             box-sizing: border-box !important;
+            padding: 6px 8px !important;
+            margin-bottom: 6px !important;
         }}
         .a4-paper .legal-box div {{
             text-align: justify !important;
             text-align-last: right !important;
             direction: rtl !important;
             overflow-wrap: break-word !important;
+            word-break: break-word !important;
             white-space: normal !important;
+            line-height: 1.45 !important;
         }}
         .a4-paper .legal-box > div:first-child {{ text-align: right !important; }}
+
         .a4-paper .hdr {{
             display: grid !important; grid-template-columns: 1fr auto 1fr !important;
-            align-items: center !important; gap: 12px !important;
-            padding: 2px 0 8px 0 !important; margin-bottom: 6px !important;
+            align-items: center !important; gap: 8px !important;
+            padding: 2px 0 6px 0 !important; margin-bottom: 5px !important;
             border-bottom: 2px solid #0f5132 !important;
+            page-break-inside: avoid !important; break-inside: avoid !important;
         }}
         .a4-paper .hdr-right p {{
             margin: 0 !important; padding: 0 !important;
-            font-size: 12.5px !important; font-weight: 800 !important;
+            font-size: 11.5px !important; font-weight: 800 !important;
             line-height: 1.28 !important; color: #000000 !important;
         }}
         .a4-paper .hdr-left p {{
             margin: 0 !important; padding: 0 !important;
-            font-size: 11.5px !important; font-weight: 700 !important;
-            line-height: 1.32 !important; color: #000000 !important;
+            font-size: 10.5px !important; font-weight: 700 !important;
+            line-height: 1.3 !important; color: #000000 !important;
         }}
         .a4-paper .hdr-left p.hdr-nowrap {{ white-space: nowrap !important; }}
         .a4-paper .hdr-center {{
-            width: 88px !important; height: 88px !important;
-            min-width: 88px !important; min-height: 88px !important;
+            width: 72px !important; height: 72px !important;
+            min-width: 72px !important; min-height: 72px !important;
             padding: 0 !important; background: transparent !important;
             border: none !important; box-shadow: none !important;
         }}
         .a4-paper .hdr-center img, .a4-paper .hdr-logo {{
-            width: 88px !important; height: 88px !important;
-            max-width: 88px !important; max-height: 88px !important;
+            width: 72px !important; height: 72px !important;
+            max-width: 72px !important; max-height: 72px !important;
             object-fit: contain !important;
         }}
-        .a4-paper .doc-banner {{ margin-bottom: 8px !important; padding: 6px 10px !important; }}
-        .a4-paper table.data-tbl {{ margin-bottom: 8px !important; }}
-        .a4-paper table.data-tbl td {{ padding: 5px 7px !important; line-height: 1.4 !important; }}
-        .a4-paper .legal-box {{ padding: 8px 10px !important; margin-bottom: 8px !important; }}
-        .a4-paper table.sig-tbl td, .a4-paper .sig-cell {{ min-height: 52px !important; padding: 6px !important; }}
-        .a4-paper .footer-qr {{ margin-top: 6px !important; padding: 6px 8px !important; }}
-        .a4-paper table.sig-tbl th, .a4-paper .sig-head {{ background: #f1f5f3 !important; }}
-        .sig-footer, table.sig-tbl, .sig-grid, .footer-qr, .attachment-section {{
-            page-break-inside: avoid !important; break-inside: avoid !important;
+        .a4-paper .doc-banner {{
+            margin-bottom: 6px !important; padding: 5px 8px !important; font-size: 13px !important;
         }}
+        .a4-paper table.data-tbl {{ margin-bottom: 6px !important; }}
+
+        /* تقليص خانة التواقيع ومنع انفصالها في صفحة مستقلة */
+        .signatures, .sig-footer, table.sig-tbl, .sig-grid, .footer-qr, .attachment-section,
+        .a4-paper table:last-of-type {{
+            margin-top: 6px !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+        }}
+        .a4-paper table.sig-tbl td, .a4-paper .sig-cell {{
+            min-height: 42px !important; padding: 4px 6px !important;
+        }}
+        .a4-paper .footer-qr {{ margin-top: 6px !important; padding: 4px 6px !important; }}
+
+        /* تصغير صور التواقيع والباركود (مع الإبقاء على الشعار أوضح) */
+        .a4-paper img.sig-slot-img, .a4-paper .sig-slot-img,
+        .a4-paper .footer-qr img, .a4-paper .att-card img {{
+            max-height: 45px !important;
+            height: auto !important;
+            width: auto !important;
+            object-fit: contain !important;
+        }}
+        .a4-paper .hdr-center img, .a4-paper .hdr-logo {{
+            max-height: 72px !important;
+        }}
+
         a, a[href^="tel"] {{
             color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
         }}
         .a4-paper.a4-dense-print, .a4-paper.a4-compact {{
-            padding: 3mm 6mm !important;
-        }}
-        .a4-paper.a4-dense-print .doc-banner, .a4-paper.a4-compact .doc-banner {{
-            margin-bottom: 5px !important; padding: 4px 8px !important; font-size: 13px !important;
-        }}
-        .a4-paper.a4-dense-print table.data-tbl, .a4-paper.a4-compact table.data-tbl {{
-            margin-bottom: 5px !important;
-        }}
-        .a4-paper.a4-dense-print table.data-tbl td, .a4-paper.a4-compact table.data-tbl td {{
-            padding: 3px 5px !important; line-height: 1.3 !important; font-size: 12px !important;
-        }}
-        .a4-paper.a4-dense-print .legal-box, .a4-paper.a4-compact .legal-box {{
-            padding: 5px 8px !important; margin-bottom: 5px !important;
-            font-size: 11.5px !important; line-height: 1.4 !important;
-        }}
-        .a4-paper.a4-dense-print table.sig-tbl td, .a4-paper.a4-dense-print .sig-cell,
-        .a4-paper.a4-compact table.sig-tbl td, .a4-paper.a4-compact .sig-cell {{
-            min-height: 42px !important; padding: 4px !important;
-        }}
-        .a4-paper.a4-dense-print .footer-qr, .a4-paper.a4-compact .footer-qr {{
-            margin-top: 4px !important; padding: 4px 6px !important;
+            padding: 4mm 5mm !important;
         }}
     }}
 </style>
