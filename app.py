@@ -961,6 +961,172 @@ def _count_visible_tokens(index: int) -> list[str]:
     return [_COUNT_TOKEN[n] for n in range(index, 6)]
 
 
+def _agr(singular: str, plural: str, is_plural: bool) -> str:
+    """اختيار صياغة المفرد أو الجمع."""
+    return plural if is_plural else singular
+
+
+def _text_suggests_plural(text: str) -> bool | None:
+    """True=جمع، False=مفرد، None=غير محسوم من النص."""
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    if any(tok in raw for tok in ("عدة", "أكثر من", "مصابين", "جثامين", "أطراف", "متعددين", "جماعة")):
+        if "واحد" in raw and "عدة" not in raw and "أكثر" not in raw:
+            return False
+        return True
+    if any(tok in raw for tok in ("واحد", "واحدة", "فرد", "مفرد", "جثمان واحد", "مصاب واحد", "طرف واحد")):
+        return False
+    return None
+
+
+def _extra_people_listed(text: str) -> bool:
+    raw = str(text or "").strip()
+    if not raw:
+        return False
+    lowered = raw.replace("لا يوجد", "").replace("-", "").strip()
+    if not lowered or lowered in {".", "لا", "بدون"}:
+        return False
+    return len(lowered) > 2
+
+
+def _detect_people_count(values: dict, form_id: str = "") -> int:
+    """استنتاج عدد الأشخاص/الأطراف لصياغة المفرد والجمع في الخطاب والحقول."""
+    values = values or {}
+    fid = str(form_id or "")
+
+    if fid == "decl_settlement" or values.get("party_count"):
+        return max(1, _count_parties(values))
+
+    if fid == "med_injury" or values.get("cases_mode"):
+        hint = _text_suggests_plural(values.get("cases_mode"))
+        if hint is True or _extra_people_listed(values.get("other_injured")):
+            return 2
+        return 1
+
+    if fid == "med_morgue" or values.get("deceased_count"):
+        hint = _text_suggests_plural(values.get("deceased_count"))
+        if hint is True or _extra_people_listed(values.get("other_deceased")):
+            return 2
+        return 1
+
+    if fid == "decl_flee_waiver":
+        return 2 if _flee_is_present(values) else 1
+
+    if fid == "decl_animal_hit":
+        return 2 if _animal_owner_present(values) else 1
+
+    # نماذج الطرف الواحد افتراضياً (إقرار/محضر/تحليل سموم)
+    for key in ("party_count", "cases_mode", "deceased_count", "people_count", "violators_count"):
+        hint = _text_suggests_plural(values.get(key))
+        if hint is True:
+            return 2
+        if hint is False:
+            return 1
+    return 1
+
+
+def _is_plural_case(values: dict, form_id: str = "") -> bool:
+    return _detect_people_count(values, form_id) >= 2
+
+
+def _field_display_label(form_id: str, field: dict, values: dict) -> str:
+    """تبديل تسميات الحقول بين المفرد والجمع حسب العدد الفعلي."""
+    base = str((field or {}).get("label") or "")
+    key = str((field or {}).get("key") or "")
+    plural = _is_plural_case(values, form_id)
+    if form_id == "med_injury":
+        mapping = {
+            "party_name": ("اسم المصاب الرباعي", "اسم المصاب الأول الرباعي"),
+            "party_id": ("رقم الهوية / الإقامة والجنسية", "رقم الهوية / الإقامة والجنسية للمصاب الأول"),
+            "plate_no": ("بيانات المركبة وصفته بالحادث", "بيانات المركبة وصفته بالحادث (المصاب الأول)"),
+            "security_hold": ("التوجيه الأمني بعد تلقي العلاج", "التوجيه الأمني بعد تلقي العلاج للمصابين"),
+            "other_injured": ("بيان المصابين الإضافيين (الاسم، الهوية، الصفة، الإصابة الظاهرة)",) * 2,
+        }
+        if key in mapping:
+            return mapping[key][1] if plural else mapping[key][0]
+    if form_id == "med_morgue":
+        mapping = {
+            "party_name": ("اسم المتوفى (أو مجهول الهوية مع أوصافه)", "اسم المتوفى الأول (أو مجهول الهوية مع أوصافه)"),
+            "party_id": ("رقم الهوية / الإقامة والجنسية والعمر", "رقم الهوية / الإقامة والجنسية والعمر للمتوفى الأول"),
+            "plate_no": ("المركبة ورقم اللوحة وصفة المتوفى بالحادث", "المركبة ورقم اللوحة وصفة المتوفى الأول بالحادث"),
+            "forensic_order": ("التوجيه النظامي حيال التحفظ والكشف الطبي", "التوجيه النظامي حيال التحفظ والكشف الطبي للجثامين"),
+            "other_deceased": ("بيانات الجثامين الإضافية عند تعدد الوفيات (الاسم، الهوية، الصفة)",) * 2,
+        }
+        if key in mapping:
+            return mapping[key][1] if plural else mapping[key][0]
+    if form_id == "decl_settlement" and key == "party_count":
+        return base
+    return base
+
+
+def _form_display_title(form_def: dict, values: dict, form_id: str = "") -> str:
+    title = str((form_def or {}).get("title") or "")
+    fid = str(form_id or (form_def or {}).get("id") or "")
+    plural = _is_plural_case(values, fid)
+    if fid == "med_injury" or "مصاب / مصابين" in title:
+        return "نموذج معالجة مصابين" if plural else "نموذج معالجة مصاب"
+    if fid == "med_morgue" or "جثمان / جثامين" in title:
+        return "نموذج إيداع جثامين" if plural else "نموذج إيداع جثمان"
+    return title
+
+
+def _med_injury_legal(m: dict) -> str:
+    plural = _is_plural_case(m, "med_injury")
+    mode = _val(m, "cases_mode")
+    extras = ""
+    if plural and str(m.get("other_injured") or "").strip():
+        extras = f"، وبيان المصابين الإضافيين: ({_val(m, 'other_injured')})"
+    data_label = _agr("وبيانات المصاب", "وبيانات المصاب الرئيسي", plural)
+    aid_clause = _agr(
+        "وإسعافه ومعالجته وتنويمه إن تستدعي حالته الصحية ذلك",
+        "وإسعافهم ومعالجتهم وتنويم من تستدعي حالته الصحية ذلك",
+        plural,
+    )
+    report_clause = _agr(
+        "وموافاتنا بتقرير طبي مفصل ومعتمد يوضح نوع الإصابة ومدة الشفاء المقررة",
+        "وموافاتنا بتقرير طبي مفصل ومعتمد لكل حالة يوضح نوع الإصابات ومدة الشفاء المقررة",
+        plural,
+    )
+    exit_clause = _agr("حيال خروجه", "حيال خروجهم", plural)
+    arrive_clause = _agr("والواصل إليكم", "والواصلين إليكم", plural)
+    return (
+        f"سعادة مدير ({_val(m, 'hospital_name')}) المحترم، السلام عليكم ورحمة الله وبركاته.. "
+        f"إشارةً إلى الحادث المروري رقم ({_val(m, 'incident_no')})، نبعث لسعادتكم ({mode})، {data_label}: "
+        f"({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')} - {_val(m, 'plate_no')})"
+        f"{extras}، {arrive_clause} ({_sel(m, 'transport_way')}). "
+        f"نأمل الأمر بإجراء الكشف الطبي اللازم {aid_clause}، {report_clause}، "
+        f"مع اعتماد التوجيه الأمني التالي {exit_clause}: ({_sel(m, 'security_hold')})."
+    )
+
+
+def _med_morgue_legal(m: dict) -> str:
+    plural = _is_plural_case(m, "med_morgue")
+    mode = _val(m, "deceased_count")
+    extras = ""
+    if plural and str(m.get("other_deceased") or "").strip():
+        extras = f"، والبيان الإضافي للوفيات: ({_val(m, 'other_deceased')})"
+    body_label = _agr("وبيانات الجثمان", "وبيانات الجثمان الأول", plural)
+    receive_clause = _agr(
+        "استلام وإيداع الجثمان في الثلاجة رسمياً",
+        "استلام وإيداع الجثامين في الثلاجة رسمياً",
+        plural,
+    )
+    report_clause = _agr(
+        "وإجراء الكشف الطبي اللازم وموافاتنا بتقرير الوفاة المعتمد",
+        "وإجراء الكشف الطبي اللازم وموافاتنا بتقارير الوفاة المعتمدة لكل حالة",
+        plural,
+    )
+    return (
+        f"سعادة مدير ({_val(m, 'hospital_name')}) المحترم، السلام عليكم ورحمة الله وبركاته.. "
+        f"على إثر الحادث المروري الجسيم رقم ({_val(m, 'incident_no')})، جرى بعث ({mode}) للإيداع بثلاجة الموتى طرفكم، "
+        f"{body_label}: ({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')} - {_val(m, 'plate_no')})"
+        f"{extras}، حيث كانت واقعة الوفاة والنقل: ({_sel(m, 'transport_death')}). "
+        f"نأمل من سعادتكم الأمر بـ{receive_clause}، {report_clause}، "
+        f"مع التقيد التام بالتوجيه النظامي التالي: ({_sel(m, 'forensic_order')})."
+    )
+
+
 def _settlement_legal(values: dict) -> str:
     count = _count_parties(values)
     clauses = []
@@ -985,15 +1151,29 @@ def _settlement_legal(values: dict) -> str:
     compensation = ""
     if "عوض" in str(values.get("settlement_basis") or ""):
         compensation = f" وتفاصيل العوض أو الإصلاح: ({_val(values, 'compensation')})."
-    return (
-        f"نقر نحن الأطراف الموقعة أدناه في الحادث المروري رقم ({_val(values, 'incident_no')}) "
-        f"الواقع في ({_val(values, 'incident_loc')})، وعدد الأطراف المشمولين بهذا الصلح ({count})، وهم: "
-        + "؛ ".join(clauses)
-        + f". وأساس الصلح والتنازل: ({_val(values, 'settlement_basis')}).{compensation} "
-        f"ونقر بأن ({_val(values, 'injury_statement')}). "
-        "وبموجب هذا الإقرار نُسقط مطالبتنا بالحق الخاص إسقاطاً نهائياً لا رجعة فيه أمام قسم مرور العارضة "
-        "وأمام الجهات القضائية، ونُبرئ ذمة بعضنا فيما شمله هذا الصلح من التلفيات المادية."
-    )
+    if count <= 1:
+        opener = (
+            f"أقر أنا الطرف الموقع أدناه في الحادث المروري رقم ({_val(values, 'incident_no')}) "
+            f"الواقع في ({_val(values, 'incident_loc')})، بصفتي الطرف الوحيد المشمول بهذا الصلح، وهو: "
+        )
+        closer = (
+            f". وأساس الصلح والتنازل: ({_val(values, 'settlement_basis')}).{compensation} "
+            f"وأقر بأن ({_val(values, 'injury_statement')}). "
+            "وبموجب هذا الإقرار أُسقط مطالبتي بالحق الخاص إسقاطاً نهائياً لا رجعة فيه أمام قسم مرور العارضة "
+            "وأمام الجهات القضائية، وأُبرئ الذمة فيما شمله هذا الصلح من التلفيات المادية."
+        )
+    else:
+        opener = (
+            f"نقر نحن الأطراف الموقعة أدناه في الحادث المروري رقم ({_val(values, 'incident_no')}) "
+            f"الواقع في ({_val(values, 'incident_loc')})، وعدد الأطراف المشمولين بهذا الصلح ({count})، وهم: "
+        )
+        closer = (
+            f". وأساس الصلح والتنازل: ({_val(values, 'settlement_basis')}).{compensation} "
+            f"ونقر بأن ({_val(values, 'injury_statement')}). "
+            "وبموجب هذا الإقرار نُسقط مطالبتنا بالحق الخاص إسقاطاً نهائياً لا رجعة فيه أمام قسم مرور العارضة "
+            "وأمام الجهات القضائية، ونُبرئ ذمة بعضنا فيما شمله هذا الصلح من التلفيات المادية."
+        )
+    return opener + "؛ ".join(clauses) + closer
 
 
 def _flee_is_present(values: dict) -> bool:
@@ -1857,14 +2037,7 @@ TRAFFIC_FORMS = {
              "sample": "2- ريان بن موسى خبراني | هوية: 1123344556 | مرافق | إصابة متوسطة بالكتف الأيمن.\n3- عادل محمد علي | إقامة: 2456677889 | قائد الطرف الثاني | رضوض وكدمات متفرقة.",
              "visible_if": {"key": "cases_mode", "contains_any": ["عدة مصابين"]}},
         ],
-        "legal_fn": lambda m: (
-            f"سعادة مدير ({_val(m, 'hospital_name')}) المحترم، السلام عليكم ورحمة الله وبركاته.. "
-            f"إشارةً إلى الحادث المروري رقم ({_val(m, 'incident_no')})، نبعث لسعادتكم ({_val(m, 'cases_mode')})، وبيانات المصاب الرئيسي: "
-            f"({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')} - {_val(m, 'plate_no')})"
-            + (f"، وبيان المصابين الإضافيين: ({_val(m, 'other_injured')})" if "عدة" in str(m.get("cases_mode") or "") else "")
-            + f"، والواصلين إليكم ({_sel(m, 'transport_way')}). نأمل الأمر بإجراء الكشف الطبي اللازم وإسعافهم ومعالجتهم وتنويم من تستدعي حالته الصحية ذلك، "
-            f"وموافاتنا بتقرير طبي مفصل ومعتمد لكل حالة يوضح نوع الإصابات ومدة الشفاء المقررة، مع اعتماد التوجيه الأمني التالي حيال الخروج: ({_sel(m, 'security_hold')})."
-        ),
+        "legal_fn": _med_injury_legal,
     },
 
     "med_morgue": {
@@ -1904,14 +2077,7 @@ TRAFFIC_FORMS = {
              "sample": "2- ...",
              "visible_if": {"key": "deceased_count", "contains_any": ["عدة جثامين"]}},
         ],
-        "legal_fn": lambda m: (
-            f"سعادة مدير ({_val(m, 'hospital_name')}) المحترم، السلام عليكم ورحمة الله وبركاته.. "
-            f"على إثر الحادث المروري الجسيم رقم ({_val(m, 'incident_no')})، جرى بعث ({_val(m, 'deceased_count')}) للإيداع بثلاجة الموتى طرفكم، "
-            f"وبيانات الجثمان: ({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')} - {_val(m, 'plate_no')})"
-            + (f"، البيان الإضافي للوفيات: ({_val(m, 'other_deceased')})" if "عدة" in str(m.get("deceased_count") or "") else "")
-            + f"، حيث كانت واقعة الوفاة والنقل: ({_sel(m, 'transport_death')}). نأمل من سعادتكم الأمر باستلام وإيداع الجثمان/الجثامين في الثلاجة رسمياً، "
-            f"وإجراء الكشف الطبي اللازم وموافاتنا بتقرير الوفاة المعتمد، مع التقيد التام بالتوجيه النظامي التالي: ({_sel(m, 'forensic_order')})."
-        ),
+        "legal_fn": _med_morgue_legal,
     },
 
     "med_toxicology": {
@@ -2217,6 +2383,30 @@ def read_device_uid() -> str:
     return uid if _UUID4_RE.match(uid) else ""
 
 
+def ensure_device_identity() -> tuple[str, str]:
+    """ يضمن وجود معرّف جهاز فوري: كوكي المتصفح أولاً، ثم معرّف الجلسة الاحتياطي."""
+    cookie_uid = read_device_uid()
+    if cookie_uid:
+        st.session_state["device_uid"] = cookie_uid
+        st.session_state.pop("device_uid_pending", None)
+        hashed = device_hash_for(cookie_uid)
+        st.session_state["device_hash"] = hashed
+        return cookie_uid, hashed
+
+    pending = str(
+        st.session_state.get("device_uid_pending")
+        or st.session_state.get("device_uid")
+        or ""
+    ).strip()
+    if not pending or not _UUID4_RE.match(pending):
+        pending = str(uuid.uuid4())
+        st.session_state["device_uid_pending"] = pending
+    st.session_state["device_uid"] = pending
+    hashed = device_hash_for(pending)
+    st.session_state["device_hash"] = hashed
+    return pending, hashed
+
+
 def get_device_shift(device_hash: str) -> dict:
     if not device_hash:
         return _blank_shift()
@@ -2481,13 +2671,16 @@ def render_device_bootstrap(
     shift_payload: dict | None,
     wipe: bool,
     duty_sig_b64: str = "",
+    preferred_uid: str = "",
 ) -> None:
     """يبقي معرّف الجهاز في الكوكيز والتخزين المحلي دون إضافته إلى الرابط.
     التوقيع (duty_sig_b64) يُحفظ في localStorage فقط — وليس في الكوكيز — لتفادي حد 4KB.
+    preferred_uid: معرّف الجلسة الاحتياطي يُعتمد فوراً إن لم يوجد معرّف في المتصفح.
     """
     light = shift_light_payload(shift_payload) if shift_payload else None
     shift_js = json.dumps(light, ensure_ascii=True) if light else "null"
     sig_js = json.dumps(str(duty_sig_b64 or ""), ensure_ascii=True)
+    preferred_js = json.dumps(str(preferred_uid or ""), ensure_ascii=True)
     st.html(
         f"""
 <script>
@@ -2499,6 +2692,7 @@ def render_device_bootstrap(
   var wipe = {"true" if wipe else "false"};
   var officialShift = {shift_js};
   var officialDutySig = {sig_js};
+  var preferredUid = {preferred_js};
   function readCookie(name) {{
     var parts = (document.cookie || "").split("; ");
     for (var i = 0; i < parts.length; i++) {{
@@ -2520,10 +2714,14 @@ def render_device_bootstrap(
     for (var i = 0; i < 16; i++) hex.push(bytes[i].toString(16).padStart(2, "0"));
     return hex.slice(0, 4).join("") + "-" + hex.slice(4, 6).join("") + "-" + hex.slice(6, 8).join("") + "-" + hex.slice(8, 10).join("") + "-" + hex.slice(10).join("");
   }}
+  function isUuid(v) {{
+    return /^[0-9a-f]{{8}}-[0-9a-f]{{4}}-4[0-9a-f]{{3}}-[89ab][0-9a-f]{{3}}-[0-9a-f]{{12}}$/i.test(String(v || ""));
+  }}
   var uid = "";
   try {{ uid = localStorage.getItem(uidKey) || ""; }} catch (e) {{}}
   if (!uid) uid = readCookie(uidKey);
-  if (!/^[0-9a-f]{{8}}-[0-9a-f]{{4}}-4[0-9a-f]{{3}}-[89ab][0-9a-f]{{3}}-[0-9a-f]{{12}}$/i.test(uid)) uid = uuid4();
+  if (!isUuid(uid) && isUuid(preferredUid)) uid = preferredUid;
+  if (!isUuid(uid)) uid = uuid4();
   try {{ localStorage.setItem(uidKey, uid); }} catch (e) {{}}
   writeCookie(uidKey, uid, 31536000);
   if (wipe) {{
@@ -2767,6 +2965,7 @@ div[data-testid="stTextArea"]:has(textarea[placeholder*="LIVE_SIG_BRIDGE"]) {
 
 
 def _consume_live_sig_bridge() -> None:
+    """استهلاك جسر التوقيع الحي مبكراً حتى تبقى التواقيع في الجلسة قبل الحفظ/التنزيل."""
     raw = st.session_state.get("live_sig_bridge") or ""
     if not str(raw).strip():
         return
@@ -2791,6 +2990,10 @@ def _consume_live_sig_bridge() -> None:
             st.session_state.officer_stamp_b64 = b64
         elif pad_id == "duty" and b64:
             st.session_state.duty_stamp_b64 = b64
+        elif pad_id.startswith("p") and b64:
+            party_stamps = dict(st.session_state.get("party_stamps") or {})
+            party_stamps[pad_id] = b64
+            st.session_state.party_stamps = party_stamps
     except Exception:
         pass
 
@@ -3374,6 +3577,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     live_pad_ids = []
     dock_cards = []
+    _live_pads_map = rec.get("live_sig_pads") or fields_map.get("__live_sig_pads") or {}
+    if not isinstance(_live_pads_map, dict):
+        _live_pads_map = {}
+    _party_stamps_map = rec.get("party_stamps") or fields_map.get("__party_stamps") or {}
+    if not isinstance(_party_stamps_map, dict):
+        _party_stamps_map = {}
     if needs_party_live:
         for signer in party_signers:
             live_pad_ids.append(signer["pad"])
@@ -3397,6 +3606,22 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             else rec.get("duty_full", "")
         )
         dock_cards.append(_live_pad_card("duty", duty_pad_title, duty_pad_sub))
+
+    preloaded_live_sigs = {}
+    for pad_id in live_pad_ids:
+        b64 = (
+            str(_live_pads_map.get(pad_id) or "").strip()
+            or str(_party_stamps_map.get(pad_id) or "").strip()
+            or str(fields_map.get(f"__sig_{pad_id}") or "").strip()
+        )
+        if not b64 and pad_id == "citizen":
+            b64 = str(rec.get("citizen_stamp_b64") or "").strip()
+        elif not b64 and pad_id == "officer":
+            b64 = str(rec.get("officer_stamp_b64") or "").strip()
+        elif not b64 and pad_id == "duty":
+            b64 = str(rec.get("duty_stamp_b64") or "").strip()
+        if b64:
+            preloaded_live_sigs[pad_id] = b64
 
     live_dock_html = ""
     if dock_cards:
@@ -3982,6 +4207,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 <script>
     const PEN_COLOR = '#0d47a1';
     const LIVE_PADS = {json.dumps(live_pad_ids, ensure_ascii=False)};
+    const PRELOADED_SIGS = {json.dumps(preloaded_live_sigs, ensure_ascii=False)};
+    const DOC_SIG_KEY = {json.dumps(str(rec.get("doc_no") or "doc"), ensure_ascii=False)};
+
+    function padStorageKey(padId) {{
+        return 'khafar_pad_' + DOC_SIG_KEY + '_' + padId;
+    }}
 
     function syncPadToSlot(padId) {{
         const canvas = document.getElementById('pad_' + padId);
@@ -3993,6 +4224,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         if (empty) {{
             slot.removeAttribute('src');
             slot.style.display = 'none';
+            try {{ localStorage.removeItem(padStorageKey(padId)); }} catch (e) {{}}
             try {{
               parent.postMessage({{ type: 'khafar_live_sig', padId: padId, b64: '' }}, '*');
             }} catch (e) {{}}
@@ -4004,6 +4236,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         slot.style.display = 'inline-block';
         try {{
           const b64 = (dataUrl.split(',')[1] || '');
+          try {{ localStorage.setItem(padStorageKey(padId), b64); }} catch (e2) {{}}
           parent.postMessage({{ type: 'khafar_live_sig', padId: padId, b64: b64 }}, '*');
         }} catch (e) {{}}
     }}
@@ -4063,6 +4296,29 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
 
     LIVE_PADS.forEach(wireLivePad);
+
+    function restoreLivePad(padId, b64) {{
+        if (!padId || !b64) return;
+        const canvas = document.getElementById('pad_' + padId);
+        if (!canvas) return;
+        const img = new Image();
+        img.onload = function() {{
+            try {{
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                syncPadToSlot(padId);
+            }} catch (e) {{}}
+        }};
+        img.src = 'data:image/png;base64,' + b64;
+    }}
+    (LIVE_PADS || []).forEach(function(padId) {{
+        var b64 = (PRELOADED_SIGS && PRELOADED_SIGS[padId]) || '';
+        if (!b64) {{
+            try {{ b64 = localStorage.getItem(padStorageKey(padId)) || ''; }} catch (e) {{ b64 = ''; }}
+        }}
+        if (b64) restoreLivePad(padId, b64);
+    }});
 
     var ZOOM_KEY = "khafar_preview_zoom";
     var userZoom = 1;
@@ -4230,10 +4486,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 # =====================================================================
 init_db()
 init_takmeel_db()
-_device_uid = read_device_uid()
-DEVICE_HASH = device_hash_for(_device_uid) if _device_uid else ""
-if DEVICE_HASH:
-    st.session_state["device_hash"] = DEVICE_HASH
+_device_uid, DEVICE_HASH = ensure_device_identity()
+_cookie_uid_ready = bool(read_device_uid())
 _wipe_shift = bool(st.session_state.get("wipe_device_shift"))
 if DEVICE_HASH and not _wipe_shift and not device_shift_exists(DEVICE_HASH):
     _cookie_shift = shift_from_cookie()
@@ -4250,10 +4504,11 @@ elif DUTY_SIG_KEY not in st.session_state:
     st.session_state[DUTY_SIG_KEY] = ""
 _mirror_shift = shift if (DEVICE_HASH and device_shift_exists(DEVICE_HASH) and not _wipe_shift) else None
 render_device_bootstrap(
-    bool(_device_uid),
+    _cookie_uid_ready,
     _mirror_shift,
     _wipe_shift,
     duty_sig_b64=str(shift.get(DUTY_SIG_KEY) or ""),
+    preferred_uid=_device_uid,
 )
 if _wipe_shift:
     st.session_state.pop("wipe_device_shift", None)
@@ -4314,6 +4569,8 @@ if "party_stamps" not in st.session_state:
     st.session_state.party_stamps = {}
 if "live_sig_pads" not in st.session_state:
     st.session_state.live_sig_pads = {}
+# استهلاك جسر التوقيع الحي مبكراً قبل بناء السجل/أزرار الحفظ والتنزيل
+_consume_live_sig_bridge()
 if "officer_approved" not in st.session_state:
     st.session_state.officer_approved = False
 if "officer_stamp_b64" not in st.session_state:
@@ -4642,7 +4899,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
                     <div>
                         <span class="badge-{cat_badge_cls}">قسم مرور العارضة</span>
-                        <h3 style="margin:6px 0 2px 0; color:#ffffff; font-size:20px;">{form_def['icon']} {form_def['title']}</h3>
+                        <h3 style="margin:6px 0 2px 0; color:#ffffff; font-size:20px;">{form_def['icon']} {_form_display_title(form_def, {k: st.session_state.get(f'inp_{fid}_{k}', '') for k in ('cases_mode', 'deceased_count', 'party_count')}, fid)}</h3>
                         <div style="font-size:13px; color:#f3cc7a; font-weight:700;">{form_def.get('official_title', '')}</div>
                     </div>
                     <div style="font-size:12.5px; color:#d4a853; font-weight:700;">
@@ -4673,6 +4930,19 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         st.session_state.duty_stamp_b64 = ""
                         safe_rerun()
 
+            current_values = {}
+
+            def _label_values_snapshot() -> dict:
+                snap = dict(current_values)
+                for peek_key in (
+                    "cases_mode", "deceased_count", "party_count",
+                    "waiver_status", "legal_mode", "other_injured", "other_deceased",
+                ):
+                    wpeek = f"inp_{fid}_{peek_key}"
+                    if peek_key not in snap and wpeek in st.session_state:
+                        snap[peek_key] = st.session_state[wpeek]
+                return snap
+
             def render_field(fld):
                 wkey = f"inp_{fid}_{fld['key']}"
                 locked = st.session_state.citizen_locked
@@ -4685,17 +4955,18 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     waiting = gps_seed in ("", "بانتظار رصد الموقع") or "بانتظار" in gps_seed
                     if gps_seed and not waiting and signed_gps_pair(gps_seed):
                         st.session_state[wkey] = gps_seed
+                label_now = _field_display_label(fid, fld, _label_values_snapshot())
                 if fld["type"] == "select":
                     opts = fld["options"]
                     default_idx = opts.index(st.session_state[wkey]) if (wkey in st.session_state and st.session_state[wkey] in opts) else 0
-                    return st.selectbox(fld["label"], options=opts, index=default_idx, key=wkey, disabled=locked)
+                    return st.selectbox(label_now, options=opts, index=default_idx, key=wkey, disabled=locked)
                 if fld["type"] == "textarea":
-                    return st.text_area(fld["label"], key=wkey, height=88, disabled=locked)
+                    return st.text_area(label_now, key=wkey, height=88, disabled=locked)
                 ph = fld.get("placeholder") or ""
                 if fld.get("prefill_shift_gps") and not ph:
                     ph = "اكتب اسم الطريق وموقع الحادث"
                 return st.text_input(
-                    fld["label"],
+                    label_now,
                     key=wkey,
                     disabled=locked,
                     placeholder=ph,
@@ -4709,8 +4980,6 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     target = st.container() if fld["type"] == "textarea" else columns[idx % 2]
                     with target:
                         current_values[fld["key"]] = render_field(fld)
-
-            current_values = {}
             if fid == "decl_handover":
                 by_key = {fld["key"]: fld for fld in form_def["fields"]}
                 head = st.columns(2)
@@ -5189,7 +5458,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 ready_record = {
                     "doc_no": st.session_state.doc_no,
                     "form_id": fid,
-                    "form_title": form_def.get("official_title") or form_def["title"],
+                    "form_title": form_def.get("official_title") or _form_display_title(form_def, current_values, fid),
                     "category": form_def["category"],
                     "party_name": party_name_final,
                     "party_id": party_id_final,
@@ -5226,10 +5495,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 st.write("")
                 act1, act2, act3 = st.columns(3)
                 with act1:
-                    if not DEVICE_HASH:
-                        st.warning("يُجهَّز تعريف هذا الجهاز داخل المتصفح قبل حفظ الأرشيف. أعد المحاولة بعد لحظة.")
-                    elif st.button("💾 حفظ الوثيقة نهائياً في الأرشيف المحلي", type="primary", use_container_width=True):
-                        save_record_to_db(ready_record, DEVICE_HASH)
+                    if not _cookie_uid_ready:
+                        st.caption("⏳ تتم مزامنة تعريف الجهاز مع المتصفح في الخلفية — الحفظ متاح الآن بالمعرّف الاحتياطي.")
+                    if st.button("💾 حفظ الوثيقة نهائياً في الأرشيف المحلي", type="primary", use_container_width=True):
+                        _, hash_now = ensure_device_identity()
+                        save_record_to_db(ready_record, hash_now)
                         st.success(f"تم حفظ الوثيقة ({ready_record['doc_no']}) في أرشيف هذا الجهاز فقط.")
                 with act2:
                     st.download_button(
@@ -5353,11 +5623,12 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 pasted = parse_gps_paste(paste_gps)
                 if not pasted:
                     st.error("تعذر استخراج الإحداثيات من النص الملصوق.")
-                elif not DEVICE_HASH:
-                    st.warning("يُجهَّز تعريف هذا الجهاز داخل المتصفح. أعد المحاولة بعد لحظة.")
                 else:
+                    _, hash_now = ensure_device_identity()
+                    if not _cookie_uid_ready:
+                        st.caption("⏳ تتم مزامنة تعريف الجهاز مع المتصفح — اعتمدنا المعرّف الاحتياطي فوراً.")
                     formatted = format_live_gps(*pasted)
-                    update_default_gps(DEVICE_HASH, formatted)
+                    update_default_gps(hash_now, formatted)
                     st.session_state["gps_live_ok"] = True
                     st.session_state["gps_live_value"] = formatted
                     st.session_state["gps_toast"] = formatted
@@ -5400,20 +5671,20 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 st.success("تم مسح اسم المناوبة وبيانات هذا الجهاز (بما فيها توقيع ضابط الخفر) من المتصفح.")
                 safe_rerun()
             if save_shift:
-                if not DEVICE_HASH:
-                    st.warning("يُجهَّز تعريف هذا الجهاز داخل المتصفح. أعد الحفظ بعد لحظة.")
-                else:
-                    save_device_shift(DEVICE_HASH, {
-                        "dept_name": "قسم مرور العارضة",
-                        "officer_rank": s_orank,
-                        "officer_name": s_oname,
-                        "duty_rank": s_drank,
-                        "duty_name": s_dname,
-                        "default_gps": s_gps,
-                        DUTY_SIG_KEY: st.session_state.get(DUTY_SIG_KEY) or shift.get(DUTY_SIG_KEY) or "",
-                    })
-                    st.success("تم حفظ الإعدادات على هذا الجهاز فقط.")
-                    safe_rerun()
+                _, hash_now = ensure_device_identity()
+                if not _cookie_uid_ready:
+                    st.caption("⏳ تتم مزامنة تعريف الجهاز مع المتصفح — الحفظ بالمعرّف الاحتياطي متاح الآن.")
+                save_device_shift(hash_now, {
+                    "dept_name": "قسم مرور العارضة",
+                    "officer_rank": s_orank,
+                    "officer_name": s_oname,
+                    "duty_rank": s_drank,
+                    "duty_name": s_dname,
+                    "default_gps": s_gps,
+                    DUTY_SIG_KEY: st.session_state.get(DUTY_SIG_KEY) or shift.get(DUTY_SIG_KEY) or "",
+                })
+                st.success("تم حفظ الإعدادات على هذا الجهاز فقط.")
+                safe_rerun()
 
         # لوحة التوقيع خارج st.form لالتقاط Base64 لحظياً دون تعارض مع نموذج الحفظ
         st.markdown("##### ✍️ التوقيع المعتمد لضابط الخفر (يُدرج تلقائياً في جميع النماذج)")
@@ -5461,14 +5732,15 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                     payload = compress_signature_b64(st.session_state.get(DUTY_SIG_KEY) or "")
                 if not payload:
                     st.warning("ارسم التوقيع في اللوحة أو ارفع صورة أولاً.")
-                elif not DEVICE_HASH:
-                    st.warning("يُجهَّز تعريف هذا الجهاز داخل المتصفح. أعد الحفظ بعد لحظة.")
                 else:
+                    _, hash_now = ensure_device_identity()
+                    if not _cookie_uid_ready:
+                        st.caption("⏳ تتم مزامنة تعريف الجهاز مع المتصفح — الحفظ بالمعرّف الاحتياطي متاح الآن.")
                     st.session_state[DUTY_SIG_KEY] = payload
                     st.session_state["_clear_duty_sig_bridge"] = True
-                    cur = get_device_shift(DEVICE_HASH)
+                    cur = get_device_shift(hash_now)
                     cur[DUTY_SIG_KEY] = payload
-                    save_device_shift(DEVICE_HASH, cur)
+                    save_device_shift(hash_now, cur)
                     st.success("تم حفظ توقيع ضابط الخفر على هذا الجهاز وتفعيله تلقائياً.")
                     safe_rerun()
         with del_col:
