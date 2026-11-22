@@ -243,9 +243,34 @@ section[data-testid="stSidebar"] { display: none !important; }
 .block-container {
     padding-top: 0.35rem !important;
     padding-bottom: 1.4rem !important;
-    padding-left: 0.7rem !important;
-    padding-right: 0.7rem !important;
-    max-width: 1140px !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+}
+@media only screen and (max-width: 820px) {
+    .block-container,
+    .block-container h1,
+    .block-container h2,
+    .block-container h3,
+    .block-container label,
+    .block-container p,
+    [data-testid="stMarkdownContainer"],
+    [data-testid="stWidgetLabel"],
+    [data-testid="stWidgetLabel"] p {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow-wrap: anywhere !important;
+        word-break: normal !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+    .main, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+        overflow-x: hidden !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
 }
 
 .stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"] {
@@ -645,11 +670,44 @@ div[data-testid="stTabs"] div.stButton > button[kind="primary"]:hover {
     border: 1px solid #23634c;
     border-right: 5px solid var(--gold-main);
     border-radius: 12px;
-    padding: 16px 20px;
+    padding: 14px 16px !important;
     margin: 14px 0;
     color: #e2e8f0;
     font-size: 14.5px;
-    line-height: 1.95;
+    line-height: 1.9 !important;
+    direction: rtl !important;
+    text-align: justify !important;
+    text-justify: inter-word !important;
+    text-align-last: right !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
+    white-space: normal !important;
+}
+.legal-dark-box .legal-title {
+    direction: rtl !important;
+    text-align: right !important;
+    color: #d4a853 !important;
+    font-weight: 800 !important;
+    margin-bottom: 8px !important;
+    white-space: normal !important;
+}
+.legal-dark-box .legal-body {
+    direction: rtl !important;
+    unicode-bidi: embed !important;
+    text-align: justify !important;
+    text-justify: inter-word !important;
+    text-align-last: right !important;
+    line-height: 1.9 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-wrap: anywhere !important;
+    word-break: normal !important;
+    white-space: normal !important;
+    color: #e2e8f0 !important;
 }
 .lock-emerald-banner {
     background: rgba(16, 185, 129, 0.14);
@@ -816,9 +874,21 @@ iframe[data-testid="stIFrame"],
 .official-5lines, .official-5lines div,
 .official-5lines-compact, .official-5lines-compact div { text-align: right !important; }
 .auth-panel:empty { display: none !important; }
-.legal-dark-box { direction: rtl !important; text-align: right !important; unicode-bidi: embed !important; color: #e2e8f0 !important; word-spacing: normal !important; }
+.legal-dark-box {
+    direction: rtl !important; text-align: justify !important; text-justify: inter-word !important;
+    text-align-last: right !important; unicode-bidi: embed !important; color: #e2e8f0 !important;
+    width: 100% !important; max-width: 100% !important; box-sizing: border-box !important;
+    padding: 14px 16px !important; line-height: 1.9 !important;
+    overflow-wrap: anywhere !important; word-break: normal !important; white-space: normal !important;
+}
 .legal-dark-box .legal-title { direction: rtl !important; text-align: right !important; color: #d4a853 !important; font-weight: 800 !important; margin-bottom: 8px !important; }
-.legal-dark-box .legal-body { direction: rtl !important; unicode-bidi: embed !important; text-align: right !important; line-height: 1.55 !important; word-spacing: normal !important; color: #e2e8f0 !important; }
+.legal-dark-box .legal-body {
+    direction: rtl !important; unicode-bidi: embed !important;
+    text-align: justify !important; text-justify: inter-word !important; text-align-last: right !important;
+    line-height: 1.9 !important; width: 100% !important; max-width: 100% !important;
+    box-sizing: border-box !important; overflow-wrap: anywhere !important;
+    word-break: normal !important; white-space: normal !important; color: #e2e8f0 !important;
+}
 @media print {
     @page { size: A4 portrait; margin: 4mm !important; }
     html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], .main, .block-container {
@@ -859,6 +929,45 @@ def _rtl_isolate(text: str, *, as_html: bool = True) -> str:
         + html.escape(v)
         + "</span>"
     )
+
+
+def normalize_official_legal_text(text: str) -> str:
+    """وحّد المسافات والصق الأقواس بالنص حتى لا تنفصل على الجوال أو داخل A4."""
+    raw = str(text or "")
+    if not raw.strip():
+        return ""
+    raw = (
+        raw.replace("\xa0", " ")
+        .replace("\u202f", " ")
+        .replace("\u200b", "")
+        .replace("&nbsp;", " ")
+        .replace("&#160;", " ")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+    )
+    chunks = re.split(r"(<[^>]+>)", raw)
+    cleaned = []
+    for chunk in chunks:
+        if not chunk:
+            continue
+        if chunk.startswith("<") and chunk.endswith(">"):
+            cleaned.append(chunk)
+            continue
+        part = " ".join(chunk.splitlines())
+        part = re.sub(r"[ \t\f\v]+", " ", part)
+        # الصق القوس المفتوح بأول كلمة والمغلق بآخر كلمة
+        part = re.sub(r"\(\s+", "(", part)
+        part = re.sub(r"\s+\)", ")", part)
+        part = re.sub(r"（\s+", "（", part)
+        part = re.sub(r"\s+）", "）", part)
+        # امنع انفصال القوس عن الكلمة المجاورة عند الالتفاف
+        part = re.sub(r"\((\S)", lambda m: "(\u2060" + m.group(1), part)
+        part = re.sub(r"(\S)\)", lambda m: m.group(1) + "\u2060)", part)
+        cleaned.append(part)
+    out = "".join(cleaned)
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    out = re.sub(r"\s+([،,.؛;:!؟?])", r"\1", out)
+    return out.strip()
 
 
 def _val(values: dict, key: str) -> str:
@@ -4350,6 +4459,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         legal_box_title = "نص الخطاب والتوجيه الرسمي المعتمد:"
     else:
         legal_box_title = f"الصيغة النظامية المعتمدة ({rec['category']}):"
+    cleaned_legal_text = normalize_official_legal_text(rec.get("legal_text") or "")
     banner_title = (form_def or {}).get("official_title") or rec["form_title"]
     sheet_cls = "a4-sheet a4-paper dense-fit"
     table_rows = rows_html.count("<tr")
@@ -4619,11 +4729,20 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .legal-box {{
         background: #f8fafc !important; border: 1.4px solid #0f3d2e; border-right: 5px solid #0f3d2e !important;
         border-radius: 6px; padding: 14px 16px !important; margin-bottom: 14px !important;
-        font-size: 13.5px !important; line-height: 1.55 !important; text-align: right !important; direction: rtl !important;
+        font-size: 13.5px !important; line-height: 1.9 !important;
+        text-align: justify !important; text-justify: inter-word !important; text-align-last: right !important;
+        direction: rtl !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important;
+        overflow-wrap: break-word !important; word-break: normal !important; white-space: normal !important;
         word-spacing: normal !important; color: #000000 !important; font-weight: 700 !important;
     }}
     .legal-box > div:first-child {{ margin-bottom: 8px !important; font-weight: 800 !important; text-align: right !important; }}
-    .legal-box div {{ font-size: 13.5px !important; line-height: 1.55 !important; color: #000000 !important; font-weight: 700 !important; text-align: right !important; word-spacing: normal !important; }}
+    .legal-box div {{
+        font-size: 13.5px !important; line-height: 1.9 !important; color: #000000 !important; font-weight: 700 !important;
+        text-align: justify !important; text-justify: inter-word !important; text-align-last: right !important;
+        direction: rtl !important; overflow-wrap: break-word !important; word-break: normal !important;
+        white-space: normal !important; word-spacing: normal !important;
+    }}
+    .legal-box > div:first-child {{ text-align: right !important; }}
     table.sig-tbl {{
         table-layout: fixed !important; width: 100% !important;
         border-collapse: collapse; margin-top: 10px; text-align: center;
@@ -4773,10 +4892,27 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             background: #f8fafc !important;
             border-right: 5px solid #0f3d2e !important;
             color: #000000 !important;
-            text-align: right !important;
-            line-height: 1.55 !important;
+            text-align: justify !important;
+            text-justify: inter-word !important;
+            text-align-last: right !important;
+            direction: rtl !important;
+            line-height: 1.9 !important;
+            overflow-wrap: break-word !important;
+            word-break: normal !important;
+            white-space: normal !important;
             word-spacing: normal !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
         }}
+        .a4-paper .legal-box div {{
+            text-align: justify !important;
+            text-align-last: right !important;
+            direction: rtl !important;
+            overflow-wrap: break-word !important;
+            white-space: normal !important;
+        }}
+        .a4-paper .legal-box > div:first-child {{ text-align: right !important; }}
         .a4-paper .hdr {{
             display: grid !important; grid-template-columns: 1fr auto 1fr !important;
             align-items: center !important; gap: 12px !important;
@@ -4884,9 +5020,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             <div class="doc-banner">{banner_title}</div>
             <table class="{data_tbl_cls}">{rows_html}</table>
 
-            <div class="legal-box" dir="rtl" style="direction:rtl; text-align:right; line-height:1.55; word-spacing:normal;">
+            <div class="legal-box" dir="rtl" style="direction:rtl; text-align:justify; text-justify:inter-word; text-align-last:right; line-height:1.9; overflow-wrap:break-word; white-space:normal; width:100%; max-width:100%; box-sizing:border-box;">
                 <div dir="rtl" style="font-weight:800; color:#000000; margin-bottom:8px; direction:rtl; text-align:right;">{legal_box_title}</div>
-                <div dir="rtl" style="direction:rtl; unicode-bidi:embed; text-align:right; line-height:1.55; word-spacing:normal; color:#000000; font-weight:700;">&#8207;{rec['legal_text']}</div>
+                <div dir="rtl" style="direction:rtl; unicode-bidi:embed; text-align:justify; text-justify:inter-word; text-align-last:right; line-height:1.9; overflow-wrap:break-word; word-break:normal; white-space:normal; word-spacing:normal; color:#000000; font-weight:700;">&#8207;{cleaned_legal_text}</div>
             </div>
             {attachment_block}
         </div>
@@ -5939,9 +6075,20 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             elif form_def["require_image"]:
                 st.caption("⚠️ هذا النموذج يتطلب إرفاق صورة قبل اعتماد الوثيقة.")
 
-            live_legal_text = " ".join(form_def["legal_fn"](current_values).splitlines())
+            live_legal_text = normalize_official_legal_text(form_def["legal_fn"](current_values))
             st.markdown(
-                f'<div class="legal-dark-box" dir="rtl" style="direction:rtl !important;text-align:right !important;word-spacing:normal !important;"><div class="legal-title" dir="rtl" style="direction:rtl !important;text-align:right !important;color:#d4a853;font-weight:800;margin-bottom:8px;">⚖️ معاينة النص الرسمي المعتمد في الوثيقة:</div><div class="legal-body" dir="rtl" style="direction:rtl !important;unicode-bidi:embed !important;text-align:right !important;line-height:1.55 !important;word-spacing:normal !important;">\u200f{live_legal_text}</div></div>',
+                (
+                    '<div class="legal-dark-box" dir="rtl" style="direction:rtl !important;text-align:justify !important;'
+                    "text-justify:inter-word !important;text-align-last:right !important;line-height:1.9 !important;"
+                    'width:100% !important;max-width:100% !important;box-sizing:border-box !important;'
+                    'padding:14px 16px !important;overflow-wrap:anywhere !important;word-break:normal !important;'
+                    'white-space:normal !important;">'
+                    '<div class="legal-title" dir="rtl">⚖️ معاينة النص الرسمي المعتمد في الوثيقة:</div>'
+                    '<div class="legal-body" dir="rtl" style="direction:rtl !important;unicode-bidi:embed !important;'
+                    "text-align:justify !important;text-justify:inter-word !important;text-align-last:right !important;"
+                    'line-height:1.9 !important;overflow-wrap:anywhere !important;white-space:normal !important;">'
+                    f"\u200f{live_legal_text}</div></div>"
+                ),
                 unsafe_allow_html=True,
             )
 
