@@ -920,6 +920,77 @@ def normalize_western_digits(text: str) -> str:
     return str(text or "").translate(_ARABIC_INDIC_DIGITS)
 
 
+_REF_FIELD_KEYS = {"incident_no", "ref_no", "reference_no", "case_no", "report_no"}
+_REF_LABEL_TOKENS = (
+    "رقم مرجعي",
+    "الرقم المرجعي",
+    "رقم الحادث",
+    "رقم البلاغ",
+    "رقم المحضر",
+    "رقم المخالف",
+    "رقم المعاملة",
+    "رقم الواقعة",
+)
+
+
+def form_uses_reference_number(form_def: dict | None) -> bool:
+    """هل النموذج يعتمد رقماً مرجعياً (حادث/بلاغ/محضر/إحالة)؟"""
+    if not form_def:
+        return False
+    if form_def.get("category") == "تكميل":
+        return False
+    for fld in form_def.get("fields") or []:
+        key = str(fld.get("key") or "")
+        label = str(fld.get("label") or "")
+        if key in _REF_FIELD_KEYS:
+            return True
+        if any(tok in label for tok in _REF_LABEL_TOKENS):
+            return True
+    return False
+
+
+def form_primary_ref_field_key(form_def: dict | None) -> str:
+    """مفتاح حقل الرقم المرجعي الأساسي داخل النموذج (غالباً incident_no)."""
+    if not form_def:
+        return "incident_no"
+    for fld in form_def.get("fields") or []:
+        key = str(fld.get("key") or "")
+        if key in _REF_FIELD_KEYS:
+            return key
+    for fld in form_def.get("fields") or []:
+        label = str(fld.get("label") or "")
+        if any(tok in label for tok in _REF_LABEL_TOKENS):
+            return str(fld.get("key") or "incident_no")
+    return "incident_no"
+
+
+def apply_manual_reference(values: dict | None, manual_ref: str, form_def: dict | None = None) -> dict:
+    """دمج الرقم المرجعي اليدوي في قيم النموذج دون طمس الإدخال إن كان فارغاً."""
+    out = dict(values or {})
+    ref = normalize_western_digits(str(manual_ref or "").strip())
+    out["manual_ref_no"] = ref
+    if ref:
+        primary = form_primary_ref_field_key(form_def)
+        out[primary] = ref
+        out["incident_no"] = ref
+    return out
+
+
+def sync_doc_no_with_manual_ref(manual_ref: str) -> str:
+    """اعتماد الرقم اليدوي كـ doc_no عند تعبئته، وإلا الإبقاء على الرقم التلقائي المخزّن."""
+    ref = normalize_western_digits(str(manual_ref or "").strip())
+    st.session_state["manual_ref_no"] = ref
+    auto = str(st.session_state.get("auto_doc_no") or "").strip()
+    if not auto:
+        auto = str(st.session_state.get("doc_no") or "").strip() or f"KH-{datetime.now(KSA_TZ).strftime('%y%m%d-%H%M%S')}"
+        st.session_state["auto_doc_no"] = auto
+    if ref:
+        st.session_state.doc_no = ref
+        return ref
+    st.session_state.doc_no = auto
+    return auto
+
+
 def _is_agent_role(value: str) -> bool:
     text = str(value or "")
     return ("وكيل" in text) or ("وكالة" in text)
@@ -3184,11 +3255,19 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool, form_
             continue
         shown = _resolve_select_display(fields_map, key, str(fields_map.get(key, "-") or "-"))
         label = str(field.get("a4_label") or field["label"])
+        if key in _REF_FIELD_KEYS or any(tok in label for tok in _REF_LABEL_TOKENS):
+            manual_shown = normalize_western_digits(str(fields_map.get("manual_ref_no") or "").strip())
+            raw_shown = normalize_western_digits(str(fields_map.get(key, "") or "").strip())
+            shown = manual_shown or raw_shown
+            label = "رقم مرجعي" if (manual_shown or raw_shown) else label
+            # لا تُعرض نقاط وهمية إن تُرك الرقم فارغاً
+            if not shown:
+                shown = ""
         sibling_key = field.get("a4_with")
         if sibling_key:
             sibling = str(fields_map.get(sibling_key, "") or "").strip()
             if sibling:
-                shown = f"{shown} — {sibling}"
+                shown = f"{shown} — {sibling}" if shown else sibling
         compose = field.get("a4_compose") or {}
         if isinstance(compose, dict) and compose.get("fmt"):
             mapping = {"value": shown}
@@ -3203,7 +3282,10 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool, form_
                 else:
                     shown += str(compose["append_fmt"]).replace("{extra}", extra)
         field = {**field, "label": label}
-        isolate = key in {"plate_no", "party_id", "awtar_no"} or "لوحة" in label or "plate" in key.lower()
+        isolate = (
+            key in {"plate_no", "party_id", "awtar_no"} or key in _REF_FIELD_KEYS
+            or "لوحة" in label or "plate" in key.lower() or label == "رقم مرجعي"
+        )
         wide = dense and _field_is_wide(field, shown)
         if not dense or wide:
             if pending:
@@ -4172,7 +4254,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                     {center_logo_html}
                 </div>
                 <div class="hdr-left">
-                    <p class="hdr-nowrap">الرقم المرجعي: {rec['doc_no']}</p>
+                    <p class="hdr-nowrap">الرقم المرجعي: {html.escape(str(rec.get('doc_no') or '').strip())}</p>
                     <p class="hdr-nowrap">التاريخ والوقت: {rec['created_at']}</p>
                     {gps_line_html}
                 </div>
@@ -4557,6 +4639,13 @@ if "catalog_filter" in st.session_state:
     del st.session_state["catalog_filter"]
 if "doc_no" not in st.session_state:
     st.session_state.doc_no = f"KH-{now_ksa.strftime('%y%m%d-%H%M%S')}"
+if "auto_doc_no" not in st.session_state:
+    st.session_state.auto_doc_no = st.session_state.doc_no
+if "manual_ref_no" not in st.session_state:
+    st.session_state.manual_ref_no = ""
+# إن وُجد رقم يدوي محفوظ سابقاً فلا يُستبدل بالتلقائي عند إعادة التشغيل
+if str(st.session_state.get("manual_ref_no") or "").strip():
+    st.session_state.doc_no = normalize_western_digits(str(st.session_state.manual_ref_no).strip())
 if "doc_time" not in st.session_state:
     st.session_state.doc_time = now_ksa.strftime("%Y/%m/%d - %H:%M")
 if "citizen_locked" not in st.session_state:
@@ -4608,7 +4697,10 @@ def sync_attachments_to_session():
 
 def reset_doc_state():
     t_now = datetime.now(KSA_TZ)
-    st.session_state.doc_no = f"KH-{t_now.strftime('%y%m%d-%H%M%S')}"
+    auto_no = f"KH-{t_now.strftime('%y%m%d-%H%M%S')}"
+    st.session_state.auto_doc_no = auto_no
+    st.session_state.manual_ref_no = ""
+    st.session_state.doc_no = auto_no
     st.session_state.doc_time = t_now.strftime("%Y/%m/%d - %H:%M")
     st.session_state.citizen_locked = False
     st.session_state.citizen_stamp_b64 = ""
@@ -4629,6 +4721,10 @@ def reset_doc_state():
     st.session_state.att_upload_nonce = int(st.session_state.get("att_upload_nonce") or 0) + 1
     if "live_sig_bridge" in st.session_state:
         st.session_state.live_sig_bridge = ""
+    # مسح مفاتيح إدخال الرقم المرجعي اليدوي المرتبطة بالنماذج
+    for state_key in list(st.session_state.keys()):
+        if str(state_key).startswith("manual_ref_inp_"):
+            del st.session_state[state_key]
 
 
 all_archived = search_records_db("", DEVICE_HASH)
@@ -4873,6 +4969,13 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 for key, value in (pending_prefill.get("values") or {}).items():
                     if value:
                         st.session_state[f"inp_{fid}_{key}"] = value
+                pref_ref = normalize_western_digits(
+                    str((pending_prefill.get("values") or {}).get("incident_no") or "").strip()
+                )
+                if pref_ref and form_uses_reference_number(form_def):
+                    st.session_state[f"manual_ref_inp_{fid}"] = pref_ref
+                    st.session_state.manual_ref_no = pref_ref
+                    st.session_state.doc_no = pref_ref
             cat_badge_cls = {"إقرار": "green", "محضر": "gold", "إحالة طبية": "med", "تكميل": "tak"}.get(form_def["category"], "green")
 
             top_bar1, top_bar2, top_bar3 = st.columns([1.3, 1.3, 1.4])
@@ -4884,6 +4987,18 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 if st.button("⚡ تعبئة بيانات تجريبية فورية", type="primary", use_container_width=True, disabled=st.session_state.citizen_locked):
                     for fld in form_def["fields"]:
                         st.session_state[f"inp_{fid}_{fld['key']}"] = fld["sample"]
+                    if form_uses_reference_number(form_def):
+                        primary_ref = form_primary_ref_field_key(form_def)
+                        sample_ref = ""
+                        for fld in form_def["fields"]:
+                            if fld.get("key") == primary_ref:
+                                sample_ref = str(fld.get("sample") or "")
+                                break
+                        sample_ref = normalize_western_digits(sample_ref.strip())
+                        st.session_state[f"manual_ref_inp_{fid}"] = sample_ref
+                        st.session_state.manual_ref_no = sample_ref
+                        if sample_ref:
+                            st.session_state.doc_no = sample_ref
                     safe_rerun()
             with top_bar3:
                 if st.button("🆕 تفريغ وبدء سجل جديد", use_container_width=True):
@@ -4893,6 +5008,17 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                             del st.session_state[wkey]
                     reset_doc_state()
                     safe_rerun()
+
+            # مزامنة الرقم المرجعي اليدوي قبل عرض الترويسة
+            if form_uses_reference_number(form_def):
+                _ref_widget_key = f"manual_ref_inp_{fid}"
+                if _ref_widget_key not in st.session_state:
+                    st.session_state[_ref_widget_key] = str(st.session_state.get("manual_ref_no") or "")
+                _raw_ref = str(st.session_state.get(_ref_widget_key) or "")
+                _norm_ref = normalize_western_digits(_raw_ref.strip())
+                if _raw_ref.strip() and _raw_ref != _norm_ref:
+                    st.session_state[_ref_widget_key] = _norm_ref
+                sync_doc_no_with_manual_ref(_norm_ref)
 
             st.markdown(f"""
             <div class="hero-shift-card" style="padding:16px 20px; margin-top:8px;">
@@ -4908,6 +5034,24 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 </div>
             </div>
             """, unsafe_allow_html=True)
+
+            if form_uses_reference_number(form_def):
+                st.text_input(
+                    "رقم مرجعي (إدخال يدوي)",
+                    key=f"manual_ref_inp_{fid}",
+                    placeholder="أدخل الرقم المرجعي الخاص بك",
+                    disabled=st.session_state.citizen_locked,
+                    help="يُعتمد هذا الرقم في ترويسة الوثيقة والخطاب والمعاينة والطباعة والأرشيف. تُحوَّل الأرقام العربية تلقائياً إلى إنجليزية.",
+                )
+                _typed_raw = str(st.session_state.get(f"manual_ref_inp_{fid}") or "")
+                _typed_ref = normalize_western_digits(_typed_raw.strip())
+                if _typed_raw.strip() and _typed_raw != _typed_ref:
+                    # تطبيع الأرقام العربية بعد الإدخال ثم إعادة العرض
+                    st.session_state[f"manual_ref_inp_{fid}"] = _typed_ref
+                    sync_doc_no_with_manual_ref(_typed_ref)
+                    safe_rerun()
+                sync_doc_no_with_manual_ref(_typed_ref)
+                st.caption("اتركه فارغاً للإبقاء على الرقم التلقائي للجلسة، أو اكتب رقمك ليُعتمد فوراً في الوثيقة.")
 
             if st.session_state.citizen_locked:
                 lk1, lk2 = st.columns([3.8, 1.2])
@@ -4972,21 +5116,26 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     placeholder=ph,
                 )
 
+            _primary_ref_key = form_primary_ref_field_key(form_def) if form_uses_reference_number(form_def) else ""
+
+            def _is_unified_ref_field(fld: dict) -> bool:
+                """تخطّي حقل الرقم المرجعي القديم لصالح مربع الإدخال اليدوي الموحّد."""
+                if not _primary_ref_key:
+                    return False
+                return str(fld.get("key") or "") == _primary_ref_key
+
             def render_field_grid(fields):
-                if not fields:
+                visible_fields = [fld for fld in (fields or []) if not _is_unified_ref_field(fld)]
+                if not visible_fields:
                     return
                 columns = st.columns(2)
-                for idx, fld in enumerate(fields):
+                for idx, fld in enumerate(visible_fields):
                     target = st.container() if fld["type"] == "textarea" else columns[idx % 2]
                     with target:
                         current_values[fld["key"]] = render_field(fld)
             if fid == "decl_handover":
                 by_key = {fld["key"]: fld for fld in form_def["fields"]}
-                head = st.columns(2)
-                with head[0]:
-                    current_values["incident_no"] = render_field(by_key["incident_no"])
-                with head[1]:
-                    current_values["receiver_role"] = render_field(by_key["receiver_role"])
+                current_values["receiver_role"] = render_field(by_key["receiver_role"])
                 if _is_agent_role(current_values.get("receiver_role")):
                     for pair in (
                         ("agent_name", "agent_id"),
@@ -5004,6 +5153,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 pair_slot = 0
                 pair_cols = None
                 for fld in form_def["fields"]:
+                    if _is_unified_ref_field(fld):
+                        continue
                     if not _field_is_visible(fld, current_values):
                         continue
                     party_match = fld["key"][:2] if fld["key"].startswith("p") else ""
@@ -5033,6 +5184,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 pair_slot = 0
                 pair_cols = None
                 for fld in form_def["fields"]:
+                    if _is_unified_ref_field(fld):
+                        continue
                     if not _field_is_visible(fld, current_values):
                         continue
                     if fld["type"] == "textarea" or fld.get("stack_under"):
@@ -5049,6 +5202,19 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 key = fld.get("key")
                 if key and key in current_values and _should_normalize_digits(fld):
                     current_values[key] = normalize_western_digits(current_values.get(key) or "")
+
+            # اعتماد الرقم المرجعي اليدوي في قيم النموذج والخطاب والترويسة
+            _manual_now = normalize_western_digits(str(st.session_state.get("manual_ref_no") or "").strip())
+            if form_uses_reference_number(form_def):
+                sync_doc_no_with_manual_ref(_manual_now)
+                current_values = apply_manual_reference(current_values, _manual_now, form_def)
+                # إن وُجدت قيمة قديمة في session لحقل incident_no بدون إدخال يدوي، أبقِها كافتراضي
+                if not _manual_now and _primary_ref_key:
+                    legacy = st.session_state.get(f"inp_{fid}_{_primary_ref_key}")
+                    if legacy and not current_values.get(_primary_ref_key):
+                        current_values[_primary_ref_key] = normalize_western_digits(str(legacy).strip())
+                        if _primary_ref_key != "incident_no":
+                            current_values["incident_no"] = current_values[_primary_ref_key]
 
             if fid == "decl_hit_run":
                 if st.button("🔄 الانتقال لإقرار تنازل عن بلاغ صدم وهروب", use_container_width=True):
