@@ -929,6 +929,83 @@ def _rtl_isolate(text: str, *, as_html: bool = True) -> str:
     )
 
 
+def render_print_button(report_html: str, btn_label: str = "🖨️ طباعة / حفظ التقرير PDF") -> None:
+    """زر طباعة آمن للآيفون: يفتح نافذة جديدة داخل ضغطة المستخدم ثم يستدعي print()."""
+    b64_report = base64.b64encode(str(report_html or "").encode("utf-8")).decode("utf-8")
+    safe_label = html.escape(btn_label)
+    component_code = f"""
+    <div dir="rtl" style="text-align: center; font-family: Cairo, Tahoma, sans-serif; margin: 5px 0;">
+        <button type="button" onclick="openIosSafePrint()" style="
+            width: 100%;
+            background-color: #14532d;
+            color: #ffffff;
+            border: 1px solid #c5a059;
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;">
+            {safe_label}
+        </button>
+        <div id="ios-msg" style="display:none; color:#b91c1c; background:#fef2f2; border:1px solid #f87171; padding:8px; margin-top:8px; border-radius:6px; font-size:13px;">
+            ⚠️ المتصفح يمنع فتح صفحة الطباعة: فضلاً افتح الرابط في متصفح <b>Safari</b> (أيقونة البوصلة بالأسفل) وأوقف "حظر النوافذ المنبثقة" من إعدادات سفاري.
+        </div>
+    </div>
+    <script>
+    function openIosSafePrint() {{
+        const printWin = window.open('', '_blank');
+        if (!printWin || printWin.closed || typeof printWin.closed === 'undefined') {{
+            document.getElementById('ios-msg').style.display = 'block';
+            return;
+        }}
+        document.getElementById('ios-msg').style.display = 'none';
+        const binary = atob("{b64_report}");
+        const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+        let htmlContent = new TextDecoder("utf-8").decode(bytes);
+        const topBar = `
+            <style>
+                @media print {{ .no-print-bar {{ display: none !important; }} }}
+                .no-print-bar {{
+                    position: sticky; top: 0; z-index: 9999;
+                    background: #1e293b; color: #fff; padding: 10px 14px;
+                    display: flex; justify-content: space-between; align-items: center;
+                    font-family: sans-serif; direction: rtl; margin-bottom: 10px;
+                }}
+                .no-print-bar button {{
+                    padding: 8px 16px; border: none; border-radius: 6px;
+                    font-weight: bold; font-size: 14px; cursor: pointer;
+                }}
+            </style>
+            <div class="no-print-bar">
+                <button type="button" onclick="window.print()" style="background:#16a34a; color:#fff;">🖨️ طباعة / مشاركة PDF</button>
+                <span style="font-size:12px;">في الآيفون: اضغط مشاركة (⬆️) لحفظ أو إرسال الـ PDF</span>
+                <button type="button" onclick="window.close()" style="background:#dc2626; color:#fff;">✖ إغلاق</button>
+            </div>
+        `;
+        if (htmlContent.includes('<body')) {{
+            htmlContent = htmlContent.replace(/(<body[^>]*>)/i, '$1' + topBar);
+        }} else {{
+            htmlContent = topBar + htmlContent;
+        }}
+        printWin.document.open();
+        printWin.document.write(htmlContent);
+        printWin.document.close();
+        printWin.onload = function() {{
+            setTimeout(function() {{
+                try {{
+                    if (typeof printWin.syncAllLivePads === 'function') printWin.syncAllLivePads();
+                    if (typeof printWin.prepareA4Print === 'function') printWin.prepareA4Print();
+                }} catch (e) {{}}
+                try {{ printWin.focus(); }} catch (e) {{}}
+                try {{ printWin.print(); }} catch (e) {{}}
+            }}, 700);
+        }};
+    }}
+    </script>
+    """
+    components.html(component_code, height=110)
+
+
 def normalize_official_legal_text(text: str) -> str:
     """وحّد المسافات والصق الأقواس بالنص حتى لا تنفصل على الجوال أو داخل A4."""
     raw = str(text or "")
@@ -5366,6 +5443,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             (LIVE_PADS || []).forEach(function(padId) {{ syncPadToSlot(padId); }});
         }} catch (e) {{}}
     }}
+    try {{ window.syncAllLivePads = syncAllLivePads; }} catch (e) {{}}
 
     function prepareA4Print() {{
         syncAllLivePads();
@@ -5383,6 +5461,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         paper.style.maxHeight = "none";
         paper.style.overflow = "visible";
     }}
+    try {{ window.prepareA4Print = prepareA4Print; }} catch (e) {{}}
 
     function restoreA4Preview() {{
         const viewport = document.getElementById("a4PreviewViewport");
@@ -6592,8 +6671,9 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 st.markdown("#### 📄 المعاينة الرسمية مقاس A4 (جاهزة للطباعة أو الحفظ كـ PDF)")
                 st.caption(
                     "التواقيع تُرسم وتُحفظ محلياً داخل المعاينة. "
-                    "بعد التوقيع اضغط زر (طباعة الوثيقة الرسمية / حفظ كملف A4 PDF) بالأسفل."
+                    "بعد التوقيع اضغط زر الطباعة الأخضر أدناه (يعمل على الآيفون عبر نافذة آمنة)."
                 )
+                render_print_button(a4_html, "🖨️ طباعة الوثيقة الرسمية / حفظ كملف A4 PDF")
                 preview_h = 1480 if (
                     ("توقيع حي" in ready_record.get("citizen_auth_mode", ""))
                     or ("توقيع حي" in ready_record.get("officer_auth_mode", ""))
@@ -6659,6 +6739,7 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
                         safe_rerun()
 
                 if st.checkbox("عرض ومعاينة ورقة الـ A4 الرسمية للطباعة", key=f"chk_prev_{r['id']}"):
+                    render_print_button(arch_html, "🖨️ طباعة / حفظ التقرير PDF")
                     components.html(arch_html, height=1150, scrolling=True)
 
 
