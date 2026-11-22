@@ -3537,7 +3537,7 @@ def render_device_bootstrap(
       softReload();
     }}
   }} catch (e) {{}}
-}}})();
+}})();
 </script>
 """,
         unsafe_allow_javascript=True,
@@ -6337,6 +6337,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
 
 <style id="khafar-final-a4-fix">
+  #zoomBar, .zoom-bar {{ display: none !important; }}
   .legal-box {{
     display: flex !important;
     flex-direction: column !important;
@@ -6402,8 +6403,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       break-inside: avoid !important;
     }}
   }}
-/* KHAFAR_HIDE_DECL_ZOOM */
-  #zoomBar, .zoom-bar {{ display: none !important; }}
 </style>
 <script id="khafar-final-js-fix">
 (function() {{
@@ -7061,7 +7060,6 @@ st.html(
   }}
   setTimeout(scan, 300);
   setTimeout(scan, 1200);
-setTimeout(function(){{ try {{ if (window.innerWidth < 820 && typeof fitToScreenZoom === 'function') fitToScreenZoom(); }} catch(e){{}} }}, 180);
 }})();
 </script>
 """,
