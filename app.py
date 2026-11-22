@@ -1950,7 +1950,7 @@ TRAFFIC_FORMS = {
              "a4_compose": {"fmt": "{value}", "append_if": "items_action_other", "append_fmt": " — {extra}"}},
             _other_field("items_action", "اكتب التصرف يدوياً"),
             {"key": "scene_officer", "label": "رتبة واسم مباشر الواقعة / الدورية الميدانية (اختياري)", "type": "text",
-             "sample": "", "placeholder": "يُذكر عند اختلافه عن ضابط الخفر"},
+             "sample": "", "placeholder": "يُذكر عند اختلافه عن مستلم الخفر المناوب"},
         ],
         "legal_fn": lambda m: (
             f"إنه في الزمان والمكان المثبتين آلياً بترويسة هذا المحضر، واستناداً للمسوغ النظامي ({_sel(m, 'legal_reason')}) في المعاملة رقم ({_val(m, 'incident_no')})، "
@@ -1993,7 +1993,7 @@ TRAFFIC_FORMS = {
             {"key": "impound_loc", "label": "ساحة الحجز المودعة بها المركبة", "type": "text", "sample": "ساحة حجز المرور بالعارضة"},
             {"key": "pre_tow_state", "label": "حالة الهيكل الخارجي قبل الرفع على السطحة", "type": "text", "sample": "خدوش سابقة بالصدام الخلفي والزجاج سليم والأبواب مقفلة"},
             {"key": "scene_officer", "label": "رتبة واسم مباشر الواقعة / الدورية الميدانية (اختياري)", "type": "text",
-             "sample": "", "placeholder": "يُذكر عند اختلافه عن ضابط الخفر"},
+             "sample": "", "placeholder": "يُذكر عند اختلافه عن مستلم الخفر المناوب"},
         ],
         "legal_fn": lambda m: (
             f"بناءً على الصلاحيات النظامية المخولة لرجال المرور بموجب نظام المرور ولائحته التنفيذية، جرى في الزمان والمكان الموضحين بترويسة المحضر رقم ({_val(m, 'incident_no')}) "
@@ -2029,7 +2029,7 @@ TRAFFIC_FORMS = {
              "sample": "العريف سعيد بن محمد العسيري", "prefill_sample": True},
             {"key": "officer_note", "label": "إفادة راصد المخالفة التفصيلية", "type": "textarea", "sample": "أثناء مباشرة تنظيم الحركة المرورية جرى إدخال حرف (ج) بدلاً من (ح) بالخطأ للوحة المركبة المخالفة الفعلية، والمركبة المسجل عليها الإشعار لم تكن بالموقع."},
             {"key": "scene_officer", "label": "رتبة واسم مباشر الواقعة / الدورية الميدانية (اختياري)", "type": "text",
-             "sample": "", "placeholder": "يُذكر عند اختلافه عن ضابط الخفر"},
+             "sample": "", "placeholder": "يُذكر عند اختلافه عن مستلم الخفر المناوب"},
         ],
         "legal_fn": lambda m: (
             f"نرفع هذا المحضر الرسمي بشأن المخالفة المرورية رقم ({_val(m, 'incident_no')}) المقيدة بتاريخ ({_val(m, 'viol_datetime')}) على اللوحة ({_val(m, 'plate_no')})، "
@@ -2064,14 +2064,14 @@ TRAFFIC_FORMS = {
             {"key": "facts_detail", "label": "تفاصيل الوقائع المشاهدة عياناً بالموقع", "type": "textarea", "sample": "عند مباشرة الموقع تبين ارتطام المركبة المذكورة بعمود الإنارة رقم (48) بالجزيرة الوسطية مما أدى لميلان العمود وانكشاف الكيبل الأرضي دون إصابات بشرية."},
             {"key": "taken_measure", "label": "الإجراء الفوري المتخذ في الموقع", "type": "textarea", "sample": "تأمين الموقع بالدورية التحذيرية وإشعار طوارئ البلدية والكهرباء لمباشرة العمود واستكمال إجراءات الحادث."},
             {"key": "scene_officer", "label": "رتبة واسم مباشر الواقعة / الدورية الميدانية (اختياري)", "type": "text",
-             "sample": "", "placeholder": "يُذكر عند اختلافه عن ضابط الخفر"},
+             "sample": "", "placeholder": "يُذكر عند اختلافه عن مستلم الخفر المناوب"},
         ],
         "legal_fn": lambda m: (
             f"إنه في الزمان والمكان المثبتين آلياً بترويسة المحضر رقم ({_val(m, 'incident_no')})، وأثناء قيامنا بمهام العمل الميداني باشرنا واقعة ({_sel(m, 'incident_kind')}) "
             f"المرتبطة بـ ({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')}) والمركبة / الموقع ({_val(m, 'plate_no')}). "
             f"وقد ثبت لنا بالمعاينة المباشرة الآتي: ({_val(m, 'facts_detail')})، وجرى اتخاذ الإجراء الفوري التالي: ({_val(m, 'taken_measure')}). "
             + (f" ومباشر الواقعة الميدانية: ({_val(m, 'scene_officer')}). " if str(m.get('scene_officer') or '').strip() else "")
-            + "وعليه حُرر هذا المحضر الرسمي إثباتاً للواقعة على الطبيعة ورفعه لضابط الخفر لاستكمال اللازم نظاماً."
+            + "وعليه حُرر هذا المحضر الرسمي إثباتاً للواقعة على الطبيعة ورفعه لمستلم الخفر المناوب لاستكمال اللازم نظاماً."
         ),
     },
 
@@ -2269,13 +2269,13 @@ DB_PATH = "khafar_system.db"
 
 BLANK_SHIFT = {
     "dept_name": "قسم مرور العارضة",
-    "officer_rank": "ضابط الخفر",
+    "officer_rank": "مستلم الخفر المناوب",
     "officer_name": "",
     "duty_rank": "وحدة الحوادث",
     "duty_name": "",
     "default_gps": "بانتظار رصد الموقع",
 }
-# مفتاح صورة توقيع ضابط الخفر — يُحفظ في SQLite وlocalStorage فقط (ليس في الكوكيز)
+# مفتاح صورة توقيع مستلم الخفر المناوب — يُحفظ في SQLite وlocalStorage فقط (ليس في الكوكيز)
 DUTY_SIG_KEY = "duty_sig_b64"
 DUTY_SIG_LS_KEY = "khafar_duty_sig"
 MANAGER_SIG_BACKUP = "manager_sig_backup.json"
@@ -2315,14 +2315,14 @@ def init_db():
     if c.execute("SELECT COUNT(*) FROM shift_settings").fetchone()[0] == 0:
         c.execute("""
             INSERT INTO shift_settings (id, dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps)
-            VALUES (1, 'قسم مرور العارضة', 'ضابط الخفر', '', 'وحدة الحوادث', '', 'بانتظار رصد الموقع')
+            VALUES (1, 'قسم مرور العارضة', 'مستلم الخفر المناوب', '', 'وحدة الحوادث', '', 'بانتظار رصد الموقع')
         """)
     # السجل العام لم يعد مصدراً للبيانات الشخصية: تُمسح الأسماء والإحداثيات منه دائماً.
     c.execute("""
         UPDATE shift_settings
         SET dept_name=?, officer_rank=?, officer_name='', duty_rank=?, duty_name='', default_gps=?
         WHERE id=1
-    """, ("قسم مرور العارضة", "ضابط الخفر", "وحدة الحوادث", "بانتظار رصد الموقع"))
+    """, ("قسم مرور العارضة", "مستلم الخفر المناوب", "وحدة الحوادث", "بانتظار رصد الموقع"))
     c.execute("""
         CREATE TABLE IF NOT EXISTS device_shifts (
             device_hash TEXT PRIMARY KEY,
@@ -2424,7 +2424,7 @@ def _clean_shift(data: dict | None) -> dict:
         cleaned[key] = str(data.get(key) or "")[:180]
     cleaned["dept_name"] = "قسم مرور العارضة"
     if not cleaned["officer_rank"].strip():
-        cleaned["officer_rank"] = "ضابط الخفر"
+        cleaned["officer_rank"] = "مستلم الخفر المناوب"
     if not cleaned["duty_rank"].strip():
         cleaned["duty_rank"] = "وحدة الحوادث"
     if not cleaned["default_gps"].strip():
@@ -2483,7 +2483,7 @@ def make_ink_transparent_b64(raw_b64: str, max_w: int = 520, max_h: int = 180) -
 
 
 def compress_signature_b64(raw_b64: str) -> str:
-    """ضغط توقيع ضابط الخفر إلى PNG شفاف صغير مناسب للطباعة A4."""
+    """ضغط توقيع مستلم الخفر المناوب إلى PNG شفاف صغير مناسب للطباعة A4."""
     return make_ink_transparent_b64(raw_b64, max_w=480, max_h=160)
 
 
@@ -3141,7 +3141,7 @@ def _live_pad_card(pad_id: str, title: str, subtitle: str) -> str:
         <div class="live-pad-title">{title}</div>
         <div class="live-pad-sub">{subtitle}</div>
         <canvas id="pad_{pad_id}" class="live-pad-canvas" width="900" height="220"
-            style="touch-action:none; cursor:crosshair;"></canvas>
+            style="touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; cursor:crosshair;"></canvas>
         <div class="live-pad-actions no-print">
             <button type="button" class="clear-sig-btn" onclick="clearLivePad('{pad_id}')">مسح التوقيع</button>
         </div>
@@ -3150,7 +3150,7 @@ def _live_pad_card(pad_id: str, title: str, subtitle: str) -> str:
 
 
 def render_officer_sig_pad_html() -> str:
-    """لوحة توقيع حي لضابط الخفر في الإعدادات — تنقل الناتج إلى جسر Streamlit عبر postMessage."""
+    """لوحة توقيع حي لمستلم الخفر المناوب في الإعدادات — تنقل الناتج إلى جسر Streamlit عبر postMessage."""
     return f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
@@ -3158,14 +3158,14 @@ def render_officer_sig_pad_html() -> str:
   body{{margin:0;padding:8px;background:#0d1316;font-family:Cairo,Tahoma,sans-serif;color:#e2e8f0}}
   .wrap{{background:#101820;border:1px solid #1e6b50;border-radius:12px;padding:10px}}
   .title{{font-weight:800;color:#f3cc7a;font-size:13px;margin-bottom:6px;text-align:center}}
-  canvas{{width:100%;height:180px;border:1.5px dashed #0d47a1;border-radius:8px;background:#fff;touch-action:none;cursor:crosshair;display:block}}
+  canvas{{width:100%;height:180px;border:1.5px dashed #0d47a1;border-radius:8px;background:#fff;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair;display:block}}
   .actions{{display:flex;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap}}
   button{{border:1px solid #d4a853;background:#112924;color:#fff;border-radius:8px;padding:7px 12px;font-weight:800;cursor:pointer}}
   .ok{{color:#34d399;font-size:12px;font-weight:700;text-align:center;margin-top:6px;min-height:18px}}
 </style></head><body>
 <div class="wrap">
-  <div class="title">ارسم توقيع ضابط الخفر هنا (خط أسود حاد للطباعة)</div>
-  <canvas id="pad_officer_settings" width="900" height="220"></canvas>
+  <div class="title">ارسم توقيع مستلم الخفر المناوب هنا (خط أسود حاد للطباعة)</div>
+  <canvas id="pad_officer_settings" width="900" height="220" tabindex="-1"></canvas>
   <div class="actions">
     <button type="button" id="btnClear">مسح اللوحة</button>
     <button type="button" id="btnAdopt">✅ اعتماد التوقيع في الجلسة</button>
@@ -3182,19 +3182,22 @@ def render_officer_sig_pad_html() -> str:
     var src = (e.touches && e.touches[0]) ? e.touches[0] : e;
     return {{ x: (src.clientX - r.left) * (canvas.width / r.width), y: (src.clientY - r.top) * (canvas.height / r.height) }};
   }}
-  function start(e){{ e.preventDefault(); drawing = true; var p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }}
+  function start(e){{ if (e.cancelable) e.preventDefault(); e.stopPropagation(); drawing = true; var p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }}
   function move(e){{
-    if (!drawing) return; e.preventDefault();
+    if (!drawing) return; if (e.cancelable) e.preventDefault(); e.stopPropagation();
     var p = pos(e);
     ctx.lineWidth = 3.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.strokeStyle = '#000000'; ctx.lineTo(p.x, p.y); ctx.stroke();
   }}
-  function end(){{ drawing = false; }}
+  function end(e){{ if (e && e.cancelable) e.preventDefault(); drawing = false; }}
+  canvas.addEventListener('pointerdown', start, {{passive:false}});
+  canvas.addEventListener('pointermove', move, {{passive:false}});
+  canvas.addEventListener('pointerup', end, {{passive:false}});
   canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', move);
   canvas.addEventListener('mouseup', end); canvas.addEventListener('mouseleave', end);
   canvas.addEventListener('touchstart', start, {{passive:false}});
   canvas.addEventListener('touchmove', move, {{passive:false}});
-  canvas.addEventListener('touchend', end);
+  canvas.addEventListener('touchend', end, {{passive:false}});
   document.getElementById('btnClear').onclick = function(){{
     ctx.clearRect(0,0,canvas.width,canvas.height);
     document.getElementById('padStatus').textContent = '';
@@ -3228,14 +3231,14 @@ def render_manager_sig_pad_html() -> str:
   body{margin:0;padding:8px;background:#0d1316;font-family:Cairo,Tahoma,sans-serif;color:#e2e8f0}
   .wrap{background:#101820;border:1px solid #c9a227;border-radius:12px;padding:10px}
   .title{font-weight:800;color:#f3cc7a;font-size:13px;margin-bottom:6px;text-align:center}
-  canvas{width:100%;height:180px;border:1.5px dashed #c9a227;border-radius:8px;background:#ffffff;touch-action:none;cursor:crosshair;display:block}
+  canvas{width:100%;height:180px;border:1.5px dashed #c9a227;border-radius:8px;background:#ffffff;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair;display:block}
   .actions{display:flex;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap}
   button{border:1px solid #d4a853;background:#112924;color:#fff;border-radius:8px;padding:7px 12px;font-weight:800;cursor:pointer}
   .ok{color:#34d399;font-size:12px;font-weight:700;text-align:center;margin-top:6px;min-height:18px}
 </style></head><body>
 <div class="wrap">
   <div class="title">توقيع مدير وحدة الحوادث (إصبع أو قلم) — مرة واحدة لجميع الأفراد</div>
-  <canvas id="pad_manager_settings" width="900" height="220"></canvas>
+  <canvas id="pad_manager_settings" width="900" height="220" tabindex="-1"></canvas>
   <div class="actions">
     <button type="button" id="btnMgrClear">مسح اللوحة</button>
     <button type="button" id="btnMgrAdopt">✅ اعتماد التوقيع في الجلسة</button>
@@ -3247,27 +3250,32 @@ def render_manager_sig_pad_html() -> str:
   var canvas = document.getElementById('pad_manager_settings');
   var ctx = canvas.getContext('2d');
   var drawing = false;
+  var LS_KEY = 'khafar_manager_sig_staged';
   function pos(e){
     var r = canvas.getBoundingClientRect();
     var src = (e.touches && e.touches[0]) ? e.touches[0] : e;
     return { x: (src.clientX - r.left) * (canvas.width / r.width), y: (src.clientY - r.top) * (canvas.height / r.height) };
   }
-  function start(e){ e.preventDefault(); drawing = true; var p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }
+  function start(e){ if (e.cancelable) e.preventDefault(); e.stopPropagation(); drawing = true; var p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }
   function move(e){
-    if (!drawing) return; e.preventDefault();
+    if (!drawing) return; if (e.cancelable) e.preventDefault(); e.stopPropagation();
     var p = pos(e);
     ctx.lineWidth = 3.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.strokeStyle = '#0d47a1'; ctx.lineTo(p.x, p.y); ctx.stroke();
   }
-  function end(){ drawing = false; }
+  function end(e){ if (e && e.cancelable) e.preventDefault(); drawing = false; }
+  canvas.addEventListener('pointerdown', start, {passive:false});
+  canvas.addEventListener('pointermove', move, {passive:false});
+  canvas.addEventListener('pointerup', end, {passive:false});
   canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', move);
   canvas.addEventListener('mouseup', end); canvas.addEventListener('mouseleave', end);
   canvas.addEventListener('touchstart', start, {passive:false});
   canvas.addEventListener('touchmove', move, {passive:false});
-  canvas.addEventListener('touchend', end);
+  canvas.addEventListener('touchend', end, {passive:false});
   document.getElementById('btnMgrClear').onclick = function(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
     document.getElementById('mgrPadStatus').textContent = '';
+    try { localStorage.removeItem(LS_KEY); } catch (e) {}
     try { parent.postMessage({ type: 'khafar_manager_sig', b64: '' }, '*'); } catch (e) {}
   };
   document.getElementById('btnMgrAdopt').onclick = function(){
@@ -3279,6 +3287,7 @@ def render_manager_sig_pad_html() -> str:
     }
     var dataUrl = canvas.toDataURL('image/png');
     var b64 = dataUrl.split(',')[1] || '';
+    try { localStorage.setItem(LS_KEY, b64); } catch (e) {}
     try { parent.postMessage({ type: 'khafar_manager_sig', b64: b64 }, '*'); } catch (e) {}
     document.getElementById('mgrPadStatus').textContent = 'تم اعتماد التوقيع مؤقتاً — اضغط حفظ واعتماد لجميع الأفراد';
   };
@@ -3287,46 +3296,70 @@ def render_manager_sig_pad_html() -> str:
 </body></html>"""
 
 
+def _harden_bridge_textarea_js(placeholder_token: str) -> str:
+    """يمنع كيبورد الجوال على حقول الجسر المخفية: readonly + inputmode=none بدون أي focus."""
+    return f"""
+  function hardenBridgeFields() {{
+    var nodes = document.querySelectorAll('textarea');
+    for (var i = 0; i < nodes.length; i++) {{
+      var ph = (nodes[i].getAttribute('placeholder') || '');
+      if (ph.indexOf({json.dumps(placeholder_token)}) === -1) continue;
+      try {{
+        nodes[i].setAttribute('readonly', 'readonly');
+        nodes[i].setAttribute('inputmode', 'none');
+        nodes[i].setAttribute('autocomplete', 'off');
+        nodes[i].setAttribute('tabindex', '-1');
+        nodes[i].style.caretColor = 'transparent';
+      }} catch (e) {{}}
+    }}
+  }}
+  hardenBridgeFields();
+  setTimeout(hardenBridgeFields, 120);
+  setTimeout(hardenBridgeFields, 600);
+"""
+
+
 def render_manager_sig_bridge_listener() -> None:
-    """جسر postMessage لتوقيع مدير وحدة الحوادث داخل قسم الإعدادات المحمي."""
+    """جسر لالتقاط توقيع المدير عند الضغط على اعتماد فقط — بدون focus وبدون كيبورد."""
     st.html(
-        """
+        f"""
 <style>
 textarea[placeholder*="MANAGER_SIG_BRIDGE"],
-div[data-testid="stTextArea"]:has(textarea[placeholder*="MANAGER_SIG_BRIDGE"]) {
+div[data-testid="stTextArea"]:has(textarea[placeholder*="MANAGER_SIG_BRIDGE"]) {{
   height: 0 !important; min-height: 0 !important; max-height: 0 !important;
   padding: 0 !important; margin: 0 !important; border: none !important;
   opacity: 0 !important; overflow: hidden !important; pointer-events: none !important;
-}
+}}
 </style>
 <script>
-(function(){
-  function fillMgrBridge(payload) {
+(function(){{
+{_harden_bridge_textarea_js("MANAGER_SIG_BRIDGE")}
+  function fillMgrBridge(payload) {{
     if (payload === undefined || payload === null) return false;
+    hardenBridgeFields();
     var nodes = document.querySelectorAll('textarea');
-    for (var i = 0; i < nodes.length; i++) {
+    for (var i = 0; i < nodes.length; i++) {{
       var ph = (nodes[i].getAttribute('placeholder') || '');
       if (ph.indexOf('MANAGER_SIG_BRIDGE') === -1) continue;
       var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
       setter.call(nodes[i], String(payload));
-      nodes[i].dispatchEvent(new Event('input', { bubbles: true }));
-      nodes[i].dispatchEvent(new Event('change', { bubbles: true }));
-      try { nodes[i].focus(); nodes[i].blur(); } catch (e) {}
+      nodes[i].dispatchEvent(new Event('input', {{ bubbles: true }}));
+      nodes[i].dispatchEvent(new Event('change', {{ bubbles: true }}));
       return true;
-    }
+    }}
     return false;
-  }
-  if (!window.__khafarManagerSigBridge) {
+  }}
+  if (!window.__khafarManagerSigBridge) {{
     window.__khafarManagerSigBridge = true;
-    window.addEventListener('message', function(ev){
-      try {
-        var data = ev.data || {};
+    window.addEventListener('message', function(ev){{
+      try {{
+        var data = ev.data || {{}};
         if (!data || data.type !== 'khafar_manager_sig') return;
         fillMgrBridge(data.b64 || '');
-      } catch (e) {}
-    });
-  }
-})();
+      }} catch (e) {{}}
+    }});
+  }}
+}})();
 </script>
 """,
         unsafe_allow_javascript=True,
@@ -3334,88 +3367,18 @@ div[data-testid="stTextArea"]:has(textarea[placeholder*="MANAGER_SIG_BRIDGE"]) {
 
 
 def render_live_sig_bridge_listener() -> None:
-    """جسر postMessage لحفظ تواقيع اللوحات الحية (citizen/p1..p5/officer/duty) في الجلسة."""
-    st.html(
-        """
-<style>
-textarea[placeholder*="LIVE_SIG_BRIDGE"],
-div[data-testid="stTextArea"]:has(textarea[placeholder*="LIVE_SIG_BRIDGE"]) {
-  height: 0 !important; min-height: 0 !important; max-height: 0 !important;
-  padding: 0 !important; margin: 0 !important; border: none !important;
-  opacity: 0 !important; overflow: hidden !important; pointer-events: none !important;
-}
-</style>
-<script>
-(function(){
-  function fillLiveBridge(payload) {
-    if (!payload) return false;
-    var nodes = document.querySelectorAll('textarea');
-    for (var i = 0; i < nodes.length; i++) {
-      var ph = (nodes[i].getAttribute('placeholder') || '');
-      if (ph.indexOf('LIVE_SIG_BRIDGE') === -1) continue;
-      var setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-      setter.call(nodes[i], String(payload));
-      nodes[i].dispatchEvent(new Event('input', { bubbles: true }));
-      nodes[i].dispatchEvent(new Event('change', { bubbles: true }));
-      try { nodes[i].focus(); nodes[i].blur(); } catch (e) {}
-      return true;
-    }
-    return false;
-  }
-  if (!window.__khafarLiveSigBridge) {
-    window.__khafarLiveSigBridge = true;
-    window.addEventListener('message', function(ev){
-      try {
-        var data = ev.data || {};
-        if (!data || data.type !== 'khafar_live_sig' || !data.padId) return;
-        fillLiveBridge(JSON.stringify({ padId: data.padId, b64: data.b64 || '' }));
-      } catch (e) {}
-    });
-  }
-})();
-</script>
-""",
-        unsafe_allow_javascript=True,
-    )
+    """مُعطّل عمداً: التواقيع الحية تُزامن محلياً داخل إطار A4 بدون جسر Streamlit."""
+    return
 
 
 def _consume_live_sig_bridge() -> None:
-    """استهلاك جسر التوقيع الحي مبكراً: ثبّت PNG شفافاً في session_state فوراً."""
-    raw = st.session_state.get("live_sig_bridge") or ""
-    if not str(raw).strip():
-        return
-    try:
-        payload = json.loads(raw)
-        pad_id = str(payload.get("padId") or "").strip()
-        b64 = str(payload.get("b64") or "").strip()
-        if not pad_id:
-            return
-        if b64:
-            b64 = make_ink_transparent_b64(b64) or b64
-        pads = dict(st.session_state.get("live_sig_pads") or {})
-        prev = str(pads.get(pad_id) or "")
-        if prev == b64:
-            return
-        if b64:
-            pads[pad_id] = b64
-        else:
-            pads.pop(pad_id, None)
-        st.session_state.live_sig_pads = pads
-        if pad_id == "citizen":
-            st.session_state.citizen_stamp_b64 = b64
-        elif pad_id == "officer":
-            st.session_state.officer_stamp_b64 = b64
-        elif pad_id == "duty":
-            st.session_state.duty_stamp_b64 = b64
-        elif pad_id.startswith("p"):
-            party_stamps = dict(st.session_state.get("party_stamps") or {})
-            if b64:
-                party_stamps[pad_id] = b64
-            else:
-                party_stamps.pop(pad_id, None)
-            st.session_state.party_stamps = party_stamps
-    except Exception:
-        pass
+    """مُعطّل عمداً — لا rerun من لوحات التوقيع الحي."""
+    if "live_sig_bridge" in st.session_state:
+        try:
+            st.session_state.live_sig_bridge = ""
+        except Exception:
+            pass
+    return
 
 
 def _signer_id_for_pad(form_id: str, pad: str, values: dict) -> str:
@@ -3436,7 +3399,7 @@ def _signer_id_for_pad(form_id: str, pad: str, values: dict) -> str:
 
 
 def render_officer_sig_bridge_listener(*, allow_ls_restore: bool = False) -> None:
-    """يستقبل توقيع اللوحة من iframe ويملأ حقل الجسر، مع استعادة اختيارية من localStorage."""
+    """يستقبل توقيع لوحة الإعدادات عند اعتماد صريح فقط — بدون focus وبدون كيبورد جوال."""
     restore_flag = "true" if allow_ls_restore else "false"
     st.html(
         f"""
@@ -3452,8 +3415,10 @@ div[data-testid="stTextArea"]:has(textarea[placeholder*="DUTY_SIG_BRIDGE"]) {{
 (function(){{
   var LS_KEY = {json.dumps(DUTY_SIG_LS_KEY)};
   var ALLOW_RESTORE = {restore_flag};
+{_harden_bridge_textarea_js("DUTY_SIG_BRIDGE")}
   function fillBridge(b64) {{
     if (!b64) return false;
+    hardenBridgeFields();
     var nodes = document.querySelectorAll('textarea');
     for (var i = 0; i < nodes.length; i++) {{
       var ph = (nodes[i].getAttribute('placeholder') || '');
@@ -3462,7 +3427,6 @@ div[data-testid="stTextArea"]:has(textarea[placeholder*="DUTY_SIG_BRIDGE"]) {{
       setter.call(nodes[i], String(b64));
       nodes[i].dispatchEvent(new Event('input', {{ bubbles: true }}));
       nodes[i].dispatchEvent(new Event('change', {{ bubbles: true }}));
-      try {{ nodes[i].focus(); nodes[i].blur(); }} catch (e) {{}}
       return true;
     }}
     return false;
@@ -3850,16 +3814,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     # --- Duty cell ---
     if is_toxicology:
-        # خطاب تحليل السموم فقط: ختم إدارة مرور منطقة جازان + توثيق نصي لضابط الخفر بدون خانة توقيع
+        # خطاب تحليل السموم فقط: ختم إدارة مرور منطقة جازان + توثيق نصي لمستلم الخفر المناوب بدون خانة توقيع
         tox_officer_name = str(rec.get("officer_full") or "").strip()
-        for _pfx in ("ضابط الخفر /", "ضابط الخفر/", "ضابط الخفر -", "ضابط الخفر-"):
+        for _pfx in ("مستلم الخفر المناوب /", "مستلم الخفر المناوب/", "مستلم الخفر المناوب -", "مستلم الخفر المناوب-"):
             if tox_officer_name.startswith(_pfx):
                 tox_officer_name = tox_officer_name[len(_pfx):].strip()
                 break
         tox_officer_line = (
             '<div style="margin-top:8px;font-size:12px;font-weight:800;color:#000000 !important;'
             'line-height:1.45;text-align:center;">'
-            f"توثيق ضابط الخفر: {html.escape(tox_officer_name or '—')}"
+            f"توثيق مستلم الخفر المناوب: {html.escape(tox_officer_name or '—')}"
             "</div>"
         )
         if duty_stamp_now:
@@ -3883,7 +3847,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             )
         else:
             duty_box_inner = _sig_slot_img("", "slot_duty") + tox_officer_line
-        # لا تُعرض لوحة/خانة توقيع لضابط الخفر في هذا الخطاب
+        # لا تُعرض لوحة/خانة توقيع لمستلم الخفر المناوب في هذا الخطاب
         needs_officer_pad = False
         officer_box_inner = ""
     elif duty_stamp_now:
@@ -3960,7 +3924,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             sig_slots.append((signer["header"], signer["name"], signer["role"], inner))
         duty_name_now = manager_duty_full or str(rec.get("duty_full") or "")
         if not is_toxicology:
-            sig_slots.append(("ضابط الخفر", str(rec.get("officer_full") or ""), "", officer_box_inner))
+            sig_slots.append(("مستلم الخفر المناوب", str(rec.get("officer_full") or ""), "", officer_box_inner))
             sig_slots.append(("وحدة الحوادث", duty_name_now, "", duty_box_inner))
         else:
             tox_duty_header = "وحدة الحوادث" if manager_auto else "مصادقة إدارة مرور منطقة جازان"
@@ -4025,7 +3989,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                     <thead>
                         <tr>
                             <th>{html.escape(col1_header)}</th>
-                            <th>ضابط الخفر</th>
+                            <th>مستلم الخفر المناوب</th>
                             <th>وحدة الحوادث</th>
                         </tr>
                     </thead>
@@ -4066,7 +4030,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         dock_cards.append(_live_pad_card("citizen", citizen_pad_title, citizen_pad_sub))
     if needs_officer_pad and not is_toxicology:
         live_pad_ids.append("officer")
-        dock_cards.append(_live_pad_card("officer", "لوحة توقيع: ضابط الخفر المناوب", rec.get("officer_full", "")))
+        dock_cards.append(_live_pad_card("officer", "لوحة توقيع: مستلم الخفر المناوب", rec.get("officer_full", "")))
     if needs_duty_pad:
         live_pad_ids.append("duty")
         duty_pad_title = (
@@ -4101,7 +4065,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     if dock_cards:
         live_dock_html = (
             '<div class="live-sig-dock no-print">'
-            '<div class="live-sig-dock-head">✍️ لوحات التوقيع الحي بالإصبع (ارسم هنا — يُنسخ فوراً إلى خانات A4)</div>'
+            '<div class="live-sig-dock-head">✍️ لوحات التوقيع الحي بالإصبع (ارسم هنا — يُنسخ فوراً إلى خانات A4 محلياً بدون تحديث الصفحة)</div>'
             '<div class="live-sig-dock-grid">'
             + "".join(dock_cards)
             + "</div></div>"
@@ -4224,7 +4188,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .live-pad-sub {{ color: #94a3b8; font-size: 11px; margin-bottom: 8px; }}
     .live-pad-canvas {{
         width: 100%; height: 220px; border: 1.5px dashed #0d47a1; border-radius: 8px;
-        background: #f8fafc; display: block; touch-action: none;
+        background: #f8fafc; display: block;
+        touch-action: none !important;
+        user-select: none !important;
+        -webkit-user-select: none !important;
+        -webkit-touch-callout: none !important;
+        -ms-touch-action: none !important;
     }}
     .live-pad-actions {{ margin-top: 6px; text-align: center; }}
     .clear-sig-btn {{
@@ -4698,10 +4667,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         return 'khafar_pad_' + DOC_SIG_KEY + '_' + padId;
     }}
 
+    // مزامنة محلية فقط داخل نفس إطار HTML — بدون postMessage / بدون Streamlit rerun / بدون كيبورد
     function syncPadToSlot(padId) {{
         const canvas = document.getElementById('pad_' + padId);
-        const slot = document.getElementById('slot_' + padId);
-        if (!canvas || !slot) return;
+        let slot = document.getElementById('slot_' + padId);
+        if (!canvas) return;
+        if (!slot) {{
+            try {{ slot = document.querySelector('img.sig-slot-img#slot_' + padId) || document.querySelector('#slot_' + padId); }} catch (e) {{}}
+        }}
+        if (!slot) return;
         const blank = document.createElement('canvas');
         blank.width = canvas.width; blank.height = canvas.height;
         const empty = canvas.toDataURL() === blank.toDataURL();
@@ -4709,25 +4683,26 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             slot.removeAttribute('src');
             slot.style.display = 'none';
             try {{ localStorage.removeItem(padStorageKey(padId)); }} catch (e) {{}}
-            try {{
-              parent.postMessage({{ type: 'khafar_live_sig', padId: padId, b64: '' }}, '*');
-            }} catch (e) {{}}
             return;
         }}
-        // transparent PNG sync into A4 slot
         const dataUrl = canvas.toDataURL('image/png');
         slot.src = dataUrl;
         slot.style.display = 'inline-block';
         try {{
           const b64 = (dataUrl.split(',')[1] || '');
-          try {{ localStorage.setItem(padStorageKey(padId), b64); }} catch (e2) {{}}
-          parent.postMessage({{ type: 'khafar_live_sig', padId: padId, b64: b64 }}, '*');
+          if (b64) localStorage.setItem(padStorageKey(padId), b64);
         }} catch (e) {{}}
     }}
 
     function wireLivePad(padId) {{
         const canvas = document.getElementById('pad_' + padId);
         if (!canvas) return;
+        try {{
+            canvas.style.touchAction = 'none';
+            canvas.style.userSelect = 'none';
+            canvas.style.webkitUserSelect = 'none';
+            canvas.setAttribute('tabindex', '-1');
+        }} catch (e) {{}}
         const ctx = canvas.getContext('2d');
         ctx.strokeStyle = PEN_COLOR;
         ctx.lineWidth = 2.8;
@@ -4736,10 +4711,13 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         let drawing = false;
         const getPt = (e) => {{
             const r = canvas.getBoundingClientRect();
-            const t = (e.touches && e.touches.length) ? e.touches[0] : ((e.changedTouches && e.changedTouches.length) ? e.changedTouches[0] : e);
+            let src = e;
+            if (e.touches && e.touches.length) src = e.touches[0];
+            else if (e.changedTouches && e.changedTouches.length) src = e.changedTouches[0];
+            else if (typeof e.clientX === 'number') src = e;
             return {{
-                x: (t.clientX - r.left) * (canvas.width / (r.width || 1)),
-                y: (t.clientY - r.top) * (canvas.height / (r.height || 1))
+                x: (src.clientX - r.left) * (canvas.width / (r.width || 1)),
+                y: (src.clientY - r.top) * (canvas.height / (r.height || 1))
             }};
         }};
         const startDraw = (e) => {{
@@ -4751,7 +4729,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(p.x + 0.1, p.y + 0.1);
             ctx.stroke();
-            syncPadToSlot(padId);
         }};
         const moveDraw = (e) => {{
             if (!drawing) return;
@@ -4760,16 +4737,32 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             const p = getPt(e);
             ctx.lineTo(p.x, p.y);
             ctx.stroke();
+        }};
+        const endDraw = (e) => {{
+            if (e && e.cancelable) e.preventDefault();
+            if (!drawing) {{
+                syncPadToSlot(padId);
+                return;
+            }}
+            drawing = false;
+            // عند رفع الإصبع فقط: احفظ محلياً وانسخ فوراً إلى خانة A4 — بدون سيرفر وبدون rerun
             syncPadToSlot(padId);
         }};
-        const endDraw = () => {{ drawing = false; syncPadToSlot(padId); }};
+        canvas.addEventListener('pointerdown', startDraw, {{ passive: false }});
+        canvas.addEventListener('pointermove', moveDraw, {{ passive: false }});
+        canvas.addEventListener('pointerup', endDraw, {{ passive: false }});
+        canvas.addEventListener('pointercancel', endDraw, {{ passive: false }});
         canvas.addEventListener('mousedown', startDraw);
         canvas.addEventListener('mousemove', moveDraw);
         window.addEventListener('mouseup', endDraw);
         canvas.addEventListener('touchstart', startDraw, {{ passive: false }});
         canvas.addEventListener('touchmove', moveDraw, {{ passive: false }});
-        window.addEventListener('touchend', endDraw, {{ passive: false }});
-        window.addEventListener('touchcancel', endDraw, {{ passive: false }});
+        canvas.addEventListener('touchend', endDraw, {{ passive: false }});
+        canvas.addEventListener('touchcancel', endDraw, {{ passive: false }});
+        try {{ canvas.setPointerCapture && null; }} catch (e) {{}}
+        canvas.addEventListener('pointerdown', function(ev) {{
+            try {{ if (canvas.setPointerCapture) canvas.setPointerCapture(ev.pointerId); }} catch (e) {{}}
+        }}, {{ passive: false }});
     }}
 
     function clearLivePad(padId) {{
@@ -4797,10 +4790,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         img.src = 'data:image/png;base64,' + b64;
     }}
     (LIVE_PADS || []).forEach(function(padId) {{
-        var b64 = (PRELOADED_SIGS && PRELOADED_SIGS[padId]) || '';
-        if (!b64) {{
-            try {{ b64 = localStorage.getItem(padStorageKey(padId)) || ''; }} catch (e) {{ b64 = ''; }}
-        }}
+        var b64 = '';
+        try {{ b64 = localStorage.getItem(padStorageKey(padId)) || ''; }} catch (e) {{ b64 = ''; }}
+        if (!b64 && PRELOADED_SIGS && PRELOADED_SIGS[padId]) b64 = PRELOADED_SIGS[padId];
         if (b64) restoreLivePad(padId, b64);
     }});
 
@@ -4914,7 +4906,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         printBtn.addEventListener("click", function(ev) {{
             ev.preventDefault();
             prepareA4Print();
-            try {{ window.focus(); }} catch (e) {{}}
             window.print();
         }});
     }}
@@ -5067,7 +5058,7 @@ if "officer_approved" not in st.session_state:
 if "officer_stamp_b64" not in st.session_state:
     st.session_state.officer_stamp_b64 = ""
 if "officer_auth_mode" not in st.session_state:
-    st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لضابط الخفر)"
+    st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لمستلم الخفر المناوب)"
 if "duty_auth_mode" not in st.session_state:
     st.session_state.duty_auth_mode = "ختم المصادقة النظامي لوحدة الحوادث"
 if "duty_stamp_b64" not in st.session_state:
@@ -5111,7 +5102,7 @@ def reset_doc_state():
     st.session_state.live_sig_pads = {}
     st.session_state.officer_approved = False
     st.session_state.officer_stamp_b64 = ""
-    st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لضابط الخفر)"
+    st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لمستلم الخفر المناوب)"
     st.session_state.duty_auth_mode = "ختم المصادقة النظامي لوحدة الحوادث"
     st.session_state.duty_stamp_b64 = ""
     st.session_state.receiver_name = ""
@@ -5471,7 +5462,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         st.session_state.live_sig_pads = {}
                         st.session_state.officer_approved = False
                         st.session_state.officer_stamp_b64 = ""
-                        st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لضابط الخفر)"
+                        st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لمستلم الخفر المناوب)"
                         st.session_state.duty_auth_mode = "ختم المصادقة النظامي لوحدة الحوادث"
                         st.session_state.duty_stamp_b64 = ""
                         safe_rerun()
@@ -5577,11 +5568,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         current_values[fld["key"]] = render_field(fld)
                     pair_slot += 1
                 if fid == "decl_settlement":
-                    st.caption("بعد اعتماد الوثيقة تظهر لوحة توقيع حي مستقلة لكل طرف مشمول، مع ضابط الخفر ووحدة الحوادث، داخل صفحة A4 واحدة.")
+                    st.caption("بعد اعتماد الوثيقة تظهر لوحة توقيع حي مستقلة لكل طرف مشمول، مع مستلم الخفر المناوب ووحدة الحوادث، داخل صفحة A4 واحدة.")
                 elif fid == "decl_animal_hit":
-                    st.caption("مجهول المالك: 3 خانات توقيع (السائق + ضابط الخفر + وحدة الحوادث). حضور المالك: 4 خانات بإضافة مالك الحيوان ولوحة توقيع حي.")
+                    st.caption("مجهول المالك: 3 خانات توقيع (السائق + مستلم الخفر المناوب + وحدة الحوادث). حضور المالك: 4 خانات بإضافة مالك الحيوان ولوحة توقيع حي.")
                 else:
-                    st.caption("بعد الاعتماد تُفتح لوحة توقيع المُبلّغ المتنازل، ولوحة الطرف المتسبب عند حضوره، بجانب ضابط الخفر ووحدة الحوادث.")
+                    st.caption("بعد الاعتماد تُفتح لوحة توقيع المُبلّغ المتنازل، ولوحة الطرف المتسبب عند حضوره، بجانب مستلم الخفر المناوب ووحدة الحوادث.")
             else:
                 pair_slot = 0
                 pair_cols = None
@@ -5879,10 +5870,10 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 st.markdown("<div class='auth-panel'>", unsafe_allow_html=True)
                 is_toxicology_form = fid == "med_toxicology" or "تحليل سموم" in str(form_def.get("title") or "")
                 if is_toxicology_form:
-                    st.markdown("#### 2️⃣ مصادقة إدارة مرور منطقة جازان وتوثيق ضابط الخفر")
-                    st.caption(f"التوثيق النصي لضابط الخفر: {unit_display}")
+                    st.markdown("#### 2️⃣ مصادقة إدارة مرور منطقة جازان وتوثيق مستلم الخفر المناوب")
+                    st.caption(f"التوثيق النصي لمستلم الخفر المناوب: {unit_display}")
                 else:
-                    st.markdown("#### 2️⃣ توثيق ضابط الخفر ومصادقة وحدة الحوادث")
+                    st.markdown("#### 2️⃣ توثيق مستلم الخفر المناوب ومصادقة وحدة الحوادث")
                     st.caption(f"الإعدادات الافتراضية: {unit_display}  •  {duty_display}")
 
                 _auth_sk = _stable_form_session_key()
@@ -5891,18 +5882,18 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     st.session_state[officer_name_key] = st.session_state.officer_full_override or unit_display
 
                 st.text_input(
-                    "رتبة واسم ضابط الخفر المناوب",
+                    "رتبة واسم مستلم الخفر المناوب",
                     key=officer_name_key,
                     disabled=st.session_state.officer_approved,
                     placeholder="مثال: الملازم فهد بن ...",
                 )
 
-                chosen_officer_auth = st.session_state.officer_auth_mode or "توقيع حي على الشاشة بالإصبع (لضابط الخفر)"
+                chosen_officer_auth = st.session_state.officer_auth_mode or "توقيع حي على الشاشة بالإصبع (لمستلم الخفر المناوب)"
                 use_saved_officer_sig = False
                 if not is_toxicology_form:
                     manual_sig_key = f"manual_officer_sig_{_auth_sk}"
                     if saved_officer_sig:
-                        st.success("✅ تم إدراج توقيع ضابط الخفر المحفوظ من الإعدادات تلقائياً")
+                        st.success("✅ تم إدراج توقيع مستلم الخفر المناوب المحفوظ من الإعدادات تلقائياً")
                         st.checkbox(
                             "✏️ التوقيع يدوياً لهذا النموذج فقط",
                             key=manual_sig_key,
@@ -5916,17 +5907,17 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                             chosen_officer_auth = st.session_state.officer_auth_mode
                         elif st.session_state.get(manual_sig_key) and st.session_state.officer_auth_mode == "توقيع محفوظ من الإعدادات (تلقائي)":
                             st.session_state.officer_stamp_b64 = ""
-                            st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لضابط الخفر)"
+                            st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لمستلم الخفر المناوب)"
                     if not use_saved_officer_sig:
                         officer_auth_opts = [
-                            "توقيع حي على الشاشة بالإصبع (لضابط الخفر)",
-                            "بصمة رقمية (منفذ الشحن Type-C) لضابط الخفر",
+                            "توقيع حي على الشاشة بالإصبع (لمستلم الخفر المناوب)",
+                            "بصمة رقمية (منفذ الشحن Type-C) لمستلم الخفر المناوب",
                         ]
                         officer_default_idx = 0
                         if "بصمة" in (st.session_state.officer_auth_mode or ""):
                             officer_default_idx = 1
                         chosen_officer_auth = st.radio(
-                            "وسيلة توثيق ضابط الخفر:",
+                            "وسيلة توثيق مستلم الخفر المناوب:",
                             officer_auth_opts,
                             index=officer_default_idx,
                             key=f"officer_auth_radio_{_auth_sk}",
@@ -5990,8 +5981,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         else:
                             st.session_state.duty_stamp_b64 = ""
                         if is_toxicology_form:
-                            # تحليل السموم فقط: لا يُشترط توقيع/بصمة ضابط الخفر ولا يُدرج التوقيع المحفوظ
-                            st.session_state.officer_auth_mode = "توثيق نصي لضابط الخفر (بدون توقيع)"
+                            # تحليل السموم فقط: لا يُشترط توقيع/بصمة مستلم الخفر المناوب ولا يُدرج التوقيع المحفوظ
+                            st.session_state.officer_auth_mode = "توثيق نصي لمستلم الخفر المناوب (بدون توقيع)"
                             st.session_state.officer_stamp_b64 = ""
                         elif use_saved_officer_sig and saved_officer_sig:
                             st.session_state.officer_auth_mode = "توقيع محفوظ من الإعدادات (تلقائي)"
@@ -6009,11 +6000,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     if is_toxicology_form:
                         st.success(
                             f"تم الاعتماد: مصادقة إدارة مرور منطقة جازان ({st.session_state.duty_auth_mode}) • "
-                            f"توثيق ضابط الخفر نصياً بدون توقيع"
+                            f"توثيق مستلم الخفر المناوب نصياً بدون توقيع"
                         )
                     else:
                         st.success(
-                            f"تم التوثيق: ضابط الخفر ({st.session_state.officer_auth_mode}) • "
+                            f"تم التوثيق: مستلم الخفر المناوب ({st.session_state.officer_auth_mode}) • "
                             f"وحدة الحوادث ({st.session_state.duty_auth_mode})"
                         )
                     if st.session_state.officer_stamp_b64 and not is_toxicology_form:
@@ -6136,15 +6127,10 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     )
 
                 st.markdown("#### 📄 المعاينة الرسمية مقاس A4 (جاهزة للطباعة أو الحفظ كـ PDF)")
-                render_live_sig_bridge_listener()
-                st.text_area(
-                    "جسر التواقيع الحية",
-                    key="live_sig_bridge",
-                    height=68,
-                    placeholder="LIVE_SIG_BRIDGE",
-                    label_visibility="collapsed",
+                st.caption(
+                    "التواقيع تُرسم وتُحفظ محلياً داخل المعاينة (بدون كيبورد وبدون تحديث للصفحة). "
+                    "للطباعة أو التنزيل الشامل استخدم الأزرار داخل إطار المعاينة."
                 )
-                _consume_live_sig_bridge()
                 preview_h = 1480 if (
                     ("توقيع حي" in ready_record.get("citizen_auth_mode", ""))
                     or ("توقيع حي" in ready_record.get("officer_auth_mode", ""))
@@ -6260,7 +6246,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
             with r1:
                 s_orank = st.text_input("خانة التوثيق الأولى", value=shift["officer_rank"])
             with r2:
-                s_oname = st.text_input("اسم ضابط الخفر (اختياري)", value=shift["officer_name"])
+                s_oname = st.text_input("اسم مستلم الخفر المناوب (اختياري)", value=shift["officer_name"])
 
             r3, r4 = st.columns([1, 2])
             with r3:
@@ -6288,7 +6274,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 clear_device_shift(DEVICE_HASH)
                 st.session_state[DUTY_SIG_KEY] = ""
                 st.session_state["wipe_device_shift"] = True
-                st.success("تم مسح اسم المناوبة وبيانات هذا الجهاز (بما فيها توقيع ضابط الخفر) من المتصفح.")
+                st.success("تم مسح اسم المناوبة وبيانات هذا الجهاز (بما فيها توقيع مستلم الخفر المناوب) من المتصفح.")
                 safe_rerun()
             if save_shift:
                 _, hash_now = ensure_device_identity()
@@ -6307,7 +6293,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 safe_rerun()
 
         # لوحة التوقيع خارج st.form لالتقاط Base64 لحظياً دون تعارض مع نموذج الحفظ
-        st.markdown("##### ✍️ التوقيع المعتمد لضابط الخفر (يُدرج تلقائياً في جميع النماذج)")
+        st.markdown("##### ✍️ التوقيع المعتمد لمستلم الخفر المناوب (يُدرج تلقائياً في جميع النماذج)")
         st.caption("يُحفظ التوقيع على هذا الجهاز فقط (SQLite + localStorage) ولا يُوضع في الكوكيز حتى لا يتجاوز حد 4KB.")
         _allow_ls_restore = not bool(
             str(st.session_state.get(DUTY_SIG_KEY) or shift.get(DUTY_SIG_KEY) or "").strip()
@@ -6332,7 +6318,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                     cur = get_device_shift(DEVICE_HASH)
                     cur[DUTY_SIG_KEY] = compressed
                     save_device_shift(DEVICE_HASH, cur)
-                st.toast("تم اعتماد توقيع ضابط الخفر من اللوحة", icon="✅")
+                st.toast("تم اعتماد توقيع مستلم الخفر المناوب من اللوحة", icon="✅")
                 safe_rerun()
 
         sig_upload = st.file_uploader(
@@ -6361,10 +6347,10 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                     cur = get_device_shift(hash_now)
                     cur[DUTY_SIG_KEY] = payload
                     save_device_shift(hash_now, cur)
-                    st.success("تم حفظ توقيع ضابط الخفر على هذا الجهاز وتفعيله تلقائياً.")
+                    st.success("تم حفظ توقيع مستلم الخفر المناوب على هذا الجهاز وتفعيله تلقائياً.")
                     safe_rerun()
         with del_col:
-            if st.button("🗑️ حذف / إعادة رسم توقيع ضابط الخفر", use_container_width=True):
+            if st.button("🗑️ حذف / إعادة رسم توقيع مستلم الخفر المناوب", use_container_width=True):
                 st.session_state[DUTY_SIG_KEY] = ""
                 st.session_state["_clear_duty_sig_bridge"] = True
                 if DEVICE_HASH:
@@ -6382,7 +6368,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 unsafe_allow_html=True,
             )
             try:
-                st.image(base64.b64decode(preview_sig), caption="معاينة توقيع ضابط الخفر المعتمد", width=280)
+                st.image(base64.b64decode(preview_sig), caption="معاينة توقيع مستلم الخفر المناوب المعتمد", width=280)
             except Exception:
                 st.caption("تعذّر عرض معاينة التوقيع المحفوظ.")
         else:
