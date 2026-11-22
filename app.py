@@ -4590,6 +4590,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 <head>
 <meta charset="UTF-8">
 <meta name="format-detection" content="telephone=no">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <title>{rec['doc_no']} - {banner_title}</title>
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap');
@@ -5208,8 +5210,23 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 </style>
 </head>
 <body>
+    <div dir="rtl" style="text-align:center; margin: 12px 0;" class="no-print">
+        <button id="ios-pdf-btn" type="button" onclick="exportReportForIOS()" style="
+            width:100%; background:#14532d; color:#fff; border:1px solid #c5a059;
+            padding:14px; font-size:16px; font-weight:bold; border-radius:8px; cursor:pointer;">
+            📄 استخراج التقرير PDF / طباعة (يدعم الآيفون)
+        </button>
+        <div id="ios-preview-box" style="display:none; margin-top:12px; background:#f8fafc; border:2px solid #16a34a; border-radius:8px; padding:10px;">
+            <p style="color:#14532d; font-weight:bold; font-size:13px; margin:0 0 8px 0;">
+                ✅ تم تجهيز الوثيقة!<br>
+                • في <b>سفاري</b>: اختر <b>(تنزيل)</b> من الرسالة المنبثقة لفتح الـ PDF.<br>
+                • داخل <b>واتساب للآيفون</b>: اضغط <b>ضغطة مطولة</b> على الوثيقة أدناه واختر <b>(مشاركة)</b> أو <b>(طباعة)</b>:
+            </p>
+            <img id="ios-ready-img" alt="معاينة الوثيقة" style="width:100%; border:1px solid #cbd5e1; border-radius:4px;" />
+        </div>
+    </div>
     <div class="toolbar no-print">
-        <button class="print-btn" type="button" id="printOfficialBtn">🖨️ طباعة الوثيقة الرسمية / حفظ كملف A4 PDF</button>
+        <button class="print-btn" type="button" id="printOfficialBtn">🖨️ طباعة مباشرة من المتصفح</button>
     </div>
     <div class="zoom-bar no-print" id="zoomBar">
         <button type="button" class="z-btn" data-z="-">➖ تصغير</button>
@@ -5519,87 +5536,66 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         scheduleA4Fit();
     }}
 
-    async function printOrDownloadIOS() {{
-        try {{
-            if (typeof syncAllLivePads === "function") syncAllLivePads();
-            if (typeof prepareA4Print === "function") prepareA4Print();
-        }} catch (e) {{}}
-        const reportElement =
+    async function exportReportForIOS() {{
+        const btn = document.getElementById("ios-pdf-btn");
+        const target =
             document.getElementById("print-area") ||
             document.getElementById("a4Sheet") ||
             document.querySelector(".a4-page") ||
-            document.querySelector(".a4-paper");
-        if (!reportElement) {{
-            alert("لم يتم العثور على حاوية الورقة");
+            document.querySelector(".a4-paper") ||
+            document.querySelector(".report-container");
+        if (!target) {{
+            alert("لم يتم العثور على حاوية التقرير البيضاء، تأكد من مطابقة الـ id أو الـ class");
             return;
         }}
-        const headStyles = Array.from(document.querySelectorAll("style, link[rel='stylesheet']"))
-            .map(function(node) {{ return node.outerHTML; }})
-            .join("\\n");
-        const cleanHTML = `
-<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="format-detection" content="telephone=no">
-<title>وثيقة رسمية - قسم مرور العارضة</title>
-<style>
-@page {{ size: A4 portrait; margin: 6mm 8mm; }}
-body {{ margin: 0; padding: 0; background: #fff; font-family: Cairo, Tahoma, Arial, sans-serif; direction: rtl; }}
-.ios-bar {{
-    position: sticky; top: 0; z-index: 9999; background: #14532d; color: #fff;
-    padding: 12px; text-align: center; font-weight: bold;
-    display: flex; justify-content: space-around; align-items: center;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-}}
-.ios-bar button {{
-    background: #eab308; color: #000; border: none;
-    padding: 8px 16px; border-radius: 6px; font-weight: bold; font-size: 15px;
-}}
-@media print {{
-    .ios-bar, .no-print, .toolbar, .zoom-bar, .live-sig-dock,
-    .live-pad-actions, .live-pad-canvas {{ display: none !important; }}
-}}
-.live-pad-canvas, .live-pad-actions, .live-sig-dock, .toolbar, .zoom-bar, .no-print {{
-    display: none !important;
-}}
-.a4-preview-viewport, .a4-fit {{
-    height: auto !important; overflow: visible !important; transform: none !important;
-}}
-.a4-sheet, .a4-paper, .a4-page, .print-area {{
-    width: 100% !important; max-width: 210mm !important; margin: 0 auto !important;
-    transform: none !important; zoom: 1 !important; box-shadow: none !important;
-}}
-</style>
-${{headStyles}}
-</head>
-<body>
-<div class="ios-bar">
-    <span>جاهز للطباعة أو الحفظ عبر زر المشاركة (⬆️) بالأسفل</span>
-    <button type="button" onclick="window.print()">🖨️ أمر الطباعة</button>
-</div>
-${{reportElement.outerHTML}}
-<script>
-window.onload = function() {{
-    setTimeout(function() {{ window.print(); }}, 600);
-}};
-<\\/script>
-</body>
-</html>`;
-        const blob = new Blob([cleanHTML], {{ type: "text/html;charset=utf-8" }});
-        const blobUrl = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = blobUrl;
-        link.target = "_blank";
-        link.rel = "noopener";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(function() {{
-            try {{ URL.revokeObjectURL(blobUrl); }} catch (e) {{}}
+        if (!window.htmlToImage || !window.jspdf) {{
+            alert("مكتبات التصدير لم تُحمَّل بعد. تحقق من الاتصال ثم أعد المحاولة.");
+            return;
+        }}
+        const originalLabel = btn ? btn.innerText : "";
+        if (btn) {{
+            btn.innerText = "⏳ جاري تجهيز الوثيقة للآيفون...";
+            btn.disabled = true;
+        }}
+        try {{
+            try {{
+                if (typeof syncAllLivePads === "function") syncAllLivePads();
+                if (typeof prepareA4Print === "function") prepareA4Print();
+            }} catch (e) {{}}
+            const options = {{ quality: 0.95, pixelRatio: 2, backgroundColor: "#ffffff" }};
+            await htmlToImage.toJpeg(target, options);
+            const imgData = await htmlToImage.toJpeg(target, options);
+            const readyImg = document.getElementById("ios-ready-img");
+            const previewBox = document.getElementById("ios-preview-box");
+            if (readyImg) readyImg.src = imgData;
+            if (previewBox) previewBox.style.display = "block";
+            const {{ jsPDF }} = window.jspdf;
+            const pdf = new jsPDF("p", "mm", "a4");
+            const imgProps = pdf.getImageProperties(imgData);
+            const pageWidth = 198;
+            let pageHeight = (imgProps.height * pageWidth) / imgProps.width;
+            if (pageHeight > 285) pageHeight = 285;
+            pdf.addImage(imgData, "JPEG", 6, 6, pageWidth, pageHeight);
+            const pdfDataUri = pdf.output("datauristring");
+            const link = document.createElement("a");
+            link.href = pdfDataUri;
+            link.download = "وثيقة_مرور_العارضة.pdf";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            if (btn) btn.innerText = "✅ تم استخراج الوثيقة بنجاح";
+        }} catch (err) {{
+            alert("حدث خطأ أثناء تجهيز الملف: " + (err && err.message ? err.message : err));
+            if (btn) btn.innerText = originalLabel || "📄 استخراج التقرير PDF / طباعة (يدعم الآيفون)";
+        }} finally {{
+            if (btn) btn.disabled = false;
             try {{ restoreA4Preview(); }} catch (e) {{}}
-        }}, 4000);
+        }}
+    }}
+    try {{ window.exportReportForIOS = exportReportForIOS; }} catch (e) {{}}
+
+    async function printOrDownloadIOS() {{
+        return exportReportForIOS();
     }}
     try {{ window.printOrDownloadIOS = printOrDownloadIOS; }} catch (e) {{}}
 
@@ -5607,7 +5603,11 @@ window.onload = function() {{
     if (printBtn) {{
         printBtn.addEventListener("click", function(ev) {{
             ev.preventDefault();
-            printOrDownloadIOS();
+            try {{
+                if (typeof syncAllLivePads === "function") syncAllLivePads();
+                if (typeof prepareA4Print === "function") prepareA4Print();
+            }} catch (e) {{}}
+            window.print();
         }});
     }}
 
