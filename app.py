@@ -4629,16 +4629,24 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         legal_box_title = f"الصيغة النظامية المعتمدة ({rec['category']}):"
     cleaned_legal_text = normalize_official_legal_text(rec.get("legal_text") or "")
     banner_title = (form_def or {}).get("official_title") or rec["form_title"]
-    sheet_cls = "a4-sheet a4-paper a4-page print-area dense-fit"
-    table_rows = rows_html.count("<tr")
+    text_len = len(re.sub(r"<[^>]+>", "", cleaned_legal_text or ""))
+    rows_cnt = rows_html.count("<tr")
+    sigs_cnt = len(party_signers) + (1 if is_toxicology else 2)
     form_id_now = str(rec.get("form_id") or "")
-    dense_always = form_id_now in {"decl_settlement", "decl_flee_waiver", "decl_animal_hit", "med_toxicology"}
     if (
-        dense_always
-        or len(party_signers) >= 3
-        or table_rows > 8
+        form_id_now == "decl_settlement"
+        or sigs_cnt >= 4
+        or rows_cnt >= 8
+        or text_len > 620
         or image_count > 0
     ):
+        tier = "dense"
+    elif rows_cnt <= 5 and text_len <= 420:
+        tier = "spacious"
+    else:
+        tier = "balanced"
+    sheet_cls = f"a4-sheet a4-paper a4-page print-area a4-tier-{tier}"
+    if tier == "dense":
         sheet_cls += " a4-dense-print"
     gps_line_html = gps_header_line(str(rec.get("gps_coords") or ""))
 
@@ -4766,34 +4774,47 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             margin: 0 !important;
             height: auto;
         }}
+        .a4-page-frame {{
+            direction: rtl !important;
+            width: 210mm !important;
+            height: 297mm !important;
+            padding: 6mm 7mm !important;
+            box-sizing: border-box !important;
+            margin: 0 auto !important;
+            overflow: hidden !important;
+            background: #ffffff !important;
+            position: relative !important;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+            transform-origin: top center !important;
+        }}
         .a4-sheet, .a4-paper {{
             direction: rtl !important;
-            width: 794px !important;
-            height: auto !important;
-            min-height: 1123px !important;
-            max-height: none !important;
+            width: 100% !important;
+            height: 285mm !important;
+            min-height: 285mm !important;
+            max-height: 285mm !important;
             box-sizing: border-box !important;
-            margin: 0 auto;
+            margin: 0 auto !important;
             background: #ffffff !important;
             color: #000000 !important;
-            padding: 14px 32px 20px 32px !important;
-            border: 2px solid #000000;
-            overflow: visible !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: flex-start !important;
-            box-shadow: 0 12px 32px rgba(0,0,0,0.45);
-            transform-origin: top right !important;
+            padding: 0 !important;
+            border: 1.8px solid #0f3d2e !important;
+            border-radius: 4px !important;
+            overflow: hidden !important;
+            display: table !important;
+            table-layout: fixed !important;
+            box-shadow: none !important;
+            transform-origin: top center !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             color-adjust: exact !important;
         }}
-        .a4-fit {{
-            justify-content: flex-start !important;
-            min-height: 0 !important;
-            height: auto !important;
-            flex: 1 1 auto;
-        }}
+        .a4-row {{ display: table-row !important; }}
+        .a4-cell {{ display: table-cell !important; width: 100% !important; }}
+        .a4-row-mid {{ height: 100% !important; }}
+        .legal-wrap-cell {{ vertical-align: top !important; padding: 4px 0 !important; }}
+        .sig-bottom-cell {{ vertical-align: bottom !important; padding: 0 !important; }}
+        .a4-fit {{ display: contents !important; }}
         .a4-sheet, .a4-sheet p, .a4-sheet td, .a4-sheet th, .a4-sheet div, .a4-sheet span,
         .a4-paper, .a4-paper p, .a4-paper td, .a4-paper th, .a4-paper div, .a4-paper span {{
             color: #000000 !important;
@@ -4813,15 +4834,21 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             display: block !important;
             padding: 0 !important;
         }}
+        .a4-page-frame {{
+            width: 210mm !important;
+            max-width: none !important;
+            margin: 0 auto !important;
+            transform-origin: top center !important;
+        }}
         .a4-sheet, .a4-paper {{
-            width: 794px !important;
+            width: 100% !important;
             max-width: none !important;
             direction: rtl !important;
-            margin: 0 !important;
-            transform-origin: top right !important;
+            margin: 0 auto !important;
+            transform-origin: top center !important;
         }}
     }}
-    .a4-fit {{ display: flex; flex-direction: column; justify-content: flex-start; flex: 1 1 auto; min-height: 100%; }}
+    .a4-fit {{ display: contents !important; }}
     .hdr, .header, .report-header {{
         display: flex !important;
         justify-content: space-between !important;
@@ -5019,159 +5046,162 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-sheet table a, .a4-sheet .legal-box a, a[href^="tel"] {{
         color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
     }}
-    .a4-compact, .a4-dense-print {{ padding: 14px 32px 20px 32px !important; }}
-    .a4-compact .hdr, .a4-dense-print .hdr {{
-        display: flex !important; justify-content: space-between !important; align-items: center !important;
-        width: 100% !important; padding: 2px 0 8px 0 !important; margin-bottom: 8px !important;
-        border-bottom: 2px solid #0f5132;
-    }}
-    .a4-compact .hdr-center, .a4-dense-print .hdr-center {{
-        width: 24% !important; height: 80px; min-width: 80px; min-height: 80px; padding: 0 6px !important;
-    }}
-    .a4-compact .hdr-center img, .a4-compact .hdr-logo,
-    .a4-dense-print .hdr-center img, .a4-dense-print .hdr-logo {{
-        width: 80px !important; height: 80px !important;
-        max-width: 80px !important; max-height: 80px !important;
-    }}
-    .a4-compact .hdr-right p, .a4-dense-print .hdr-right p {{ font-size: 12.5px !important; line-height: 1.38 !important; }}
-    .a4-compact .hdr-left p, .a4-dense-print .hdr-left p {{ font-size: 11.5px !important; line-height: 1.32 !important; }}
-    .a4-compact .doc-banner, .a4-dense-print .doc-banner {{
-        font-size: 13px !important; padding: 4px 8px !important; margin-bottom: 6px !important;
-    }}
-    .a4-compact table.data-tbl, .a4-dense-print table.data-tbl {{ margin-bottom: 6px !important; }}
-    .a4-compact table.data-tbl td, .a4-compact table.data-tbl td.val,
-    .a4-dense-print table.data-tbl td, .a4-dense-print table.data-tbl td.val {{
-        padding: 3.5px 6px !important; font-size: 11px !important; line-height: 1.35 !important;
-    }}
-    .a4-compact .legal-box, .a4-dense-print .legal-box {{
-        font-size: 11.5px !important; line-height: 1.5 !important; padding: 7px 10px !important; margin-bottom: 6px !important;
-    }}
-    .a4-compact .legal-box div, .a4-dense-print .legal-box div {{
-        font-size: 11.5px !important; line-height: 1.5 !important;
-    }}
-    .a4-compact table.sig-tbl td, .a4-dense-print table.sig-tbl td {{
-        min-height: 54px !important; padding: 4px 6px !important;
-    }}
-    .a4-compact .sig-cell, .a4-dense-print .sig-cell {{ min-height: 54px !important; padding: 4px 6px !important; }}
-    .a4-compact .sig-head, .a4-dense-print .sig-head {{ font-size: 10px !important; padding: 3px !important; }}
-    .a4-compact .footer-qr, .a4-dense-print .footer-qr {{ padding: 4px 8px !important; margin-top: 6px !important; }}
-    .a4-compact .footer-qr img, .a4-dense-print .footer-qr img {{ width: 32px !important; height: 32px !important; }}
-    .a4-compact .doc-banner, .a4-dense-print .doc-banner,
-    .a4-compact .hdr, .a4-dense-print .hdr,
-    .a4-compact .sig-footer, .a4-dense-print .sig-footer {{
-        margin-bottom: 6px !important;
-    }}
+    /* a4-dense-print / a4-compact: لا تلمس padding الورقة — الإطار الفيزيائي يتحكم */
+    .a4-compact, .a4-dense-print {{ padding: 0 !important; }}
 
-    /* ===== ميزان A4 التلقائي: 3 مستويات ===== */
-    .a4-mode-spacious {{
-        padding: 7mm 8mm !important;
-        display: flex !important; flex-direction: column !important;
+    /* ===== إطار A4 فيزيائي ثابت + مستويات كثافة بايثون ===== */
+    .a4-page-frame {{
+        width: 210mm;
+        height: 297mm;
+        padding: 6mm 7mm;
+        box-sizing: border-box;
+        overflow: hidden;
+        page-break-after: avoid !important;
+        page-break-inside: avoid !important;
+        break-after: avoid !important;
+        break-inside: avoid !important;
+        position: relative;
+        background: #ffffff;
+        margin: 0 auto;
     }}
-    .a4-mode-spacious .hdr-center, .a4-mode-spacious .hdr-center img, .a4-mode-spacious .hdr-logo {{
+    .a4-sheet, .a4-paper, .a4-page, .print-area {{
+        width: 100% !important;
+        height: 285mm !important;
+        min-height: 285mm !important;
+        max-height: 285mm !important;
+        box-sizing: border-box !important;
+        display: table !important;
+        table-layout: fixed !important;
+        border: 1.8px solid #0f3d2e !important;
+        border-radius: 4px !important;
+        background: #ffffff !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        page-break-after: avoid !important;
+        page-break-inside: avoid !important;
+    }}
+    .a4-row {{ display: table-row !important; }}
+    .a4-cell {{ display: table-cell !important; width: 100% !important; }}
+    .a4-row-top {{ height: auto !important; }}
+    .a4-row-mid {{ height: 100% !important; }}
+    .a4-row-bot {{ height: auto !important; }}
+    .a4-top-cell {{ vertical-align: top !important; padding: 3mm 3.5mm 0 3.5mm !important; }}
+    .legal-wrap-cell {{
+        vertical-align: top !important;
+        padding: 2mm 3.5mm !important;
+    }}
+    .sig-bottom-cell {{
+        vertical-align: bottom !important;
+        padding: 0 3.5mm 3mm 3.5mm !important;
+    }}
+    .sig-footer {{ width: 100% !important; }}
+
+    /* spacious */
+    .a4-tier-spacious .hdr-center, .a4-tier-spacious .hdr-center img, .a4-tier-spacious .hdr-logo {{
         width: 86px !important; height: 86px !important; max-width: 86px !important; max-height: 86px !important;
         min-width: 86px !important; min-height: 86px !important;
     }}
-    .a4-mode-spacious .hdr-right p {{ font-size: 13px !important; line-height: 1.42 !important; }}
-    .a4-mode-spacious .hdr-left p {{ font-size: 12.5px !important; line-height: 1.4 !important; }}
-    .a4-mode-spacious .doc-banner {{
-        font-size: 16px !important; padding: 9px 14px !important; margin: 10px 0 16px !important;
+    .a4-tier-spacious .hdr-right p {{ font-size: 13px !important; line-height: 1.42 !important; }}
+    .a4-tier-spacious .hdr-left p {{ font-size: 12.5px !important; line-height: 1.4 !important; }}
+    .a4-tier-spacious .doc-banner {{
+        font-size: 16px !important; padding: 9px 14px !important; margin: 10px 0 14px !important;
     }}
-    .a4-mode-spacious table.data-tbl {{ margin-bottom: 16px !important; }}
-    .a4-mode-spacious table.data-tbl th, .a4-mode-spacious table.data-tbl td {{
-        font-size: 13.5px !important; line-height: 1.65 !important; padding: 9px 12px !important;
+    .a4-tier-spacious table.data-tbl {{ margin-bottom: 12px !important; }}
+    .a4-tier-spacious table.data-tbl th, .a4-tier-spacious table.data-tbl td {{
+        font-size: 13.5px !important; line-height: 1.65 !important; padding: 10px 12px !important;
     }}
-    .a4-mode-spacious .legal-box, .a4-mode-spacious .legal-box div {{
-        font-size: 14.5px !important; line-height: 2.05 !important;
-        padding: 16px 18px !important; margin: 8px 0 18px !important;
+    .a4-tier-spacious .legal-box, .a4-tier-spacious .legal-box .legal-body, .a4-tier-spacious .legal-box .legal-title {{
+        font-size: 15px !important; line-height: 2.1 !important;
     }}
-    .a4-mode-spacious .legal-box > div:first-child {{ margin-bottom: 10px !important; }}
-    .a4-mode-spacious table.sig-tbl td, .a4-mode-spacious .sig-cell {{
-        min-height: 100px !important; padding: 10px 8px !important; font-size: 13px !important;
+    .a4-tier-spacious .legal-box {{
+        padding: 18px !important; margin: 4px 0 10px !important;
     }}
-    .a4-mode-spacious table.sig-tbl th, .a4-mode-spacious .sig-head {{
+    .a4-tier-spacious .legal-title {{ margin-bottom: 10px !important; }}
+    .a4-tier-spacious table.sig-tbl td, .a4-tier-spacious .sig-cell {{
+        height: 105px !important; min-height: 105px !important; padding: 10px 8px !important; font-size: 13px !important;
+    }}
+    .a4-tier-spacious table.sig-tbl th, .a4-tier-spacious .sig-head {{
         padding: 8px !important; font-size: 13px !important;
     }}
-    .a4-mode-spacious img.sig-slot-img {{ max-height: 56px !important; }}
-    .a4-mode-spacious .footer-qr {{ padding: 8px 10px !important; margin-top: 10px !important; }}
+    .a4-tier-spacious img.sig-slot-img {{ max-height: 56px !important; }}
+    .a4-tier-spacious .footer-qr {{ padding: 8px 10px !important; margin-top: 8px !important; }}
 
-    .a4-mode-balanced {{
-        padding: 5.5mm 6.5mm !important;
-        display: flex !important; flex-direction: column !important;
-    }}
-    .a4-mode-balanced .hdr-center, .a4-mode-balanced .hdr-center img, .a4-mode-balanced .hdr-logo {{
+    /* balanced */
+    .a4-tier-balanced .hdr-center, .a4-tier-balanced .hdr-center img, .a4-tier-balanced .hdr-logo {{
         width: 76px !important; height: 76px !important; max-width: 76px !important; max-height: 76px !important;
         min-width: 76px !important; min-height: 76px !important;
     }}
-    .a4-mode-balanced .hdr-right p {{ font-size: 12.5px !important; }}
-    .a4-mode-balanced .doc-banner {{
-        font-size: 14.5px !important; padding: 7px 12px !important; margin: 8px 0 12px !important;
+    .a4-tier-balanced .hdr-right p {{ font-size: 12.5px !important; }}
+    .a4-tier-balanced .doc-banner {{
+        font-size: 14.5px !important; padding: 7px 12px !important; margin: 8px 0 10px !important;
     }}
-    .a4-mode-balanced table.data-tbl {{ margin-bottom: 10px !important; }}
-    .a4-mode-balanced table.data-tbl th, .a4-mode-balanced table.data-tbl td {{
+    .a4-tier-balanced table.data-tbl {{ margin-bottom: 8px !important; }}
+    .a4-tier-balanced table.data-tbl th, .a4-tier-balanced table.data-tbl td {{
         font-size: 12.5px !important; line-height: 1.5 !important; padding: 6px 9px !important;
     }}
-    .a4-mode-balanced .legal-box, .a4-mode-balanced .legal-box div {{
+    .a4-tier-balanced .legal-box, .a4-tier-balanced .legal-box .legal-body, .a4-tier-balanced .legal-box .legal-title {{
         font-size: 13px !important; line-height: 1.75 !important;
-        padding: 12px 14px !important; margin: 6px 0 12px !important;
     }}
-    .a4-mode-balanced table.sig-tbl td, .a4-mode-balanced .sig-cell {{
-        min-height: 78px !important; padding: 7px 6px !important; font-size: 12px !important;
+    .a4-tier-balanced .legal-box {{
+        padding: 12px 14px !important; margin: 4px 0 8px !important;
     }}
-    .a4-mode-balanced img.sig-slot-img {{ max-height: 48px !important; }}
-    .a4-mode-balanced .footer-qr {{ padding: 6px 8px !important; margin-top: 8px !important; }}
+    .a4-tier-balanced table.sig-tbl td, .a4-tier-balanced .sig-cell {{
+        height: 78px !important; min-height: 78px !important; padding: 7px 6px !important; font-size: 12px !important;
+    }}
+    .a4-tier-balanced img.sig-slot-img {{ max-height: 48px !important; }}
+    .a4-tier-balanced .footer-qr {{ padding: 6px 8px !important; margin-top: 6px !important; }}
 
-    .a4-mode-dense, .a4-ultra-fit {{
-        padding: 4mm 5.5mm !important;
-        min-height: 0 !important; height: auto !important;
-        display: flex !important; flex-direction: column !important;
-        justify-content: flex-start !important;
-    }}
-    .a4-mode-dense .hdr-center, .a4-mode-dense .hdr-center img, .a4-mode-dense .hdr-logo,
-    .a4-ultra-fit .hdr-center, .a4-ultra-fit .hdr-center img, .a4-ultra-fit .hdr-logo {{
+    /* dense */
+    .a4-tier-dense .hdr-center, .a4-tier-dense .hdr-center img, .a4-tier-dense .hdr-logo,
+    .a4-dense-print .hdr-center, .a4-dense-print .hdr-center img, .a4-dense-print .hdr-logo {{
         width: 66px !important; height: 66px !important; max-width: 66px !important; max-height: 66px !important;
         min-width: 66px !important; min-height: 66px !important;
     }}
-    .a4-mode-dense .hdr-right p, .a4-ultra-fit .hdr-right p {{ font-size: 11.5px !important; }}
-    .a4-mode-dense .doc-banner, .a4-ultra-fit .doc-banner {{
+    .a4-tier-dense .hdr-right p, .a4-dense-print .hdr-right p {{ font-size: 11.5px !important; }}
+    .a4-tier-dense .doc-banner, .a4-dense-print .doc-banner {{
         font-size: 13px !important; padding: 5px 10px !important; margin: 4px 0 6px !important;
     }}
-    .a4-mode-dense table.data-tbl, .a4-ultra-fit table.data-tbl {{ margin-bottom: 6px !important; }}
-    .a4-mode-dense table.data-tbl th, .a4-mode-dense table.data-tbl td,
-    .a4-ultra-fit table.data-tbl th, .a4-ultra-fit table.data-tbl td {{
+    .a4-tier-dense table.data-tbl, .a4-dense-print table.data-tbl {{ margin-bottom: 5px !important; }}
+    .a4-tier-dense table.data-tbl th, .a4-tier-dense table.data-tbl td,
+    .a4-dense-print table.data-tbl th, .a4-dense-print table.data-tbl td {{
         font-size: 11px !important; line-height: 1.35 !important; padding: 3.5px 6px !important;
     }}
-    .a4-mode-dense .legal-box, .a4-mode-dense .legal-box div,
-    .a4-ultra-fit .legal-box, .a4-ultra-fit .legal-box div {{
-        font-size: 11.5px !important; line-height: 1.42 !important;
-        padding: 7px 10px !important; margin: 4px 0 6px !important;
+    .a4-tier-dense .legal-box, .a4-tier-dense .legal-box .legal-body, .a4-tier-dense .legal-box .legal-title,
+    .a4-dense-print .legal-box, .a4-dense-print .legal-box .legal-body, .a4-dense-print .legal-box .legal-title {{
+        font-size: 11.5px !important; line-height: 1.45 !important;
     }}
-    .a4-mode-dense table.sig-tbl td, .a4-mode-dense .sig-cell,
-    .a4-ultra-fit table.sig-tbl td, .a4-ultra-fit .sig-cell {{
-        min-height: 50px !important; padding: 4px 5px !important; font-size: 11px !important;
+    .a4-tier-dense .legal-box, .a4-dense-print .legal-box {{
+        padding: 7px 10px !important; margin: 2px 0 5px !important;
     }}
-    .a4-mode-dense img.sig-slot-img, .a4-ultra-fit img.sig-slot-img {{ max-height: 40px !important; }}
-    .a4-mode-dense .footer-qr, .a4-ultra-fit .footer-qr {{
-        padding: 5px 8px !important; margin-top: 6px !important;
+    .a4-tier-dense table.sig-tbl td, .a4-tier-dense .sig-cell,
+    .a4-dense-print table.sig-tbl td, .a4-dense-print .sig-cell {{
+        height: 54px !important; min-height: 54px !important; padding: 4px 5px !important; font-size: 11px !important;
     }}
-    .a4-mode-dense .sig-footer, .a4-ultra-fit .sig-footer {{ margin-top: 6px !important; }}
-
-    .a4-fill-page {{
-        min-height: 1070px !important;
-        justify-content: space-between !important;
+    .a4-tier-dense img.sig-slot-img, .a4-dense-print img.sig-slot-img {{ max-height: 40px !important; }}
+    .a4-tier-dense .footer-qr, .a4-dense-print .footer-qr {{
+        padding: 4px 7px !important; margin-top: 4px !important;
     }}
-    .a4-fill-page .a4-fit {{ flex: 1 1 auto !important; }}
-    .a4-fill-page .sig-footer {{ margin-top: auto !important; }}
+    .a4-tier-dense .a4-top-cell {{ padding: 2mm 2.5mm 0 2.5mm !important; }}
+    .a4-tier-dense .legal-wrap-cell {{ padding: 1mm 2.5mm !important; }}
+    .a4-tier-dense .sig-bottom-cell {{ padding: 0 2.5mm 2mm 2.5mm !important; }}
 
     @media print {{
-        @page {{ size: A4 portrait; margin: 5mm 6mm !important; }}
+        @page {{ size: A4 portrait; margin: 0mm !important; }}
         html, body {{
-            width: 100% !important; margin: 0 !important; padding: 0 !important; height: auto !important;
-            overflow: visible !important; overflow-x: hidden !important; background: #ffffff !important;
-            direction: rtl !important; text-align: right !important; transform: none !important;
+            width: 210mm !important;
+            height: 297mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            background: #ffffff !important;
+            direction: rtl !important;
+            text-align: right !important;
+            transform: none !important;
         }}
         .a4-preview-viewport, .a4-preview-wrapper {{
-            margin: 0 !important; padding: 0 !important; height: auto !important; width: 100% !important;
-            overflow: visible !important; background: #ffffff !important; direction: rtl !important;
+            margin: 0 !important; padding: 0 !important; width: 210mm !important; height: 297mm !important;
+            overflow: hidden !important; background: #ffffff !important; direction: rtl !important;
         }}
         .toolbar, .no-print, .zoom-bar, .live-sig-dock, .clear-sig-btn, .sig-guide-hint, .sig-mode-note,
         .live-pad-actions, .live-sig-dock-head, .ios-print-hint {{ display: none !important; }}
@@ -5180,37 +5210,52 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         .live-pad-canvas {{ display: none !important; border: none !important; }}
 
+        .a4-page-frame {{
+            width: 210mm !important;
+            height: 297mm !important;
+            padding: 6mm 7mm !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+            margin: 0 !important;
+            position: relative !important;
+            background: #ffffff !important;
+            page-break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-after: avoid !important;
+            break-inside: avoid !important;
+            box-shadow: none !important;
+        }}
         .a4-sheet, .a4-paper, .a4-page, .print-area, .report-container {{
             direction: rtl !important;
             transform: none !important;
             width: 100% !important;
             max-width: 100% !important;
-            height: auto !important;
-            min-height: 0 !important;
-            max-height: none !important;
+            height: 285mm !important;
+            min-height: 285mm !important;
+            max-height: 285mm !important;
             margin: 0 auto !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: flex-start !important;
+            display: table !important;
+            table-layout: fixed !important;
             box-sizing: border-box !important;
             page-break-after: avoid !important;
             break-after: avoid !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
             box-shadow: none !important;
-            border: 1.5px solid #0f3d2e !important;
+            border: 1.8px solid #0f3d2e !important;
             border-radius: 4px !important;
-            overflow: visible !important;
+            overflow: hidden !important;
             background: #ffffff !important;
+            padding: 0 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             color-adjust: exact !important;
         }}
-        .a4-fit {{
-            height: auto !important; min-height: 0 !important; flex: 1 1 auto !important;
-            transform: none !important;
-            display: flex !important; flex-direction: column !important; justify-content: flex-start !important;
-        }}
+        .a4-row {{ display: table-row !important; }}
+        .a4-cell {{ display: table-cell !important; width: 100% !important; }}
+        .a4-row-mid {{ height: 100% !important; }}
+        .legal-wrap-cell {{ vertical-align: top !important; }}
+        .sig-bottom-cell {{ vertical-align: bottom !important; }}
         .a4-paper, .a4-paper *, .a4-sheet, .a4-sheet * {{
             color: #000000 !important; opacity: 1 !important;
             -webkit-print-color-adjust: exact !important;
@@ -5222,10 +5267,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             color: #ffffff !important;
             background-color: #0f3d2e !important;
         }}
-        .a4-paper table, .a4-sheet table {{
+        .a4-paper table.data-tbl, .a4-sheet table.data-tbl,
+        .a4-paper table.sig-tbl, .a4-sheet table.sig-tbl {{
             width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important;
         }}
-        .a4-paper th, .a4-paper td, .a4-sheet th, .a4-sheet td {{
+        .a4-paper table.data-tbl th, .a4-paper table.data-tbl td,
+        .a4-sheet table.data-tbl th, .a4-sheet table.data-tbl td,
+        .a4-paper table.sig-tbl th, .a4-paper table.sig-tbl td,
+        .a4-sheet table.sig-tbl th, .a4-sheet table.sig-tbl td {{
             border: 1px solid #1e293b !important;
             white-space: normal !important;
             overflow-wrap: anywhere !important;
@@ -5265,18 +5314,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         a, a[href^="tel"] {{
             color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
         }}
-        .a4-fill-page, .a4-sheet.a4-fill-page, .a4-paper.a4-fill-page,
-        .a4-sheet.a4-short-fill, .a4-paper.a4-short-fill {{
-            min-height: 283mm !important;
-            justify-content: space-between !important;
-        }}
-        .a4-fill-page .sig-footer, .a4-short-fill .sig-footer {{
-            margin-top: auto !important;
-        }}
-        .a4-mode-dense, .a4-ultra-fit {{
-            min-height: 0 !important; height: auto !important;
-            justify-content: flex-start !important;
-        }}
     }}
 </style>
 </head>
@@ -5290,51 +5327,58 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     {live_dock_html}
 
-    <div class="a4-preview-viewport" id="a4PreviewViewport"><div class="{sheet_cls}" id="a4Sheet" data-print-root="1">
-        <div class="a4-fit" id="a4Fit">
-        <div>
-            <div class="hdr">
-                <div class="hdr-right">
-                    <p>المملكة العربية السعودية</p>
-                    <p>وزارة الداخلية</p>
-                    <p>الأمن العام - الإدارة العامة للمرور</p>
-                    <p>إدارة مرور منطقة جازان</p>
-                    <p>قسم مرور العارضة</p>
-                </div>
-                <div class="hdr-center">
-                    {center_logo_html}
-                </div>
-                <div class="hdr-left">
-                    <p class="hdr-nowrap">الرقم المرجعي: {html.escape(str(rec.get('doc_no') or '').strip())}</p>
-                    <p class="hdr-nowrap">التاريخ والوقت: {rec['created_at']}</p>
-                    {gps_line_html}
-                </div>
-            </div>
-
-            <div class="doc-banner">{banner_title}</div>
-            <table class="{data_tbl_cls}">{rows_html}</table>
-
-            <div class="legal-box" dir="rtl" style="direction:rtl; text-align:justify; text-justify:inter-word; text-align-last:right; line-height:1.9; overflow-wrap:break-word; white-space:normal; width:100%; max-width:100%; box-sizing:border-box;">
-                <div dir="rtl" style="font-weight:800; color:#000000; margin-bottom:8px; direction:rtl; text-align:right;">{legal_box_title}</div>
-                <div dir="rtl" style="direction:rtl; unicode-bidi:embed; text-align:justify; text-justify:inter-word; text-align-last:right; line-height:1.9; overflow-wrap:break-word; word-break:normal; white-space:normal; word-spacing:normal; color:#000000; font-weight:700;">&#8207;{cleaned_legal_text}</div>
-            </div>
-            {attachment_block}
-        </div>
-
-        <div class="sig-footer">
-            {sig_table_html}
-
-            <div class="footer-qr">
-                <div>
-                    <div style="font-size:10.5px; font-weight:800; color:#000000;">
-                        وثيقة رسمية مقفلة إلكترونياً ضد الكشط أو التعديل اليدوي — قسم مرور العارضة.
+    <div class="a4-preview-viewport" id="a4PreviewViewport">
+    <div id="a4PageFrame" class="a4-page-frame" data-a4-tier="{tier}">
+    <div class="{sheet_cls}" id="a4Sheet" data-print-root="1" data-a4-tier="{tier}">
+        <div class="a4-row a4-row-top">
+            <div class="a4-cell a4-top-cell">
+                <div class="hdr">
+                    <div class="hdr-right">
+                        <p>المملكة العربية السعودية</p>
+                        <p>وزارة الداخلية</p>
+                        <p>الأمن العام - الإدارة العامة للمرور</p>
+                        <p>إدارة مرور منطقة جازان</p>
+                        <p>قسم مرور العارضة</p>
                     </div>
-                    <div style="font-size:10px; font-weight:700; color:#000000;">ختم التحقق الرقمي (SHA-256 Seal): {rec['verify_hash']}</div>
+                    <div class="hdr-center">
+                        {center_logo_html}
+                    </div>
+                    <div class="hdr-left">
+                        <p class="hdr-nowrap">الرقم المرجعي: {html.escape(str(rec.get('doc_no') or '').strip())}</p>
+                        <p class="hdr-nowrap">التاريخ والوقت: {rec['created_at']}</p>
+                        {gps_line_html}
+                    </div>
                 </div>
-                <img src="data:image/png;base64,{qr_b64}" style="width:42px; height:42px;" />
+                <div class="doc-banner">{banner_title}</div>
+                <table class="{data_tbl_cls}">{rows_html}</table>
             </div>
         </div>
+        <div class="a4-row a4-row-mid">
+            <div class="a4-cell legal-wrap-cell">
+                <div class="legal-box" dir="rtl" style="direction:rtl; text-align:justify; text-justify:inter-word; text-align-last:right; overflow-wrap:break-word; white-space:normal; width:100%; max-width:100%; box-sizing:border-box;">
+                    <div class="legal-title" dir="rtl" style="font-weight:800; color:#000000; direction:rtl; text-align:right;">{legal_box_title}</div>
+                    <div class="legal-body" dir="rtl" style="direction:rtl; unicode-bidi:embed; text-align:justify; text-justify:inter-word; text-align-last:right; overflow-wrap:break-word; word-break:normal; white-space:normal; word-spacing:normal; color:#000000; font-weight:700;">&#8207;{cleaned_legal_text}</div>
+                </div>
+                {attachment_block}
+            </div>
         </div>
+        <div class="a4-row a4-row-bot">
+            <div class="a4-cell sig-bottom-cell">
+                <div class="sig-footer">
+                    {sig_table_html}
+                    <div class="footer-qr">
+                        <div>
+                            <div style="font-size:10.5px; font-weight:800; color:#000000;">
+                                وثيقة رسمية مقفلة إلكترونياً ضد الكشط أو التعديل اليدوي — قسم مرور العارضة.
+                            </div>
+                            <div style="font-size:10px; font-weight:700; color:#000000;">ختم التحقق الرقمي (SHA-256 Seal): {rec['verify_hash']}</div>
+                        </div>
+                        <img src="data:image/png;base64,{qr_b64}" style="width:42px; height:42px;" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     </div>
 </div>
 <script>
@@ -5531,141 +5575,148 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         if (b64) restoreLivePad(padId, b64);
     }});
 
-    function clearA4BalanceClasses(sheet) {{
-        if (!sheet) return;
-        ["a4-mode-spacious", "a4-mode-balanced", "a4-mode-dense", "a4-ultra-fit", "a4-fill-page", "a4-short-fill"]
-            .forEach(function(cls) {{ try {{ sheet.classList.remove(cls); }} catch (e) {{}} }});
-        try {{
-            const footer = sheet.querySelector(".sig-footer");
-            if (footer) footer.style.removeProperty("margin-top");
-        }} catch (e2) {{}}
-    }}
+    function stepDownFitA4(rootDoc) {{
+        const doc = rootDoc || document;
+        const frame = doc.getElementById("a4PageFrame") || doc.querySelector(".a4-page-frame");
+        const sheet = doc.getElementById("a4Sheet")
+            || doc.querySelector(".a4-sheet")
+            || doc.querySelector(".a4-paper");
+        if (!frame || !sheet) return 0;
 
-    function lockA4FullWidth(sheet) {{
-        if (!sheet) return;
         try {{
+            sheet.style.removeProperty("zoom");
+            sheet.style.setProperty("transform", "none", "important");
             sheet.style.setProperty("width", "100%", "important");
             sheet.style.setProperty("max-width", "100%", "important");
-            sheet.style.setProperty("margin", "0 auto", "important");
             sheet.style.setProperty("margin-left", "auto", "important");
             sheet.style.setProperty("margin-right", "auto", "important");
             sheet.style.setProperty("box-sizing", "border-box", "important");
-            sheet.style.setProperty("transform", "none", "important");
         }} catch (e) {{}}
-    }}
 
-    function applyA4FillPage(sheet, forPrint) {{
+        // قياس الارتفاع الطبيعي بدون قصّ
         try {{
-            sheet.classList.add("a4-fill-page");
-            sheet.classList.add("a4-short-fill");
-            if (forPrint) {{
-                sheet.style.setProperty("min-height", "283mm", "important");
-            }} else {{
-                sheet.style.setProperty("min-height", "1070px", "important");
-            }}
-            sheet.style.setProperty("justify-content", "space-between", "important");
-            const footer = sheet.querySelector(".sig-footer");
-            if (footer) footer.style.setProperty("margin-top", "auto", "important");
-        }} catch (e) {{}}
-    }}
-
-    function autoBalanceA4(rootDoc, forcePrint) {{
-        const PAGE_H = 1048;
-        const doc = rootDoc || document;
-        const sheet = (doc.querySelector)
-            ? (doc.querySelector("#a4Sheet") || doc.querySelector(".a4-sheet") || doc.querySelector(".a4-paper"))
-            : null;
-        if (!sheet) return "none";
-        const forPrint = !!forcePrint
-            || !!(window.matchMedia && window.matchMedia("print").matches)
-            || !!(doc.__khafarPrintWin)
-            || !!(typeof window !== "undefined" && window.__khafarPrintWin);
-        clearA4BalanceClasses(sheet);
-        try {{
-            sheet.style.setProperty("min-height", "0", "important");
             sheet.style.setProperty("height", "auto", "important");
+            sheet.style.setProperty("min-height", "0", "important");
             sheet.style.setProperty("max-height", "none", "important");
-            sheet.style.overflow = "visible";
-            sheet.style.removeProperty("zoom");
-            try {{ sheet.dataset.balanceZoom = "1"; }} catch (dz) {{}}
-            sheet.style.setProperty("justify-content", "flex-start", "important");
-        }} catch (e) {{}}
-        lockA4FullWidth(sheet);
-
-        function measure() {{
-            try {{
-                sheet.style.setProperty("min-height", "0", "important");
-                sheet.style.setProperty("height", "auto", "important");
-                sheet.style.setProperty("justify-content", "flex-start", "important");
-            }} catch (e) {{}}
-            void sheet.offsetHeight;
-            return sheet.scrollHeight || sheet.offsetHeight || 0;
-        }}
-
-        // 1) spacious
-        try {{ sheet.classList.add("a4-mode-spacious"); }} catch (e) {{}}
-        let h = measure();
-        if (h <= PAGE_H) {{
-            applyA4FillPage(sheet, forPrint);
-            lockA4FullWidth(sheet);
-            return "spacious";
-        }}
-
-        // 2) balanced
-        try {{
-            sheet.classList.remove("a4-mode-spacious");
-            sheet.classList.add("a4-mode-balanced");
+            sheet.style.setProperty("overflow", "visible", "important");
         }} catch (e2) {{}}
-        h = measure();
-        if (h <= PAGE_H) {{
-            applyA4FillPage(sheet, forPrint);
-            lockA4FullWidth(sheet);
-            return "balanced";
+
+        function frameInnerH() {{
+            try {{
+                const cs = (doc.defaultView || window).getComputedStyle(frame);
+                const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+                const h = (frame.clientHeight || 0) - padY;
+                if (h > 100) return h;
+            }} catch (e3) {{}}
+            // 285mm ≈ 1077px عند 96dpi
+            return Math.round(285 * 96 / 25.4);
         }}
 
-        // 3) dense + ultra-fit
-        try {{
-            sheet.classList.remove("a4-mode-balanced");
-            sheet.classList.add("a4-mode-dense");
-            sheet.classList.add("a4-ultra-fit");
-            sheet.style.setProperty("min-height", "0", "important");
-            sheet.style.setProperty("height", "auto", "important");
-            sheet.style.setProperty("justify-content", "flex-start", "important");
-        }} catch (e3) {{}}
-        h = measure();
-        let z = 1;
-        if (h > PAGE_H) {{
-            z = Math.max(0.72, Math.floor((PAGE_H / h) * 1000) / 1000);
+        function bumpDown(node, fontDelta, padDelta) {{
+            if (!node || !node.style) return;
             try {{
-                sheet.style.setProperty("zoom", String(z), "important");
-                try {{ sheet.dataset.balanceZoom = String(z); }} catch (dz2) {{}}
-                lockA4FullWidth(sheet);
+                const cs = (doc.defaultView || window).getComputedStyle(node);
+                const fs = parseFloat(cs.fontSize) || 0;
+                if (fs > 8.5) {{
+                    node.style.setProperty("font-size", Math.max(8.5, fs - fontDelta).toFixed(2) + "px", "important");
+                }}
+                const pt = parseFloat(cs.paddingTop) || 0;
+                const pb = parseFloat(cs.paddingBottom) || 0;
+                if (pt > 1 || pb > 1) {{
+                    node.style.setProperty("padding-top", Math.max(1, pt - padDelta).toFixed(2) + "px", "important");
+                    node.style.setProperty("padding-bottom", Math.max(1, pb - padDelta).toFixed(2) + "px", "important");
+                }}
+                const mt = parseFloat(cs.marginTop) || 0;
+                const mb = parseFloat(cs.marginBottom) || 0;
+                if (mt > 1) node.style.setProperty("margin-top", Math.max(0, mt - Math.min(padDelta, 0.6)).toFixed(2) + "px", "important");
+                if (mb > 1) node.style.setProperty("margin-bottom", Math.max(0, mb - Math.min(padDelta, 0.6)).toFixed(2) + "px", "important");
+                const lh = parseFloat(cs.lineHeight);
+                if (!isNaN(lh) && lh > 12) {{
+                    node.style.setProperty("line-height", Math.max(11, lh - fontDelta * 0.8).toFixed(2) + "px", "important");
+                }}
             }} catch (e4) {{}}
-        }} else {{
-            try {{ sheet.style.removeProperty("zoom"); }} catch (e5) {{}}
-            lockA4FullWidth(sheet);
         }}
-        return z < 1 ? ("dense-zoom-" + z) : "dense";
+
+        function shrinkOnce() {{
+            const targets = sheet.querySelectorAll(
+                ".legal-box, .legal-box .legal-body, .legal-box .legal-title, .legal-box div,"
+                + "table.data-tbl th, table.data-tbl td,"
+                + "table.sig-tbl th, table.sig-tbl td, .sig-cell, .sig-head, .sig-person, .sig-role,"
+                + ".doc-banner, .footer-qr, .footer-qr div, .hdr-right p, .hdr-left p,"
+                + ".a4-top-cell, .legal-wrap-cell, .sig-bottom-cell, .attachment-section, .attachment-title"
+            );
+            targets.forEach(function(el) {{ bumpDown(el, 0.4, 1); }});
+            try {{
+                const logos = sheet.querySelectorAll(".hdr-center img, .hdr-logo, img.sig-slot-img");
+                logos.forEach(function(img) {{
+                    const cs = (doc.defaultView || window).getComputedStyle(img);
+                    const h = parseFloat(cs.height) || parseFloat(img.style.maxHeight) || 0;
+                    if (h > 28) {{
+                        const nh = Math.max(28, h - 2);
+                        img.style.setProperty("height", nh + "px", "important");
+                        img.style.setProperty("width", nh + "px", "important");
+                        img.style.setProperty("max-height", nh + "px", "important");
+                        img.style.setProperty("max-width", nh + "px", "important");
+                    }}
+                }});
+            }} catch (e5) {{}}
+        }}
+
+        let step = 0;
+        let frameH = frameInnerH();
+        void sheet.offsetHeight;
+        while ((sheet.scrollHeight > frameH + 1) && step < 8) {{
+            shrinkOnce();
+            void sheet.offsetHeight;
+            frameH = frameInnerH();
+            step += 1;
+        }}
+
+        // أعد قفل الارتفاع الفيزيائي لصفحة واحدة
+        try {{
+            sheet.style.setProperty("height", "285mm", "important");
+            sheet.style.setProperty("min-height", "285mm", "important");
+            sheet.style.setProperty("max-height", "285mm", "important");
+            sheet.style.setProperty("overflow", "hidden", "important");
+            sheet.style.setProperty("width", "100%", "important");
+            sheet.style.setProperty("margin-left", "auto", "important");
+            sheet.style.setProperty("margin-right", "auto", "important");
+            frame.style.setProperty("overflow", "hidden", "important");
+        }} catch (e6) {{}}
+        return step;
     }}
-    try {{ window.autoBalanceA4 = autoBalanceA4; }} catch (e) {{}}
-    try {{ window.fitSinglePageForPrint = function(root) {{ return autoBalanceA4(root || document, true); }}; }} catch (e) {{}}
+    try {{ window.stepDownFitA4 = stepDownFitA4; }} catch (e) {{}}
+    try {{ window.autoBalanceA4 = stepDownFitA4; }} catch (e) {{}}
+    try {{ window.fitSinglePageForPrint = stepDownFitA4; }} catch (e) {{}}
 
     function fitA4Preview() {{
         if (window.matchMedia && window.matchMedia("print").matches) return;
         const viewport = document.getElementById("a4PreviewViewport");
+        const frame = document.getElementById("a4PageFrame");
         const paper = document.getElementById("a4Sheet");
-        if (!viewport || !paper) return;
-        try {{ autoBalanceA4(document, false); }} catch (e) {{}}
-        paper.style.width = "794px";
-        paper.style.margin = "0 auto";
-        paper.style.direction = "rtl";
-        paper.style.transformOrigin = "top center";
-        paper.style.transform = "";
-        const balanceZoom = parseFloat((paper.dataset && paper.dataset.balanceZoom) || paper.style.zoom || "1") || 1;
+        if (!viewport || !frame) return;
+        try {{
+            frame.style.width = "210mm";
+            frame.style.height = "297mm";
+            frame.style.margin = "0 auto";
+            frame.style.direction = "rtl";
+            frame.style.transformOrigin = "top center";
+            frame.style.transform = "";
+            frame.style.zoom = "";
+            if (paper) {{
+                paper.style.width = "100%";
+                paper.style.height = "285mm";
+                paper.style.minHeight = "285mm";
+                paper.style.maxHeight = "285mm";
+                paper.style.margin = "0 auto";
+                paper.style.zoom = "";
+                paper.style.transform = "none";
+            }}
+        }} catch (e) {{}}
         const avail = Math.max(viewport.clientWidth || window.innerWidth || 794, 1);
-        const natural = 794;
-        const fitZoom = Math.max(0.35, Math.min(1, avail / natural)) * Math.min(balanceZoom, 1);
-        paper.style.zoom = String(Math.max(0.35, Math.min(1, fitZoom)));
+        const natural = frame.offsetWidth || Math.round(210 * 96 / 25.4) || 794;
+        const fitZoom = Math.max(0.35, Math.min(1, avail / Math.max(natural, 1)));
+        frame.style.zoom = String(fitZoom);
         viewport.style.overflow = "hidden";
         viewport.style.height = "auto";
         try {{
@@ -5674,10 +5725,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 const dockH = dock ? dock.offsetHeight + 18 : 0;
                 const toolbar = document.querySelector(".toolbar");
                 const tH = toolbar ? toolbar.offsetHeight + 12 : 0;
-                const viewH = viewport.scrollHeight || (paper.offsetHeight * (parseFloat(paper.style.zoom) || 1));
+                const viewH = viewport.scrollHeight || (frame.offsetHeight * fitZoom);
                 window.frameElement.style.height = Math.ceil(viewH + 120 + dockH + tH) + "px";
             }}
-        }} catch (e) {{}}
+        }} catch (e2) {{}}
     }}
 
     function syncAllLivePads() {{
@@ -5690,40 +5741,71 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     function prepareA4Print() {{
         syncAllLivePads();
         const viewport = document.getElementById("a4PreviewViewport");
+        const frame = document.getElementById("a4PageFrame");
         const paper = document.getElementById("a4Sheet");
         if (viewport) {{
             viewport.style.height = "auto";
             viewport.style.overflow = "visible";
+            viewport.style.zoom = "";
         }}
-        if (!paper) return;
-        lockA4FullWidth(paper);
-        paper.style.maxHeight = "none";
-        paper.style.height = "auto";
-        paper.style.overflow = "visible";
-        autoBalanceA4(document, true);
+        if (frame) {{
+            frame.style.zoom = "";
+            frame.style.transform = "none";
+            frame.style.width = "210mm";
+            frame.style.height = "297mm";
+            frame.style.overflow = "hidden";
+            frame.style.margin = "0 auto";
+        }}
+        if (paper) {{
+            paper.style.zoom = "";
+            paper.style.transform = "none";
+            paper.style.width = "100%";
+            paper.style.margin = "0 auto";
+        }}
+        stepDownFitA4(document);
     }}
     try {{ window.prepareA4Print = prepareA4Print; }} catch (e) {{}}
 
     function restoreA4Preview() {{
         const viewport = document.getElementById("a4PreviewViewport");
+        const frame = document.getElementById("a4PageFrame");
         const paper = document.getElementById("a4Sheet");
         if (viewport) {{
             viewport.style.height = "";
             viewport.style.overflow = "hidden";
         }}
+        if (frame) {{
+            frame.style.zoom = "";
+            frame.style.removeProperty("transform");
+            frame.style.removeProperty("width");
+            frame.style.removeProperty("height");
+            frame.style.removeProperty("margin");
+            frame.style.removeProperty("overflow");
+        }}
         if (paper) {{
-            clearA4BalanceClasses(paper);
             paper.style.zoom = "";
             paper.style.removeProperty("transform");
-            paper.style.margin = "";
-            paper.style.width = "";
-            paper.style.removeProperty("max-width");
-            paper.style.removeProperty("box-sizing");
+            paper.style.removeProperty("width");
             paper.style.removeProperty("height");
-            paper.style.removeProperty("max-height");
             paper.style.removeProperty("min-height");
-            paper.style.removeProperty("justify-content");
-            paper.style.overflow = "";
+            paper.style.removeProperty("max-height");
+            paper.style.removeProperty("overflow");
+            paper.style.removeProperty("margin");
+            // امسح تصغير step-down من العناصر الداخلية بإعادة تحميل الأنماط عبر إزالة inline typography
+            try {{
+                paper.querySelectorAll("[style]").forEach(function(el) {{
+                    if (!el.classList.contains("hdr-logo") && el.tagName !== "IMG") {{
+                        ["font-size","padding-top","padding-bottom","margin-top","margin-bottom","line-height","height","width","max-height","max-width"]
+                            .forEach(function(prop) {{
+                                try {{
+                                    if (el.style.getPropertyPriority(prop) === "important") {{
+                                        el.style.removeProperty(prop);
+                                    }}
+                                }} catch (ie) {{}}
+                            }});
+                    }}
+                }});
+            }} catch (e3) {{}}
         }}
         scheduleA4Fit();
     }}
@@ -5738,7 +5820,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
     }}
 
-    function buildCleanPrintHtml(sheetHtml) {{
+    function buildCleanPrintHtml(frameHtml) {{
         var styles = collectPrintStyles();
         var topBar = ''
             + '<div class="no-print" style="position:sticky;top:0;z-index:9999;background:#14532d;color:#fff;'
@@ -5756,74 +5838,77 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + '<title>وثيقة رسمية - قسم مرور العارضة</title>'
             + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap">'
             + styles
-            + '<style>@page{{size:A4 portrait;margin:5mm 6mm !important;}}'
-            + 'html,body{{width:100% !important;margin:0 !important;padding:0 !important;background:#fff;direction:rtl;overflow-x:hidden !important;}}'
+            + '<style>@page{{size:A4 portrait;margin:0mm !important;}}'
+            + 'html,body{{width:210mm !important;height:297mm !important;margin:0 !important;padding:0 !important;'
+            + 'overflow:hidden !important;background:#fff !important;direction:rtl !important;}}'
+            + '.a4-page-frame{{width:210mm !important;height:297mm !important;padding:6mm 7mm !important;'
+            + 'box-sizing:border-box !important;overflow:hidden !important;margin:0 !important;background:#fff !important;'
+            + 'page-break-after:avoid !important;page-break-inside:avoid !important;position:relative !important;}}'
+            + '.a4-sheet,.a4-paper{{width:100% !important;height:285mm !important;min-height:285mm !important;'
+            + 'max-height:285mm !important;display:table !important;table-layout:fixed !important;'
+            + 'box-sizing:border-box !important;overflow:hidden !important;margin:0 auto !important;'
+            + 'border:1.8px solid #0f3d2e !important;border-radius:4px !important;background:#fff !important;}}'
+            + '.a4-row{{display:table-row !important;}}.a4-cell{{display:table-cell !important;width:100% !important;}}'
+            + '.a4-row-mid{{height:100% !important;}}.legal-wrap-cell{{vertical-align:top !important;}}'
+            + '.sig-bottom-cell{{vertical-align:bottom !important;}}'
             + '@media print{{.no-print{{display:none !important;}}'
-            + '.a4-sheet,.a4-paper,.a4-page,.print-area{{width:100% !important;max-width:100% !important;margin:0 auto !important;'
-            + 'box-sizing:border-box !important;height:auto !important;min-height:0 !important;justify-content:flex-start !important;'
-            + 'page-break-after:avoid !important;break-after:avoid !important;}}'
-            + '.a4-fit{{min-height:0 !important;flex:1 1 auto !important;}}'
-            + '.a4-fill-page,.a4-short-fill{{min-height:283mm !important;justify-content:space-between !important;}}'
-            + '.a4-fill-page .sig-footer,.a4-short-fill .sig-footer{{margin-top:auto !important;}}'
-            + '.a4-mode-dense,.a4-ultra-fit{{min-height:0 !important;height:auto !important;justify-content:flex-start !important;}}'
-            + '.a4-ultra-fit table.data-tbl td,.a4-ultra-fit table.data-tbl th,.a4-ultra-fit .sig-tbl td,.a4-ultra-fit .sig-cell{{'
-            + 'padding-top:2.5px !important;padding-bottom:2.5px !important;line-height:1.32 !important;font-size:10.5px !important;}}'
-            + '.a4-ultra-fit .legal-box,.a4-ultra-fit .legal-box div{{padding-top:5px !important;padding-bottom:5px !important;'
-            + 'margin-bottom:4px !important;line-height:1.32 !important;font-size:11px !important;}}'
-            + '.hdr-left{{padding-left:6px !important;padding-right:10px !important;text-align:left !important;box-sizing:border-box !important;}}'
-            + '.footer-qr{{margin-top:8px !important;padding:5px 8px !important;width:100% !important;max-width:100% !important;'
-            + 'box-sizing:border-box !important;overflow:hidden !important;}}}}'
-            + '</style></head><body style="margin:0;padding:0;background:#fff;direction:rtl;width:100%;overflow-x:hidden;">'
-            + topBar + sheetHtml
+            + 'html,body{{width:210mm !important;height:297mm !important;margin:0 !important;padding:0 !important;overflow:hidden !important;}}'
+            + '.a4-page-frame{{width:210mm !important;height:297mm !important;overflow:hidden !important;'
+            + 'page-break-after:avoid !important;page-break-inside:avoid !important;}}'
+            + '.a4-sheet,.a4-paper{{height:285mm !important;min-height:285mm !important;max-height:285mm !important;'
+            + 'overflow:hidden !important;width:100% !important;margin:0 auto !important;}}}}'
+            + '</style></head><body style="margin:0;padding:0;background:#fff;direction:rtl;width:210mm;height:297mm;overflow:hidden;">'
+            + topBar + frameHtml
             + '<script>(function(){{'
             + 'window.__khafarPrintWin=true;document.__khafarPrintWin=true;'
-            + 'function clearA4BalanceClasses(sheet){{'
-            + 'if(!sheet)return;'
-            + '["a4-mode-spacious","a4-mode-balanced","a4-mode-dense","a4-ultra-fit","a4-fill-page","a4-short-fill"]'
-            + '.forEach(function(c){{try{{sheet.classList.remove(c);}}catch(e){{}}}});'
-            + 'try{{var f=sheet.querySelector(".sig-footer");if(f)f.style.removeProperty("margin-top");}}catch(e2){{}}}}'
-            + 'function lockA4FullWidth(sheet){{if(!sheet)return;try{{'
-            + 'sheet.style.setProperty("width","100%","important");sheet.style.setProperty("max-width","100%","important");'
-            + 'sheet.style.setProperty("margin","0 auto","important");sheet.style.setProperty("margin-left","auto","important");'
-            + 'sheet.style.setProperty("margin-right","auto","important");sheet.style.setProperty("box-sizing","border-box","important");'
-            + 'sheet.style.setProperty("transform","none","important");}}catch(e){{}}}}'
-            + 'function applyA4FillPage(sheet){{try{{'
-            + 'sheet.classList.add("a4-fill-page");sheet.classList.add("a4-short-fill");'
-            + 'sheet.style.setProperty("min-height","283mm","important");'
-            + 'sheet.style.setProperty("justify-content","space-between","important");'
-            + 'var footer=sheet.querySelector(".sig-footer");'
-            + 'if(footer)footer.style.setProperty("margin-top","auto","important");}}catch(e){{}}}}'
-            + 'function autoBalanceA4(rootDoc){{'
-            + 'var PAGE_H=1048;'
+            + 'function stepDownFitA4(rootDoc){{'
             + 'var doc=rootDoc||document;'
-            + 'var sheet=(doc.querySelector)?(doc.querySelector("#a4Sheet")||doc.querySelector(".a4-sheet")||doc.querySelector(".a4-paper")):null;'
-            + 'if(!sheet)return "none";'
-            + 'clearA4BalanceClasses(sheet);'
-            + 'try{{sheet.style.minHeight="0";sheet.style.height="auto";sheet.style.maxHeight="none";sheet.style.overflow="visible";'
-            + 'sheet.style.removeProperty("zoom");sheet.style.setProperty("justify-content","flex-start","important");}}catch(e){{}}'
-            + 'lockA4FullWidth(sheet);'
-            + 'function measure(){{try{{sheet.style.minHeight="0";sheet.style.setProperty("justify-content","flex-start","important");}}catch(e){{}}'
-            + 'void sheet.offsetHeight;return sheet.scrollHeight||sheet.offsetHeight||0;}}'
-            + 'try{{sheet.classList.add("a4-mode-spacious");}}catch(e){{}}'
-            + 'var h=measure();'
-            + 'if(h<=PAGE_H){{applyA4FillPage(sheet);lockA4FullWidth(sheet);return "spacious";}}'
-            + 'try{{sheet.classList.remove("a4-mode-spacious");sheet.classList.add("a4-mode-balanced");}}catch(e2){{}}'
-            + 'h=measure();'
-            + 'if(h<=PAGE_H){{applyA4FillPage(sheet);lockA4FullWidth(sheet);return "balanced";}}'
-            + 'try{{sheet.classList.remove("a4-mode-balanced");sheet.classList.add("a4-mode-dense");sheet.classList.add("a4-ultra-fit");'
-            + 'sheet.style.setProperty("min-height","0","important");sheet.style.setProperty("height","auto","important");'
-            + 'sheet.style.setProperty("justify-content","flex-start","important");}}catch(e3){{}}'
-            + 'h=measure();var z=1;'
-            + 'if(h>PAGE_H){{z=Math.max(0.72,Math.floor((PAGE_H/h)*1000)/1000);'
-            + 'try{{sheet.style.setProperty("zoom",String(z),"important");lockA4FullWidth(sheet);}}catch(e4){{}}'
-            + '}}else{{try{{sheet.style.removeProperty("zoom");}}catch(e5){{}}lockA4FullWidth(sheet);}}'
-            + 'return z<1?("dense-zoom-"+z):"dense";}}'
-            + 'window.autoBalanceA4=autoBalanceA4;'
-            + 'function go(){{try{{autoBalanceA4(document);}}catch(e){{}}try{{window.focus();}}catch(e2){{}}try{{window.print();}}catch(e3){{}}}}'
+            + 'var frame=doc.getElementById("a4PageFrame")||doc.querySelector(".a4-page-frame");'
+            + 'var sheet=doc.getElementById("a4Sheet")||doc.querySelector(".a4-sheet")||doc.querySelector(".a4-paper");'
+            + 'if(!frame||!sheet)return 0;'
+            + 'try{{sheet.style.removeProperty("zoom");sheet.style.setProperty("transform","none","important");'
+            + 'sheet.style.setProperty("width","100%","important");sheet.style.setProperty("max-width","100%","important");'
+            + 'sheet.style.setProperty("margin-left","auto","important");sheet.style.setProperty("margin-right","auto","important");'
+            + 'sheet.style.setProperty("box-sizing","border-box","important");}}catch(e){{}}'
+            + 'try{{sheet.style.setProperty("height","auto","important");sheet.style.setProperty("min-height","0","important");'
+            + 'sheet.style.setProperty("max-height","none","important");sheet.style.setProperty("overflow","visible","important");}}catch(e2){{}}'
+            + 'function frameInnerH(){{try{{var cs=(doc.defaultView||window).getComputedStyle(frame);'
+            + 'var padY=(parseFloat(cs.paddingTop)||0)+(parseFloat(cs.paddingBottom)||0);'
+            + 'var h=(frame.clientHeight||0)-padY;if(h>100)return h;}}catch(e3){{}}return Math.round(285*96/25.4);}}'
+            + 'function bumpDown(node,fontDelta,padDelta){{if(!node||!node.style)return;try{{'
+            + 'var cs=(doc.defaultView||window).getComputedStyle(node);var fs=parseFloat(cs.fontSize)||0;'
+            + 'if(fs>8.5)node.style.setProperty("font-size",Math.max(8.5,fs-fontDelta).toFixed(2)+"px","important");'
+            + 'var pt=parseFloat(cs.paddingTop)||0;var pb=parseFloat(cs.paddingBottom)||0;'
+            + 'if(pt>1||pb>1){{node.style.setProperty("padding-top",Math.max(1,pt-padDelta).toFixed(2)+"px","important");'
+            + 'node.style.setProperty("padding-bottom",Math.max(1,pb-padDelta).toFixed(2)+"px","important");}}'
+            + 'var mt=parseFloat(cs.marginTop)||0;var mb=parseFloat(cs.marginBottom)||0;'
+            + 'if(mt>1)node.style.setProperty("margin-top",Math.max(0,mt-Math.min(padDelta,0.6)).toFixed(2)+"px","important");'
+            + 'if(mb>1)node.style.setProperty("margin-bottom",Math.max(0,mb-Math.min(padDelta,0.6)).toFixed(2)+"px","important");'
+            + '}}catch(e4){{}}}}'
+            + 'function shrinkOnce(){{'
+            + 'var targets=sheet.querySelectorAll(".legal-box,.legal-box .legal-body,.legal-box .legal-title,.legal-box div,'
+            + 'table.data-tbl th,table.data-tbl td,table.sig-tbl th,table.sig-tbl td,.sig-cell,.sig-head,.sig-person,.sig-role,'
+            + '.doc-banner,.footer-qr,.footer-qr div,.hdr-right p,.hdr-left p,.a4-top-cell,.legal-wrap-cell,.sig-bottom-cell");'
+            + 'targets.forEach(function(el){{bumpDown(el,0.4,1);}});'
+            + 'try{{sheet.querySelectorAll(".hdr-center img,.hdr-logo,img.sig-slot-img").forEach(function(img){{'
+            + 'var cs=(doc.defaultView||window).getComputedStyle(img);var h=parseFloat(cs.height)||0;'
+            + 'if(h>28){{var nh=Math.max(28,h-2);img.style.setProperty("height",nh+"px","important");'
+            + 'img.style.setProperty("width",nh+"px","important");img.style.setProperty("max-height",nh+"px","important");'
+            + 'img.style.setProperty("max-width",nh+"px","important");}}}});}}catch(e5){{}}}}'
+            + 'var step=0;var frameH=frameInnerH();void sheet.offsetHeight;'
+            + 'while((sheet.scrollHeight>frameH+1)&&step<8){{shrinkOnce();void sheet.offsetHeight;frameH=frameInnerH();step+=1;}}'
+            + 'try{{sheet.style.setProperty("height","285mm","important");sheet.style.setProperty("min-height","285mm","important");'
+            + 'sheet.style.setProperty("max-height","285mm","important");sheet.style.setProperty("overflow","hidden","important");'
+            + 'sheet.style.setProperty("width","100%","important");sheet.style.setProperty("margin-left","auto","important");'
+            + 'sheet.style.setProperty("margin-right","auto","important");'
+            + 'frame.style.setProperty("overflow","hidden","important");}}catch(e6){{}}'
+            + 'return step;}}'
+            + 'window.stepDownFitA4=stepDownFitA4;'
+            + 'function go(){{try{{stepDownFitA4(document);}}catch(e){{}}try{{window.focus();}}catch(e2){{}}try{{window.print();}}catch(e3){{}}}}'
             + 'if(document.fonts&&document.fonts.ready){{document.fonts.ready.then(function(){{setTimeout(go,450);}});}}'
             + 'else{{setTimeout(go,450);}}'
             + 'window.addEventListener("load",function(){{setTimeout(go,700);}});'
-            + 'window.addEventListener("beforeprint",function(){{try{{autoBalanceA4(document);}}catch(e){{}}}});'
+            + 'window.addEventListener("beforeprint",function(){{try{{stepDownFitA4(document);}}catch(e){{}}}});'
             + '}}());<\\/script>'
             + '</body></html>';
     }}
@@ -5832,10 +5917,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         // مسار متزامن 100%: مزامنة التواقيع ثم window.open داخل نفس ضغطة المستخدم
         try {{ syncAllLivePads(); }} catch (e) {{}}
         try {{ prepareA4Print(); }} catch (e2) {{}}
+        var frame = document.getElementById("a4PageFrame")
+            || document.querySelector(".a4-page-frame");
         var sheet = document.getElementById("a4Sheet")
             || document.querySelector(".a4-page")
             || document.querySelector(".a4-paper");
-        if (!sheet) {{
+        if (!frame && !sheet) {{
             alert("لم يتم العثور على ورقة A4");
             return;
         }}
@@ -5849,7 +5936,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         var hintHide = document.getElementById("iosPrintHint");
         if (hintHide) hintHide.style.display = "none";
-        var cleanHtml = buildCleanPrintHtml(sheet.outerHTML);
+        var cleanHtml = buildCleanPrintHtml((frame || sheet).outerHTML);
         try {{
             printWin.document.open();
             printWin.document.write(cleanHtml);
