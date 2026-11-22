@@ -3867,8 +3867,8 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool, form_
         safe_label = html.escape(label)
         if isolate:
             safe_value = (
-                '<span class="rtl-iso" dir="rtl" style="unicode-bidi:isolate; white-space:nowrap; '
-                'display:inline-block; max-width:100%;">'
+                '<span class="rtl-iso" dir="rtl" style="unicode-bidi:isolate; white-space:normal; '
+                'display:inline; max-width:100%; overflow-wrap:anywhere; word-break:break-word;">'
                 + html.escape(value)
                 + "</span>"
             )
@@ -4707,19 +4707,42 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     table.data-tbl td.lbl, table.sig-tbl th, .sig-head {{
         -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }}
-    table.data-tbl {{ width: 100%; border-collapse: collapse; margin-bottom: 20px !important; }}
+    table.data-tbl {{
+        width: 100% !important; border-collapse: collapse !important;
+        table-layout: fixed !important; margin-bottom: 20px !important;
+    }}
     .a4-paper, .a4-paper * {{
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
         color-adjust: exact !important;
     }}
-    table.data-tbl td {{ border: 1.4px solid #000000 !important; padding: 10px 12px !important; font-size: 14px !important; line-height: 1.7 !important; vertical-align: top; direction: rtl; text-align: right; color: #000000 !important; font-weight: 700 !important; }}
-    table.data-tbl td.lbl {{ width: 21%; background: #f4f7f6 !important; font-weight: 800 !important; color: #000000 !important; }}
-    table.data-tbl td.val {{ width: 29%; color: #000000 !important; font-weight: 700 !important; white-space: pre-line; font-size: 14px !important; overflow-wrap: anywhere; }}
-    table.data-tbl td.val.plate-val, table.data-tbl td.plate-val {{
-        white-space: nowrap !important; overflow: visible !important; word-break: keep-all !important;
+    table.data-tbl th, table.data-tbl td {{
+        border: 1.4px solid #000000 !important; padding: 10px 12px !important;
+        font-size: 14px !important; line-height: 1.7 !important; vertical-align: top;
+        direction: rtl; text-align: right; color: #000000 !important; font-weight: 700 !important;
+        white-space: normal !important; word-wrap: break-word !important;
+        overflow-wrap: anywhere !important; word-break: break-word !important;
+        overflow: hidden !important;
     }}
-    table.data-tbl .rtl-iso {{ unicode-bidi: isolate; white-space: nowrap; }}
+    table.data-tbl td.lbl {{ width: 21%; background: #f4f7f6 !important; font-weight: 800 !important; color: #000000 !important; }}
+    table.data-tbl td.val {{
+        width: 29%; color: #000000 !important; font-weight: 700 !important;
+        white-space: normal !important; font-size: 14px !important;
+        overflow-wrap: anywhere !important; word-break: break-word !important; overflow: hidden !important;
+    }}
+    table.data-tbl td.val.plate-val, table.data-tbl td.plate-val {{
+        white-space: normal !important; overflow: hidden !important;
+        word-break: break-word !important; overflow-wrap: anywhere !important;
+    }}
+    table.data-tbl .rtl-iso {{
+        unicode-bidi: isolate; white-space: normal !important; display: inline !important;
+        overflow-wrap: anywhere !important; word-break: break-word !important;
+    }}
+    table.data-tbl td span, table.data-tbl td b, table.data-tbl td strong,
+    table.sig-tbl td span, table.sig-tbl td b, table.sig-tbl td strong {{
+        white-space: normal !important; display: inline !important;
+        overflow-wrap: anywhere !important; word-break: break-word !important;
+    }}
     table.data-tbl.cols-4 td.lbl.half {{ width: 21%; }}
     table.data-tbl.cols-4 td.val.half {{ width: 29%; }}
     table.data-tbl.cols-4 td.lbl {{ width: 21%; }}
@@ -4897,7 +4920,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             background-color: #0f3d2e !important;
         }}
 
-        /* تقليص حشوة الجداول لتوفير مساحة لجدول التواقيع */
+        /* تقليص حشوة الجداول وتثبيت الحدود داخل المستطيل */
         .a4-paper table, .a4-sheet table {{
             width: 100% !important;
             border-collapse: collapse !important;
@@ -4908,10 +4931,25 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             padding: 4px 6px !important;
             font-size: 11.5px !important;
             line-height: 1.35 !important;
+            white-space: normal !important;
             word-wrap: break-word !important;
-            overflow-wrap: break-word !important;
+            overflow-wrap: anywhere !important;
+            word-break: break-word !important;
+            overflow: hidden !important;
+        }}
+        .a4-paper td span, .a4-paper td b, .a4-paper td strong,
+        .a4-sheet td span, .a4-sheet td b, .a4-sheet td strong,
+        .a4-paper .rtl-iso, .a4-sheet .rtl-iso {{
+            white-space: normal !important;
+            display: inline !important;
+            overflow-wrap: anywhere !important;
+            word-break: break-word !important;
         }}
         .a4-paper table.data-tbl td.lbl {{ background: #f4f7f6 !important; }}
+        .a4-paper table.data-tbl td.val.plate-val, .a4-paper table.data-tbl td.plate-val {{
+            white-space: normal !important; overflow: hidden !important;
+            word-break: break-word !important; overflow-wrap: anywhere !important;
+        }}
         .a4-paper table.sig-tbl th, .a4-paper .sig-head {{ background: #f1f5f3 !important; }}
 
         /* ضبط صندوق الخطاب ومنع خروج الأرقام */
