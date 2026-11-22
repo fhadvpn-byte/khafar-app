@@ -6337,7 +6337,44 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
 
 <style id="khafar-final-a4-fix">
-/* KHAFAR_SLEEK_ZOOM_START */
+  .legal-box {{
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    flex: 1 1 auto !important;
+    background: #f8fafc !important;
+    border: 1.4px solid #cbd5e1 !important;
+    border-right: 5px solid #0f3d2e !important;
+    border-radius: 6px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }}
+  .legal-box .legal-box-title {{
+    font-weight: 800 !important;
+    color: #000000 !important;
+    text-align: right !important;
+    margin-bottom: 6px !important;
+  }}
+  .legal-box .legal-box-body {{
+    direction: rtl !important;
+    unicode-bidi: embed !important;
+    text-align: justify !important;
+    text-justify: inter-word !important;
+    text-align-last: right !important;
+    color: #000000 !important;
+    font-weight: 700 !important;
+    overflow-wrap: break-word !important;
+    white-space: normal !important;
+  }}
+  img.sig-slot-img {{
+    background: #ffffff !important;
+    mix-blend-mode: normal !important;
+    max-height: 52px !important;
+    width: auto !important;
+    max-width: 95% !important;
+    object-fit: contain !important;
+    margin: 2px auto !important;
+  }}
   @media screen {{
     #zoomBar, .zoom-bar {{
       display: flex !important;
@@ -6423,57 +6460,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
   }}
   @media print {{
-    #zoomBar, .zoom-bar {{ display: none !important; }}
-    #khafarZoomViewport, #khafarZoomSizer, #khafarZoomCanvas {{
-      position: static !important;
-      width: 100% !important;
-      min-width: 0 !important;
-      max-width: none !important;
-      height: auto !important;
-      overflow: visible !important;
-      transform: none !important;
-    }}
-  }}
-/* KHAFAR_SLEEK_ZOOM_END */
-.legal-box {{
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: center !important;
-    flex: 1 1 auto !important;
-    background: #f8fafc !important;
-    border: 1.4px solid #cbd5e1 !important;
-    border-right: 5px solid #0f3d2e !important;
-    border-radius: 6px !important;
-    width: 100% !important;
-    box-sizing: border-box !important;
-  }}
-  .legal-box .legal-box-title {{
-    font-weight: 800 !important;
-    color: #000000 !important;
-    text-align: right !important;
-    margin-bottom: 6px !important;
-  }}
-  .legal-box .legal-box-body {{
-    direction: rtl !important;
-    unicode-bidi: embed !important;
-    text-align: justify !important;
-    text-justify: inter-word !important;
-    text-align-last: right !important;
-    color: #000000 !important;
-    font-weight: 700 !important;
-    overflow-wrap: break-word !important;
-    white-space: normal !important;
-  }}
-  img.sig-slot-img {{
-    background: #ffffff !important;
-    mix-blend-mode: normal !important;
-    max-height: 54px !important;
-    width: auto !important;
-    max-width: 95% !important;
-    object-fit: contain !important;
-    margin: 2px auto !important;
-  }}
-  @media print {{
     @page {{ size: A4 portrait; margin: 4.5mm 6mm !important; }}
     html, body {{
       margin: 0 !important;
@@ -6483,12 +6469,25 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       height: auto !important;
       overflow: visible !important;
     }}
-    .no-print, .toolbar, .zoom-bar, .live-sig-dock {{ display: none !important; }}
+    .no-print, .toolbar, #zoomBar, .zoom-bar, .live-sig-dock, #printOfficialBtn, .print-btn {{
+      display: none !important;
+    }}
+    #khafarZoomViewport, #khafarZoomSizer, #khafarZoomCanvas {{
+      position: static !important;
+      width: 100% !important;
+      min-width: 0 !important;
+      max-width: none !important;
+      height: auto !important;
+      overflow: visible !important;
+      transform: none !important;
+    }}
     #a4Sheet {{
       display: flex !important;
       flex-direction: column !important;
       justify-content: space-between !important;
       width: 100% !important;
+      min-width: 0 !important;
+      max-width: none !important;
       margin: 0 auto !important;
       box-sizing: border-box !important;
       border: 1.8px solid #0f3d2e !important;
@@ -6505,15 +6504,39 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 (function() {{
   window.__padInk = window.__padInk || {{}};
 
+  // =========================================================
+  // 1) ربط ومزامنة لوحات التوقيع الحي بالإصبع 100%
+  // =========================================================
+  function canvasHasVisibleInk(canvas) {{
+    try {{
+      var ctx = canvas.getContext('2d');
+      var data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      for (var i = 3; i < data.length; i += 16) {{
+        if (data[i] > 18) return true;
+      }}
+    }} catch (e) {{}}
+    return false;
+  }}
+
   function bindInkTracker(padId) {{
     var c = document.getElementById('pad_' + padId);
     if (!c || c.dataset.inkBound === '1') return;
     c.dataset.inkBound = '1';
-    var mark = function() {{ c.dataset.hasInk = '1'; window.__padInk[padId] = true; }};
+    var mark = function() {{
+      c.dataset.hasInk = '1';
+      window.__padInk[padId] = true;
+    }};
+    var syncSoon = function() {{
+      setTimeout(function() {{ window.syncPadToSlot(padId); }}, 25);
+    }};
     c.addEventListener('pointerdown', mark, {{ passive: true }});
     c.addEventListener('touchstart', mark, {{ passive: true }});
     c.addEventListener('mousedown', mark);
+    c.addEventListener('pointerup', syncSoon, {{ passive: true }});
+    c.addEventListener('touchend', syncSoon, {{ passive: true }});
+    c.addEventListener('mouseup', syncSoon);
   }}
+
   if (typeof LIVE_PADS !== 'undefined' && Array.isArray(LIVE_PADS)) {{
     LIVE_PADS.forEach(bindInkTracker);
   }}
@@ -6530,17 +6553,21 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       s.removeAttribute('src');
       s.style.setProperty('display', 'none', 'important');
     }}
-    try {{ if (typeof padStorageKey === 'function') localStorage.removeItem(padStorageKey(padId)); }} catch (e) {{}}
+    try {{
+      if (typeof padStorageKey === 'function') localStorage.removeItem(padStorageKey(padId));
+    }} catch (e) {{}}
   }};
 
   window.syncPadToSlot = function(padId) {{
     var canvas = document.getElementById('pad_' + padId);
     var slot = document.getElementById('slot_' + padId);
     if (!canvas || !slot) return;
-    var hasInk = (canvas.dataset.hasInk === '1') || !!window.__padInk[padId];
+    var hasInk = (canvas.dataset.hasInk === '1') || !!window.__padInk[padId] || canvasHasVisibleInk(canvas);
     if (!hasInk) {{
       var saved = '';
-      try {{ if (typeof padStorageKey === 'function') saved = localStorage.getItem(padStorageKey(padId)) || ''; }} catch (e) {{}}
+      try {{
+        if (typeof padStorageKey === 'function') saved = localStorage.getItem(padStorageKey(padId)) || '';
+      }} catch (e) {{}}
       if (!saved) return;
     }}
     var out = document.createElement('canvas');
@@ -6552,7 +6579,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     octx.drawImage(canvas, 0, 0);
     var dataUrl = out.toDataURL('image/png');
     slot.setAttribute('src', dataUrl);
-    slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; max-height:52px !important; width:auto !important; max-width:95% !important; margin:2px auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
+    slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; max-height:50px !important; width:auto !important; max-width:95% !important; margin:3px auto 0 auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
     try {{
       var b64 = (dataUrl.split(',')[1] || '');
       if (b64 && typeof padStorageKey === 'function') localStorage.setItem(padStorageKey(padId), b64);
@@ -6565,7 +6592,169 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
   }};
 
+  // =========================================================
+  // 2) تخصيص نموذج إحالة وطلب تحليل السموم حصرا:
+  //    باسم مدير إدارة مرور منطقة جازان (العقيد / محمد بن عبدالله آل هادي)
+  //    ويوقع من ضابط الخفر (مع نقل خانة التوقيع الحي إلى داخل المربع)
+  // =========================================================
+  function applyToxicologyDirectorBlock(docRoot) {{
+    var sheet = docRoot.getElementById('a4Sheet');
+    if (!sheet) return;
+
+    var bannerEl = sheet.querySelector('.doc-banner');
+    var bannerTxt = bannerEl ? (bannerEl.textContent || '') : '';
+    var sheetTxt = sheet.textContent || '';
+    var isTox = (bannerTxt.indexOf('سموم') !== -1)
+      || (sheetTxt.indexOf('تحليل سموم') !== -1)
+      || (sheetTxt.indexOf('تحليل السموم') !== -1)
+      || (sheetTxt.indexOf('مراقبة السموم') !== -1);
+
+    if (!isTox) return;
+
+    // تحديث عنوان لوحة التوقيع الحي العلوية في شاشة المعاينة لهذا النموذج فقط
+    if (docRoot === document) {{
+      docRoot.querySelectorAll('div, span, label, strong, b').forEach(function(el) {{
+        if (el.children.length === 0 && (el.textContent || '').indexOf('مستلم الخفر المناوب') !== -1 && !sheet.contains(el)) {{
+          el.textContent = el.textContent.replace(/مستلم الخفر المناوب/g, 'ضابط الخفر (عن مدير إدارة مرور منطقة جازان)');
+        }}
+      }});
+    }}
+
+    if (sheet.dataset.toxDirectorApplied === '1') return;
+
+    // استخراج عنصر التوقيع الحي لضابط الخفر قبل إخفاء الشريط السفلي المكرر
+    var dutySlotImg = sheet.querySelector('img#slot_officer, img#slot_duty, img#slot_khafar, img#slot_receiver');
+    if (!dutySlotImg) {{
+      var allSlots = sheet.querySelectorAll('img[id^="slot_"]');
+      for (var sIdx = 0; sIdx < allSlots.length; sIdx++) {{
+        var sid = (allSlots[sIdx].id || '').toLowerCase();
+        if (sid.indexOf('hosp') === -1 && sid.indexOf('cit') === -1 && sid.indexOf('party') === -1) {{
+          dutySlotImg = allSlots[sIdx];
+          break;
+        }}
+      }}
+    }}
+
+    var customDutyName = '';
+    sheet.querySelectorAll('tr, div').forEach(function(el) {{
+      if (el.querySelector('table')) return;
+      var rawT = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (rawT.length > 0 && rawT.length < 180 && (rawT.indexOf('توثيق مستلم الخفر') === 0 || rawT.indexOf('توثيق ضابط الخفر') === 0)) {{
+        if (!dutySlotImg) {{
+          var archivedImg = el.querySelector('img');
+          if (archivedImg) dutySlotImg = archivedImg;
+        }}
+        var colonPos = rawT.indexOf(':');
+        if (colonPos !== -1) {{
+          var extracted = rawT.slice(colonPos + 1).trim();
+          if (extracted && extracted !== 'مستلم الخفر المناوب' && extracted !== 'ضابط الخفر' && extracted !== '-') {{
+            customDutyName = extracted;
+          }}
+        }}
+        if (dutySlotImg && el.contains(dutySlotImg) && dutySlotImg.parentNode) {{
+          dutySlotImg.parentNode.removeChild(dutySlotImg);
+        }}
+        var parentRow = el.closest('tr');
+        if (parentRow && parentRow.cells && parentRow.cells.length === 1) {{
+          if (dutySlotImg && parentRow.contains(dutySlotImg) && dutySlotImg.parentNode) {{
+            dutySlotImg.parentNode.removeChild(dutySlotImg);
+          }}
+          parentRow.style.setProperty('display', 'none', 'important');
+        }} else {{
+          el.style.setProperty('display', 'none', 'important');
+        }}
+      }}
+    }});
+
+    // تحديد رأس عمود (وحدة الحوادث) وخلية التوقيع التابعة له أيا كان هيكل الجدول
+    var hdrEl = null;
+    var candidates = sheet.querySelectorAll('th, td, div, span');
+    for (var i = 0; i < candidates.length; i++) {{
+      var c = candidates[i];
+      if (c.children.length === 0) {{
+        var ct = (c.textContent || '').trim();
+        if (ct === 'وحدة الحوادث' || ct === 'رئيس وحدة الحوادث') {{
+          hdrEl = c;
+          break;
+        }}
+      }}
+    }}
+
+    var bodyCell = null;
+    var bodyCandidates = sheet.querySelectorAll('td, div');
+    for (var j = 0; j < bodyCandidates.length; j++) {{
+      var bc = bodyCandidates[j];
+      if (bc.querySelector('table') || bc.querySelector('tr')) continue;
+      var bt = (bc.textContent || '').trim();
+      if ((bt.indexOf('فهد بن أحمد') !== -1 || bt.indexOf('مجرشي') !== -1 || bt.indexOf('رئيس وحدة الحوادث') !== -1) && bt.length < 220) {{
+        if (bc.tagName === 'TD') {{
+          bodyCell = bc;
+          break;
+        }} else if (!bodyCell) {{
+          bodyCell = bc.closest('td') || bc;
+        }}
+      }}
+    }}
+
+    if (hdrEl) {{
+      hdrEl.textContent = 'مدير إدارة مرور منطقة جازان';
+      if (!bodyCell) {{
+        var hCell = hdrEl.closest('th, td');
+        var hRow = hCell ? hCell.parentElement : null;
+        var tbl = hCell ? hCell.closest('table') : null;
+        if (tbl && hRow && tbl.rows && tbl.rows[hRow.rowIndex + 1]) {{
+          bodyCell = tbl.rows[hRow.rowIndex + 1].cells[hCell.cellIndex] || null;
+        }}
+      }}
+    }}
+
+    if (bodyCell) {{
+      var hdrInsideBody = hdrEl && bodyCell.contains(hdrEl) && bodyCell !== hdrEl;
+      if (hdrInsideBody) {{
+        var keepHdr = hdrEl;
+        while (keepHdr.parentElement && keepHdr.parentElement !== bodyCell) {{
+          keepHdr = keepHdr.parentElement;
+        }}
+        while (keepHdr.nextSibling) {{
+          bodyCell.removeChild(keepHdr.nextSibling);
+        }}
+      }} else {{
+        bodyCell.innerHTML = '';
+      }}
+
+      var wrap = docRoot.createElement('div');
+      wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:4px 6px;gap:3px;min-height:68px;';
+
+      var directorLine = docRoot.createElement('div');
+      directorLine.style.cssText = 'font-weight:900;font-size:13.5px;color:#000000;line-height:1.45;';
+      directorLine.textContent = 'العقيد / محمد بن عبدالله آل هادي';
+
+      var dutyLine = docRoot.createElement('div');
+      dutyLine.style.cssText = 'font-weight:800;font-size:11.5px;color:#0f3d2e;line-height:1.4;';
+      dutyLine.textContent = customDutyName ? ('توقيع ضابط الخفر: ' + customDutyName) : 'توقيع ضابط الخفر المناوب';
+
+      wrap.appendChild(directorLine);
+      wrap.appendChild(dutyLine);
+
+      if (!dutySlotImg) {{
+        dutySlotImg = docRoot.createElement('img');
+        dutySlotImg.id = 'slot_officer';
+        dutySlotImg.className = 'sig-slot-img';
+        dutySlotImg.style.display = 'none';
+        dutySlotImg.alt = '';
+      }}
+      wrap.appendChild(dutySlotImg);
+      bodyCell.appendChild(wrap);
+      sheet.dataset.toxDirectorApplied = '1';
+    }}
+  }}
+
+  // =========================================================
+  // 3) موازنة الخطوط والمسافات وقفل صفحة 1/1 بدون قص سفلي
+  // =========================================================
   function balanceSheetTypography(docRoot, targetH, isPrintMode, isIOSMode) {{
+    applyToxicologyDirectorBlock(docRoot);
+
     var sheet = docRoot.getElementById('a4Sheet');
     if (!sheet) return;
     sheet.style.setProperty('display', 'flex', 'important');
@@ -6574,7 +6763,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     sheet.style.setProperty('box-sizing', 'border-box', 'important');
     sheet.style.setProperty('zoom', '1', 'important');
 
-    // On iOS AirPrint, measure at AirPrint's narrower print width (645px) so lines don't re-wrap taller during print
     if (isIOSMode && isPrintMode) {{
       sheet.style.setProperty('width', '645px', 'important');
       sheet.style.setProperty('padding', '3mm 4.5mm', 'important');
@@ -6605,7 +6793,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     var textLen = legalBody ? (legalBody.textContent || '').trim().length : 0;
     var hasAtts = attImgs && attImgs.length > 0;
 
-    if (rowsCnt <= 6 && textLen <= 520 && sigCells.length <= 3) {{
+    if (rowsCnt <= 6 && textLen <= 560 && sigCells.length <= 3) {{
       tblCells.forEach(function(td) {{
         td.style.setProperty('font-size', isIOSMode ? '12.5px' : '13.5px', 'important');
         td.style.setProperty('padding', isIOSMode ? '6px 8px' : '9px 11px', 'important');
@@ -6621,10 +6809,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         legalBody.style.setProperty('line-height', isIOSMode ? (hasAtts ? '1.65' : '1.85') : (hasAtts ? '2.0' : '2.25'), 'important');
       }}
       sigCells.forEach(function(td) {{
-        td.style.setProperty('height', isIOSMode ? (hasAtts ? '62px' : '72px') : (hasAtts ? '90px' : '105px'), 'important');
+        td.style.setProperty('height', isIOSMode ? (hasAtts ? '64px' : '74px') : (hasAtts ? '88px' : '102px'), 'important');
         td.style.setProperty('padding', isIOSMode ? '5px' : '8px', 'important');
       }});
-    }} else if (rowsCnt <= 8 && textLen <= 700 && sigCells.length <= 4) {{
+    }} else if (rowsCnt <= 8 && textLen <= 750 && sigCells.length <= 4) {{
       tblCells.forEach(function(td) {{
         td.style.setProperty('font-size', isIOSMode ? '11.5px' : '12px', 'important');
         td.style.setProperty('padding', isIOSMode ? '4px 6px' : '5px 8px', 'important');
@@ -6715,8 +6903,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
 
     var naturalH = sheet.scrollHeight;
-
-    // Restore full responsive width on iOS after measuring at 645px
     if (isIOSMode && isPrintMode) {{
       sheet.style.setProperty('width', '100%', 'important');
     }}
@@ -6731,59 +6917,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
   }}
 
+  // تطبيق التخصيص ومزامنة التواقيع عند التحميل
+  applyToxicologyDirectorBlock(document);
+  window.syncAllLivePads();
   balanceSheetTypography(document, 1045, false, false);
 
-  // --- KHAFAR_PWA_SHARE_FIX_START ---
+  // =========================================================
+  // 4) شريط التكبير والتصغير الكبسولي السلس (5% إلى 200%)
+  // =========================================================
   (function() {{
-    var isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
-      || (window.navigator && window.navigator.standalone === true);
-
-    // حماية navigator.share إن وُجد في أي زر مشاركة داخل وضع التطبيق المثبّت
-    if (navigator && typeof navigator.share === 'function' && !navigator.__khafarShareWrapped) {{
-      var origShare = navigator.share.bind(navigator);
-      navigator.__khafarShareWrapped = true;
-      navigator.share = function(data) {{
-        try {{
-          var res = origShare(data);
-          if (res && typeof res.catch === 'function') {{
-            return res.catch(function(err) {{
-              if (err && err.name === 'AbortError') return Promise.resolve();
-              var btn = document.querySelector('#printOfficialBtn, .print-btn');
-              if (btn) btn.click();
-              return Promise.resolve();
-            }});
-          }}
-          return res;
-        }} catch (e) {{
-          var btn = document.querySelector('#printOfficialBtn, .print-btn');
-          if (btn) btn.click();
-          return Promise.resolve();
-        }}
-      }};
-    }}
-
-    // في وضع التطبيق المثبّت على الآيفون، افتح النافذة فور النقرة لتجنب حظر Safari standalone
-    var pBtn = document.querySelector('#printOfficialBtn') || document.querySelector('.print-btn');
-    if (pBtn && isStandalone && !pBtn.dataset.pwaBound) {{
-      pBtn.dataset.pwaBound = '1';
-      var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (isIOS) {{
-        pBtn.addEventListener('click', function() {{
-          try {{
-            if (!window.__khafarPreWin || window.__khafarPreWin.closed) {{
-              window.__khafarPreWin = window.open('', '_blank');
-            }}
-          }} catch (e) {{}}
-        }}, true);
-      }}
-    }}
-  }})();
-  // --- KHAFAR_PWA_SHARE_FIX_END ---
-
-
-  // --- KHAFAR_INJECT_PREVIEW_ZOOM_START ---
-  (function() {{
-    // إيقاف أي مستمع resize قديم يعيد تكبير الورقة تلقائياً بعد ضغط الأزرار
     window.addEventListener('resize', function(ev) {{
       ev.stopImmediatePropagation();
     }}, true);
@@ -6822,8 +6964,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       viewport.appendChild(sizer);
     }}
 
-    // إعادة وزن خطوط وتباعد A4 على العرض القياسي 794px لتظهر الورقة متكاملة
-    try {{ balanceSheetTypography(document, 1045, false, false); }} catch (e) {{}}
+    balanceSheetTypography(document, 1045, false, false);
 
     var curScale = 1;
     var lastWinW = window.innerWidth || 0;
@@ -6840,8 +6981,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       }} catch (e) {{}}
     }}
 
-    function applyStageScale(val) {{
-      curScale = Math.max(0.15, Math.min(2.0, Math.round(val * 100) / 100));
+    window.__applyPreviewScale = function(val) {{
+      curScale = Math.max(0.05, Math.min(2.0, Math.round(val * 100) / 100));
       sheetEl.style.setProperty('zoom', '1', 'important');
       sheetEl.style.setProperty('transform', 'none', 'important');
 
@@ -6856,12 +6997,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       if (lbl) lbl.textContent = Math.round(curScale * 100) + '%';
 
       setTimeout(syncIframeHeight, 40);
-    }}
+    }};
 
     function fitStageToScreen() {{
       var availW = (viewport.clientWidth || document.documentElement.clientWidth || window.innerWidth || 794) - 8;
       var ratio = Math.min(1.0, availW / 794);
-      applyStageScale(ratio);
+      window.__applyPreviewScale(ratio);
     }}
 
     bar.querySelectorAll('[data-kz]').forEach(function(btn) {{
@@ -6869,18 +7010,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         ev.preventDefault();
         ev.stopPropagation();
         var act = btn.getAttribute('data-kz');
-        if (act === '+') applyStageScale(curScale + 0.12);
-        else if (act === '-') applyStageScale(curScale - 0.08);
+        if (act === '+') window.__applyPreviewScale(curScale + 0.10);
+        else if (act === '-') window.__applyPreviewScale(curScale - 0.05);
         else if (act === 'fit') fitStageToScreen();
-        else applyStageScale(parseFloat(act) || 1);
+        else window.__applyPreviewScale(parseFloat(act) || 1);
       }});
     }});
 
-    // على الجوال يفتح تلقائياً بملاءمة الورقة كاملة، وعلى الكمبيوتر 100%
     if ((window.innerWidth || 900) < 820) {{
       setTimeout(fitStageToScreen, 80);
     }} else {{
-      setTimeout(function() {{ applyStageScale(1.0); }}, 80);
+      setTimeout(function() {{ window.__applyPreviewScale(1.0); }}, 80);
     }}
 
     window.addEventListener('orientationchange', function() {{
@@ -6892,9 +7032,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       }}, 220);
     }});
   }})();
-  // --- KHAFAR_INJECT_PREVIEW_ZOOM_END ---
 
-
+  // =========================================================
+  // 5) طباعة ومشاركة موحدة (أندرويد كمبيوتر وآيفون Safari + وضع التطبيق المثبت)
+  // =========================================================
   var oldBtn = document.querySelector('#printOfficialBtn') || document.querySelector('.print-btn');
   if (oldBtn) {{
     var newBtn = oldBtn.cloneNode(true);
@@ -6902,26 +7043,52 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     newBtn.addEventListener('click', function(ev) {{
       ev.preventDefault();
       ev.stopPropagation();
+
+      applyToxicologyDirectorBlock(document);
       window.syncAllLivePads();
 
       var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      // Android/Desktop stays at 1042 (untouched!); iOS lowered from 945 to 795 so footer-qr fits on Page 1 of 1
+      var isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+        || (window.navigator && window.navigator.standalone === true);
       var targetH = isIOS ? 795 : 1042;
+
+      // في وضع التطبيق المثبت على الآيفون: طباعة متزامنة مباشرة تفتح نافذة AirPrint وزر المشاركة () دون حظر
+      if (isIOS && isStandalone) {{
+        var cWrap = document.getElementById('khafarZoomCanvas');
+        var szWrap = document.getElementById('khafarZoomSizer');
+        var prevTransform = cWrap ? cWrap.style.transform : '';
+        var prevW = szWrap ? szWrap.style.width : '';
+        var prevH = szWrap ? szWrap.style.height : '';
+        if (cWrap) cWrap.style.setProperty('transform', 'none', 'important');
+        if (szWrap) {{
+          szWrap.style.setProperty('width', '100%', 'important');
+          szWrap.style.setProperty('height', 'auto', 'important');
+        }}
+        balanceSheetTypography(document, targetH, true, true);
+        window.print();
+        setTimeout(function() {{
+          balanceSheetTypography(document, 1045, false, false);
+          if (cWrap) cWrap.style.setProperty('transform', prevTransform, 'important');
+          if (szWrap) {{
+            szWrap.style.setProperty('width', prevW, 'important');
+            szWrap.style.setProperty('height', prevH, 'important');
+          }}
+        }}, 600);
+        return;
+      }}
 
       var sheetClone = document.getElementById('a4Sheet').cloneNode(true);
       sheetClone.style.zoom = '1';
       sheetClone.style.transform = 'none';
       sheetClone.style.width = '100%';
-      if (typeof LIVE_PADS !== 'undefined' && Array.isArray(LIVE_PADS)) {{
-        LIVE_PADS.forEach(function(padId) {{
-          var liveSlot = document.getElementById('slot_' + padId);
-          var cloneSlot = sheetClone.querySelector('#slot_' + padId);
-          if (liveSlot && cloneSlot && liveSlot.getAttribute('src')) {{
-            cloneSlot.setAttribute('src', liveSlot.getAttribute('src'));
-            cloneSlot.setAttribute('style', liveSlot.getAttribute('style') || 'display:block !important; max-height:52px !important;');
-          }}
-        }});
-      }}
+
+      document.querySelectorAll('#a4Sheet img[id^="slot_"]').forEach(function(liveSlot) {{
+        var cloneSlot = sheetClone.querySelector('#' + liveSlot.id);
+        if (liveSlot && cloneSlot && liveSlot.getAttribute('src')) {{
+          cloneSlot.setAttribute('src', liveSlot.getAttribute('src'));
+          cloneSlot.setAttribute('style', liveSlot.getAttribute('style') || 'display:block !important; max-height:50px !important;');
+        }}
+      }});
 
       var stylesHtml = '';
       document.querySelectorAll('style, link[rel="stylesheet"]').forEach(function(node) {{
@@ -6934,7 +7101,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         + stylesHtml
         + '<style>@media screen{{body{{margin:0;padding:12px;background:#0f172a;display:flex;flex-direction:column;align-items:center;}}#a4Sheet{{max-width:100%;}}}}</style>'
         + '</head><body>'
-        + (isIOS ? '<div class="no-print" style="width:100%;max-width:794px;background:#14532d;color:#fff;padding:10px 14px;border-radius:8px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;font-weight:800;"><span>جاهز للطباعة أو المشاركة ()</span><button id="iosReprintBtn" style="background:#eab308;color:#000;border:0;padding:7px 14px;border-radius:6px;font-weight:800;"> طباعة / PDF</button></div>' : '')
+        + (isIOS ? '<div class="no-print" style="width:100%;max-width:794px;background:#14532d;color:#fff;padding:10px 14px;border-radius:8px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;font-weight:800;"><span>اضغط طباعة ثم رمز المشاركة () بالأعلى</span><button id="iosReprintBtn" style="background:#eab308;color:#000;border:0;padding:7px 14px;border-radius:6px;font-weight:800;"> طباعة / مشاركة PDF</button></div>' : '')
         + sheetClone.outerHTML
         + '</body></html>';
 
@@ -6970,8 +7137,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             if (rb) rb.onclick = function() {{ runIosFit(); w.print(); }};
             w.focus();
             w.print();
-          }}, 500);
+          }}, 450);
         }} else {{
+          balanceSheetTypography(document, targetH, true, true);
           window.print();
         }}
       }}
@@ -6979,7 +7147,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   }}
 }})();
 </script>
-
 </body>
 </html>
 """
