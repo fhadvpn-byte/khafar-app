@@ -7753,6 +7753,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 </body>
 </html>
 """
+import khafar_bail; khafar_bail.bind_functions(globals())
 
 
 # =====================================================================
@@ -7809,7 +7810,7 @@ CATEGORY_TAB_MAP = {
 }
 CATEGORY_TAB_ALIASES = {
     "✍️ الإقرارات الميدانية (6)": _DECL_TAB_LABEL,
-    "✍️ الإقرارات الميدانية (7)": _DECL_TAB_LABEL,
+    "✍️ الإقرارات الميدانية (8)": _DECL_TAB_LABEL,
 }
 
 if "nav_tab" not in st.session_state:
@@ -7962,6 +7963,7 @@ def render_compact_form_buttons(category: str, primary: bool = False):
             use_container_width=True,
         ):
             open_form_from_catalog(fid)
+import khafar_bail; khafar_bail.bind_functions(globals())
 
 
 # =====================================================================
