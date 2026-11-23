@@ -3,7 +3,7 @@ import streamlit as st
 import streamlit.components.v1 as comp
 from streamlit.delta_generator import DeltaGenerator as DG
 
-_KHAFAR_BAIL_VER = "v4"
+_KHAFAR_BAIL_VER = "v5"
 BAIL_ID = "decl_accident_bail"
 BAIL_TITLE = "إقرار كفالة حضورية وغرامية في حادث مروري"
 BAIL_OPT = "🛡️ " + BAIL_TITLE
@@ -41,7 +41,7 @@ BAIL_SPECS = [
      "إحضار المكفول لدى قسم مرور العارضة أو المحكمة المختصة متى طُلب وسداد ما يثبت شرعاً ونظاماً من حقوق خاصة أو تلفيات",
      "تفصيل الالتزام أو مبلغ التقدير إن وجد", True),
 ]
-_TR = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+_TR = str.maketrans("".join(chr(0x0660 + i) for i in range(10)), "0123456789")
 
 def _cv(d, k, fb="...................."):
     v = str((d or {}).get(k, "") or "").translate(_TR).strip()
@@ -100,30 +100,31 @@ function initBailedPad(){
   var p1=dock.querySelector('canvas[id^="pad_"]:not(#pad_officer)');
   if(!p1)return;
   dock.querySelectorAll('div,span,label,strong,b').forEach(function(el){
-    if(!el.children.length&&/المقر|المستلم|المواطن|الطرف الأول/.test(el.textContent||''))el.textContent=' توقيع الكفيل الضامن';
+    if(!el.children.length&&/المقر|المستلم|المواطن|الطرف الأول/.test(el.textContent||''))el.textContent='✍️ توقيع الكفيل الضامن';
   });
   var card=p1.parentElement;
   while(card&&card.parentElement!==dock)card=card.parentElement;
   if(!card)return;
   var c2=card.cloneNode(true);
   c2.querySelectorAll('div,span,label,strong,b').forEach(function(el){
-    if(!el.children.length&&(el.textContent||'').indexOf('توقيع')!==-1)el.textContent=' توقيع المكفول (طرف الحادث)';
+    if(!el.children.length&&(el.textContent||'').indexOf('توقيع')!==-1)el.textContent='✍️ توقيع المكفول (طرف الحادث)';
   });
   var cv=c2.querySelector('canvas');
   if(!cv)return;
-  cv.id='pad_bailed';
-  delete cv.dataset.khTouchBound;
-  delete cv.dataset.inkBound;
-  delete cv.dataset.hasInk;
-  var ctx=cv.getContext('2d');
-  if(ctx)ctx.clearRect(0,0,cv.width,cv.height);
+  cv.id='pad_bailed';cv.removeAttribute('data-kh-touch-bound');delete cv.dataset.khTouchBound;delete cv.dataset.inkBound;delete cv.dataset.hasInk;
+  var ctx=cv.getContext('2d');ctx.clearRect(0,0,cv.width,cv.height);
   c2.querySelectorAll('button').forEach(function(b){
-    b.removeAttribute('onclick');
     b.onclick=function(ev){ev.preventDefault();if(window.clearLivePad)window.clearLivePad('bailed');};
   });
   card.parentNode.insertBefore(c2,card.nextSibling);
   if(typeof LIVE_PADS!=='undefined'&&Array.isArray(LIVE_PADS)&&LIVE_PADS.indexOf('bailed')===-1)LIVE_PADS.push('bailed');
-  if(typeof window.__khafarBindAllTouchPads==='function')window.__khafarBindAllTouchPads();
+  var dr=false,lx=0,ly=0;
+  function pt(e){var r=cv.getBoundingClientRect(),t=(e.touches&&e.touches[0])||e;return[(t.clientX-r.left)*(cv.width/(r.width||1)),(t.clientY-r.top)*(cv.height/(r.height||1))];}
+  function st(e){dr=true;var p=pt(e);lx=p[0];ly=p[1];cv.dataset.hasInk='1';if(window.__padInk)window.__padInk['bailed']=true;}
+  function mv(e){if(!dr)return;if(e.cancelable)e.preventDefault();var p=pt(e);ctx.strokeStyle='#0044cc';ctx.lineWidth=2.3;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(p[0],p[1]);ctx.stroke();lx=p[0];ly=p[1];}
+  function en(){if(!dr)return;dr=false;if(window.syncPadToSlot)setTimeout(function(){window.syncPadToSlot('bailed');},20);}
+  cv.addEventListener('mousedown',st);cv.addEventListener('mousemove',mv);window.addEventListener('mouseup',en);
+  cv.addEventListener('touchstart',st,{passive:true});cv.addEventListener('touchmove',mv,{passive:false});cv.addEventListener('touchend',en,{passive:true});
 }
 function fixBail(root){
   var s=root.getElementById?root.getElementById('a4Sheet'):root.querySelector('#a4Sheet');
@@ -147,8 +148,7 @@ function fixBail(root){
     [hr,br].forEach(function(r){Array.from(r.cells).forEach(function(c){c.style.setProperty('width','33.33%','important');});});
     Array.from(tbl.rows).forEach(function(r){if(r!==hr&&r!==br&&r.cells.length===1&&r.cells[0].colSpan===2)r.cells[0].colSpan=3;});
   }
-  s.dataset.bailFixed='1';
-  if(root===document&&typeof window.__khafarBindAllTouchPads==='function')window.__khafarBindAllTouchPads();
+  s.dataset.bailFixed='1';if(root===document&&window.__khafarBindAllTouchPads)window.__khafarBindAllTouchPads();
 }
 try{fixBail(document);}catch(e){}
 addEventListener('load',function(){try{fixBail(document);}catch(e){}});
@@ -404,7 +404,7 @@ st.selectbox = lambda label, options=(), index=0, *a, **kw: (lambda o, i, k, m: 
 def bind_functions(g):
     register_catalog(g)
     bh = g.get("build_official_a4_html")
-    if callable(bh):
+    if callable(bh) and not getattr(bh, '_kh_bail_wrapped', False):
         raw_bh = getattr(bh, "_kh_bail_raw_bh", bh)
         def _bh_wrap(*a, **kw):
             _STATE["built"] = True
@@ -416,11 +416,12 @@ def bind_functions(g):
                     "guarantor_id": next((v for k, v in vd.items() if "guarantor_id" in str(k)), ""),
                     "bailed_id_nat": next((v for k, v in vd.items() if "bailed_id_nat" in str(k)), ""),
                 })
+            if not is_b and kw: st.session_state['_kh_proto_bh_kw'] = {k: v for k, v in kw.items() if k not in ('fields_map', 'values', 'data', 'vals')}
             html = raw_bh(*a, **kw)
             if is_b and isinstance(html, str) and "kh-bail-sig-fix" not in html:
                 html = html.replace("</body>", BAIL_SIG_JS + "\n</body>", 1) if "</body>" in html else (html + BAIL_SIG_JS)
             return html
-        _bh_wrap._kh_bail_raw_bh = raw_bh
+        _bh_wrap._kh_bail_raw_bh = raw_bh; _bh_wrap._kh_bail_wrapped = True; _bh_wrap._kh_med_age_wrapped = getattr(bh, '_kh_med_age_wrapped', False)
         g["build_official_a4_html"] = _bh_wrap
 
 def ensure_bail_rendered(g):
@@ -434,7 +435,7 @@ def ensure_bail_rendered(g):
     _validate_bail_live(vals)
     bh = g.get("build_official_a4_html")
     if callable(bh):
-        bkw, rows, body = {}, [(l, _cv(vals, k)) for k, l, *_ in BAIL_SPECS], build_bail_legal_body(vals)
+        bkw, rows, body = dict(st.session_state.get('_kh_proto_bh_kw') or {}), [(l, _cv(vals, k)) for k, l, *_ in BAIL_SPECS], build_bail_legal_body(vals)
         for pn, prm in inspect.signature(getattr(bh, "_kh_bail_raw_bh", bh)).parameters.items():
             pl = pn.lower()
             if pl in ("form_id", "doc_id", "code", "key"): bkw[pn] = BAIL_ID

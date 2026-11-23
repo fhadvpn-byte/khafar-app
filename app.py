@@ -16,8 +16,8 @@ from datetime import datetime, timezone, timedelta
 from PIL import Image, ImageDraw, ImageOps
 from abu_arish_impound import ABU_ARISH_IMPOUND_TEMPLATE
 from takmeel import TAKMEEL_FORMS, init_takmeel_db, render_takmeel_form
-import importlib, khafar_bail; khafar_bail = importlib.reload(khafar_bail) if getattr(khafar_bail, "_KHAFAR_BAIL_VER", "") != "v4" else khafar_bail; khafar_bail.reset_run_state()
-import importlib, khafar_med_age; khafar_med_age = importlib.reload(khafar_med_age) if getattr(khafar_med_age, "_KHAFAR_MED_AGE_VER", "") != "v1" else khafar_med_age; khafar_med_age.reset_run_state()
+import importlib, khafar_bail; khafar_bail = importlib.reload(khafar_bail) if getattr(khafar_bail, "_KHAFAR_BAIL_VER", "") != "v5" else khafar_bail; khafar_bail.reset_run_state()
+import importlib, khafar_med_age; khafar_med_age = importlib.reload(khafar_med_age) if getattr(khafar_med_age, "_KHAFAR_MED_AGE_VER", "") != "v3" else khafar_med_age; khafar_med_age.reset_run_state()
 
 try:
     import qrcode
@@ -3356,46 +3356,142 @@ def save_record_to_db(rec: dict, device_hash: str) -> bool:
 
 
 
-
-
 # === KHAFAR_MANUAL_ARCHIVE_START ===
 _KHAFAR_ORIG_FUNCS = {}
 _KHAFAR_ALLOW_WRITE = False
-_KHAFAR_LINE_TO_SITE = {9019: 9019}
-_KHAFAR_USED_RETURN_SITES = {9019}
-_KHAFAR_READER_FN_NAMES = []
+_KHAFAR_LINE_TO_SITE = {9205: 9205}
+_KHAFAR_USED_RETURN_SITES = {8910}
+_KHAFAR_READER_FN_NAMES = ['get_traffic_logo_b64']
 
 def _khafar_clear_archive_caches():
     import streamlit as _st
     for _rname in _KHAFAR_READER_FN_NAMES:
         _rfn = globals().get(_rname)
         if _rfn is not None and hasattr(_rfn, "clear"):
-            try: _rfn.clear()
-            except Exception: pass
+            try:
+                _rfn.clear()
+            except Exception:
+                pass
+    # مسح أي بصمة منع تكرار داخلية حتى يسمح بالحفظ والتحديث في كل ضغطة زر
     for _k in list(_st.session_state.keys()):
         _kl = str(_k).lower()
-        if not _kl.startswith("_khafar_") and any(_w in _kl for _w in ("last_arch", "arch_hash", "arch_sig", "auto_arch", "arch_fp")):
+        if not _kl.startswith("_khafar_") and any(_w in _kl for _w in ("last_arch", "arch_hash", "arch_sig", "auto_arch", "arch_fp", "saved_sig", "saved_hash")):
             _st.session_state.pop(_k, None)
 
 def _khafar_arm_manual_save():
     import streamlit as _st
     _st.session_state["_khafar_save_requested"] = True
 
+def _khafar_dry_run_call(_orig_fn, *args, **kwargs):
+    import builtins as _bi, copy as _copy, io as _io, os as _os, pathlib as _pl, sqlite3 as _sq3, streamlit as _st
+    _before_keys = set(_st.session_state.keys())
+    _before_vals = {}
+    for _k in _before_keys:
+        if str(_k).startswith("_khafar_"):
+            continue
+        try:
+            _before_vals[_k] = _copy.deepcopy(_st.session_state[_k])
+        except Exception:
+            pass
+
+    _orig_wt = _pl.Path.write_text
+    _orig_wb = _pl.Path.write_bytes
+    _orig_popen = _pl.Path.open
+    _orig_preplace = _pl.Path.replace
+    _orig_os_replace = _os.replace
+    _orig_bi_open = _bi.open
+    _orig_io_open = _io.open
+    _orig_connect = _sq3.connect
+
+    def _noop(*_a, **_kw):
+        return 0
+
+    def _guarded_open(file, mode="r", *a, **kw):
+        if any(m in str(mode) for m in ("w", "a", "+", "x")):
+            return _io.StringIO() if "b" not in str(mode) else _io.BytesIO()
+        return _orig_bi_open(file, mode, *a, **kw)
+
+    def _guarded_popen(self_p, mode="r", *a, **kw):
+        if any(m in str(mode) for m in ("w", "a", "+", "x")):
+            return _io.StringIO() if "b" not in str(mode) else _io.BytesIO()
+        return _orig_popen(self_p, mode, *a, **kw)
+
+    class _ReadOnlyConnProxy:
+        def __init__(self, real_conn):
+            self._c = real_conn
+        def execute(self, sql, *a, **kw):
+            s_up = str(sql).lstrip().upper()
+            if s_up.startswith(("INSERT", "REPLACE", "UPDATE", "DELETE")):
+                class _DummyCur:
+                    lastrowid = 0
+                    rowcount = 0
+                    def fetchone(self): return None
+                    def fetchall(self): return []
+                return _DummyCur()
+            return self._c.execute(sql, *a, **kw)
+        def commit(self):
+            return None
+        def __getattr__(self, name):
+            return getattr(self._c, name)
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            try:
+                self._c.close()
+            except Exception:
+                pass
+            return False
+
+    try:
+        _pl.Path.write_text = _noop
+        _pl.Path.write_bytes = _noop
+        _pl.Path.open = _guarded_popen
+        _pl.Path.replace = _noop
+        _os.replace = _noop
+        _bi.open = _guarded_open
+        _io.open = _guarded_open
+        _sq3.connect = lambda *a, **kw: _ReadOnlyConnProxy(_orig_connect(*a, **kw))
+        return _orig_fn(*args, **kwargs)
+    finally:
+        _pl.Path.write_text = _orig_wt
+        _pl.Path.write_bytes = _orig_wb
+        _pl.Path.open = _orig_popen
+        _pl.Path.replace = _orig_preplace
+        _os.replace = _orig_os_replace
+        _bi.open = _orig_bi_open
+        _io.open = _orig_io_open
+        _sq3.connect = _orig_connect
+        for _k in list(_st.session_state.keys()):
+            if not str(_k).startswith("_khafar_") and _k not in _before_keys:
+                _st.session_state.pop(_k, None)
+        for _k, _v in _before_vals.items():
+            try:
+                if _st.session_state.get(_k) != _v:
+                    _st.session_state[_k] = _v
+            except Exception:
+                pass
+
 def _khafar_wrap_manual_archive(_orig_fn, _fn_name=""):
     import sys as _sys
     _KHAFAR_ORIG_FUNCS[_fn_name] = _orig_fn
+
     def _wrapped(*args, **kwargs):
         global _KHAFAR_ALLOW_WRITE
         import streamlit as _st
+
         if _KHAFAR_ALLOW_WRITE:
             return _orig_fn(*args, **kwargs)
+
         try:
             _caller_line = _sys._getframe(1).f_lineno
         except Exception:
             _caller_line = -1
+
         _site_id = _KHAFAR_LINE_TO_SITE.get(_caller_line)
         if _site_id is None:
             return _orig_fn(*args, **kwargs)
+
+        # تنفيذ الحفظ الفعلي بأحدث المدخلات فور ضغط الزر ثم تحديث عداد الأرشيف بالأعلى
         if _st.session_state.pop("_khafar_save_requested", False):
             _KHAFAR_ALLOW_WRITE = True
             try:
@@ -3409,10 +3505,13 @@ def _khafar_wrap_manual_archive(_orig_fn, _fn_name=""):
                 _res_saved = None
             finally:
                 _KHAFAR_ALLOW_WRITE = False
-            try: _st.rerun(scope="app")
-            except TypeError: _st.rerun()
+            try:
+                _st.rerun(scope="app")
+            except TypeError:
+                _st.rerun()
             return _res_saved
 
+        # حفظ نسخة احتياطية من المعاملات وعرض الزر الرسمي
         _st.session_state["_khafar_last_op"] = (_fn_name, args, kwargs)
         try:
             _st.markdown(
@@ -3432,14 +3531,23 @@ def _khafar_wrap_manual_archive(_orig_fn, _fn_name=""):
             )
             if _st.session_state.pop("_khafar_manual_save_flash", False):
                 _st.success(" تم حفظ واعتماد الوثيقة في الأرشيف الرسمي بنجاح!")
+                try:
+                    _st.toast(" تم الحفظ في الأرشيف الرسمي بنجاح!", icon="")
+                except Exception:
+                    pass
             _err = _st.session_state.pop("_khafar_manual_save_err", None)
             if _err:
                 _st.error(f" تعذر الحفظ في الأرشيف: {_err}")
         except Exception:
             pass
+
+        if _site_id in _KHAFAR_USED_RETURN_SITES:
+            return _khafar_dry_run_call(_orig_fn, *args, **kwargs)
         return None
+
     return _wrapped
 
+import khafar_bail; khafar_bail.bind_functions(globals()); khafar_bail.ensure_bail_rendered(globals())
 import khafar_med_age; khafar_med_age.bind_functions(globals())
 def _khafar_flush_fallback_save():
     global _KHAFAR_ALLOW_WRITE
@@ -3458,8 +3566,10 @@ def _khafar_flush_fallback_save():
                     _st.session_state["_khafar_manual_save_flash"] = True
                 finally:
                     _KHAFAR_ALLOW_WRITE = False
-                try: _st.rerun(scope="app")
-                except TypeError: _st.rerun()
+                try:
+                    _st.rerun(scope="app")
+                except TypeError:
+                    _st.rerun()
 # === KHAFAR_MANUAL_ARCHIVE_END ===
 
 def auto_save_to_archive(rec: dict, device_hash: str) -> bool:
@@ -3481,7 +3591,7 @@ def auto_save_to_archive(rec: dict, device_hash: str) -> bool:
         st.session_state.last_auto_archive_ref = ref
     return ok
 auto_save_to_archive = _khafar_wrap_manual_archive(auto_save_to_archive, 'auto_save_to_archive')
-
+auto_save_to_archive = _khafar_wrap_manual_archive(auto_save_to_archive, 'auto_save_to_archive')
 
 
 def search_records_db(q: str = "", device_hash: str = "", *, all_devices: bool = False) -> list:
@@ -6460,40 +6570,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
 
 <style id="khafar-final-a4-fix">
-  .live-sig-dock {{
-    position: relative !important;
-    z-index: 25 !important;
-    pointer-events: auto !important;
-  }}
-  canvas[id^="pad_"], .live-sig-dock canvas {{
-    touch-action: none !important;
-    -ms-touch-action: none !important;
-    -webkit-user-select: none !important;
-    user-select: none !important;
-    -webkit-touch-callout: none !important;
-    pointer-events: auto !important;
-    cursor: crosshair !important;
-    display: block !important;
-  }}
-  table.data-tbl, table.sig-tbl {{
-    width: 100% !important;
-    max-width: 100% !important;
-    border-collapse: collapse !important;
-    box-sizing: border-box !important;
-  }}
-  table.sig-tbl {{
-    table-layout: fixed !important;
-  }}
-  table.data-tbl td, table.data-tbl th,
-  table.sig-tbl td, table.sig-tbl th {{
-    box-sizing: border-box !important;
-    max-width: 100% !important;
-    white-space: normal !important;
-    word-break: normal !important;
-    overflow-wrap: break-word !important;
-    word-wrap: break-word !important;
-    overflow: hidden !important;
-  }}
+  .live-sig-dock {{ position: relative !important; z-index: 25 !important; pointer-events: auto !important; }}
+  canvas[id^="pad_"], .live-sig-dock canvas {{ touch-action: none !important; -ms-touch-action: none !important; -webkit-user-select: none !important; user-select: none !important; -webkit-touch-callout: none !important; pointer-events: auto !important; cursor: crosshair !important; display: block !important; }}
   .legal-box {{
     display: flex !important;
     flex-direction: column !important;
@@ -6712,9 +6790,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   window.__cachedIosPdfAb = null;
   window.__cachedIosPdfName = 'Maroor_AlArdah_Official.pdf';
 
-  // =========================================================
-  // 1) محرك التوقيع الحي باللمس والقلم والماوس (يعمل على كل اللوحات دون الاعتماد على LIVE_PADS)
-  // =========================================================
   function canvasHasVisibleInk(canvas) {{
     try {{
       if (!canvas || !canvas.width || !canvas.height) return false;
@@ -6735,6 +6810,85 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     return null;
   }}
+
+  function colorizeDataImgToBlue(imgEl) {{
+    try {{
+      if (!imgEl || imgEl.tagName !== 'IMG') return;
+      var curSrc = (imgEl.getAttribute('src') || '').trim();
+      if (!curSrc || curSrc.indexOf('data:image/') !== 0) return;
+      if (imgEl.dataset.blueSrc === curSrc) return;
+
+      var paintBlue = function(sourceImg) {{
+        try {{
+          var w = sourceImg.naturalWidth || sourceImg.width || 320;
+          var h = sourceImg.naturalHeight || sourceImg.height || 120;
+          if (w < 4 || h < 4) return;
+          var cv = document.createElement('canvas');
+          cv.width = w;
+          cv.height = h;
+          var cctx = cv.getContext('2d');
+          cctx.fillStyle = '#ffffff';
+          cctx.fillRect(0, 0, w, h);
+          cctx.drawImage(sourceImg, 0, 0, w, h);
+          var imData = cctx.getImageData(0, 0, w, h);
+          var d = imData.data;
+          for (var i = 0; i < d.length; i += 4) {{
+            var a = d[i + 3];
+            if (a < 12) {{
+              d[i] = 255; d[i + 1] = 255; d[i + 2] = 255; d[i + 3] = 255;
+              continue;
+            }}
+            var af = a / 255;
+            var r = Math.round(d[i] * af + 255 * (1 - af));
+            var g = Math.round(d[i + 1] * af + 255 * (1 - af));
+            var b = Math.round(d[i + 2] * af + 255 * (1 - af));
+            var lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            if (lum >= 238) {{
+              d[i] = 255; d[i + 1] = 255; d[i + 2] = 255; d[i + 3] = 255;
+              continue;
+            }}
+            if ((g > r + 28 && g > b + 20) || (r > b + 45 && r > g + 35)) {{
+              d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = 255;
+              continue;
+            }}
+            var strength = Math.min(1, ((255 - lum) / 220) * 1.18);
+            d[i]     = Math.round(255 * (1 - strength));
+            d[i + 1] = Math.round(255 * (1 - strength) + 68 * strength);
+            d[i + 2] = Math.round(255 * (1 - strength) + 204 * strength);
+            d[i + 3] = 255;
+          }}
+          cctx.putImageData(imData, 0, 0);
+          var blueUrl = cv.toDataURL('image/png');
+          imgEl.dataset.blueSrc = blueUrl;
+          imgEl.setAttribute('src', blueUrl);
+        }} catch (err) {{}}
+      }};
+
+      if (imgEl.complete && imgEl.naturalWidth > 0) paintBlue(imgEl);
+      else {{
+        var loader = new Image();
+        loader.onload = function() {{ paintBlue(loader); }};
+        loader.src = curSrc;
+      }}
+    }} catch (e) {{}}
+  }}
+
+  function ensureAllSignaturesBlue(docRoot) {{
+    try {{
+      var sheet = (docRoot.getElementById ? docRoot.getElementById('a4Sheet') : null)
+        || (docRoot.querySelector ? docRoot.querySelector('#a4Sheet') : null);
+      if (!sheet) return;
+      sheet.querySelectorAll('table.sig-tbl img, img.sig-slot-img, img[id^="slot_"]').forEach(function(im) {{
+        colorizeDataImgToBlue(im);
+      }});
+      sheet.querySelectorAll('table.sig-tbl svg path, table.sig-tbl svg polyline, table.sig-tbl svg line').forEach(function(node) {{
+        var st = (node.getAttribute('stroke') || '').toLowerCase();
+        if (st && st !== 'none' && st.indexOf('#fff') !== 0) node.setAttribute('stroke', '#0044cc');
+        node.style.setProperty('stroke', '#0044cc', 'important');
+      }});
+    }} catch (e) {{}}
+  }}
+  window.__khafarEnsureBlueSigs = ensureAllSignaturesBlue;
 
   window.clearLivePad = function(padId) {{
     window.__cachedIosPdfAb = null;
@@ -6769,8 +6923,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       if (!saved) return;
       if (saved.indexOf('data:image') !== 0) saved = 'data:image/png;base64,' + saved;
       slot.setAttribute('src', saved);
-      if (typeof colorizeDataImgToBlue === 'function') colorizeDataImgToBlue(slot);
       slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; max-height:48px !important; width:auto !important; max-width:95% !important; margin:3px auto 0 auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
+      colorizeDataImgToBlue(slot);
       return;
     }}
 
@@ -6783,8 +6937,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     octx.drawImage(canvas, 0, 0);
     var dataUrl = out.toDataURL('image/png');
     slot.setAttribute('src', dataUrl);
-    if (typeof colorizeDataImgToBlue === 'function') colorizeDataImgToBlue(slot);
     slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; max-height:48px !important; width:auto !important; max-width:95% !important; margin:3px auto 0 auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
+    colorizeDataImgToBlue(slot);
     try {{
       var b64 = (dataUrl.split(',')[1] || '');
       if (b64 && typeof padStorageKey === 'function') localStorage.setItem(padStorageKey(padId), b64);
@@ -6801,15 +6955,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
   function setupSingleTouchPad(origCv, idx) {{
     if (!origCv || origCv.dataset.khTouchBound === '1') return;
-    var padId = '';
-    if (origCv.id && origCv.id.indexOf('pad_') === 0) {{
-      padId = origCv.id.slice(4);
-    }} else {{
-      padId = origCv.getAttribute('data-pad') || ('auto_' + idx);
-      origCv.id = 'pad_' + padId;
-    }}
+    var padId = (origCv.id && origCv.id.indexOf('pad_') === 0) ? origCv.id.slice(4) : (origCv.getAttribute('data-pad') || ('auto_' + idx));
+    origCv.id = 'pad_' + padId;
 
-    // حفظ أي رسم أو توقيع موجود قبل استبدال العقدة لتنظيف المستمعات المتعارضة
     var snap = null;
     if (origCv.width > 0 && origCv.height > 0 && canvasHasVisibleInk(origCv)) {{
       snap = document.createElement('canvas');
@@ -6828,18 +6976,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     cv.style.setProperty('pointer-events', 'auto', 'important');
     cv.style.setProperty('cursor', 'crosshair', 'important');
 
-    if (origCv.parentNode) {{
-      origCv.parentNode.replaceChild(cv, origCv);
-    }}
+    if (origCv.parentNode) origCv.parentNode.replaceChild(cv, origCv);
 
     function ensureBitmapSize() {{
       var rect = cv.getBoundingClientRect();
       if (cv.width < 60 || cv.height < 30) {{
         var dpr = Math.min(window.devicePixelRatio || 1, 2);
-        var w = Math.max(320, Math.round((rect.width || 320) * dpr));
-        var h = Math.max(120, Math.round((rect.height || 120) * dpr));
-        cv.width = w;
-        cv.height = h;
+        cv.width = Math.max(320, Math.round((rect.width || 320) * dpr));
+        cv.height = Math.max(120, Math.round((rect.height || 120) * dpr));
       }}
     }}
     ensureBitmapSize();
@@ -6867,38 +7011,23 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       }} catch (e) {{}}
     }}
 
-    if (typeof ResizeObserver !== 'undefined') {{
-      var ro = new ResizeObserver(function() {{
-        if (cv.width < 60 || cv.height < 30) ensureBitmapSize();
-      }});
-      try {{ ro.observe(cv); }} catch (e) {{}}
-    }}
-
-    var isDrawing = false;
-    var lastX = 0, lastY = 0, midX = 0, midY = 0;
-    var lastTouchTs = 0;
+    var isDrawing = false, lastX = 0, lastY = 0, midX = 0, midY = 0, lastTouchTs = 0;
 
     function getCoords(clientX, clientY) {{
       ensureBitmapSize();
       var r = cv.getBoundingClientRect();
       var rw = r.width || cv.offsetWidth || cv.width || 320;
       var rh = r.height || cv.offsetHeight || cv.height || 120;
-      return {{
-        x: (clientX - r.left) * (cv.width / rw),
-        y: (clientY - r.top) * (cv.height / rh)
-      }};
+      return {{ x: (clientX - r.left) * (cv.width / rw), y: (clientY - r.top) * (cv.height / rh) }};
     }}
 
     function strokeWidth() {{
-      return Math.max(2.0, (cv.width / 340) * 2.35);
+      return Math.max(2.1, (cv.width / 340) * 2.4);
     }}
 
     function beginDraw(pt) {{
       isDrawing = true;
-      lastX = pt.x;
-      lastY = pt.y;
-      midX = pt.x;
-      midY = pt.y;
+      lastX = pt.x; lastY = pt.y; midX = pt.x; midY = pt.y;
       cv.dataset.hasInk = '1';
       window.__padInk[padId] = true;
       window.__cachedIosPdfAb = null;
@@ -6921,10 +7050,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       ctx.moveTo(midX, midY);
       ctx.quadraticCurveTo(lastX, lastY, nextMidX, nextMidY);
       ctx.stroke();
-      lastX = pt.x;
-      lastY = pt.y;
-      midX = nextMidX;
-      midY = nextMidY;
+      lastX = pt.x; lastY = pt.y; midX = nextMidX; midY = nextMidY;
     }}
 
     function endDraw() {{
@@ -6933,7 +7059,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       window.syncPadToSlot(padId);
     }}
 
-    // أحداث اللمس المباشرة غير السلبية (تمنع تمرير الصفحة أثناء التوقيع بالإصبع 100%)
     cv.addEventListener('touchstart', function(ev) {{
       lastTouchTs = Date.now();
       if (ev.cancelable) ev.preventDefault();
@@ -6962,7 +7087,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       endDraw();
     }}, {{ passive: false }});
 
-    // دعم القلم الإلكتروني (Stylus / Pen)
     cv.addEventListener('pointerdown', function(ev) {{
       if (ev.pointerType !== 'pen') return;
       if (ev.cancelable) ev.preventDefault();
@@ -6981,7 +7105,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       endDraw();
     }});
 
-    // أحداث الماوس للكمبيوتر (مع تجاهل نقرات اللمس المصطنعة)
     cv.addEventListener('mousedown', function(ev) {{
       if (Date.now() - lastTouchTs < 650 || ev.button !== 0) return;
       ev.preventDefault();
@@ -6999,14 +7122,13 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       endDraw();
     }});
 
-    // ربط زر المسح المجاور للوحة التوقيع بنفس المعرف
     var card = cv.parentElement;
     while (card && card !== document.body && !card.classList.contains('live-sig-dock') && card.querySelectorAll('canvas').length <= 1) {{
       var btns = card.querySelectorAll('button');
       if (btns.length > 0) {{
         Array.prototype.forEach.call(btns, function(btn) {{
           var bt = (btn.textContent || '') + ' ' + (btn.getAttribute('title') || '');
-          if (bt.indexOf('مسح') !== -1 || bt.indexOf('إعادة') !== -1 || bt.toLowerCase().indexOf('clear') !== -1 || btns.length === 1) {{
+          if (bt.indexOf('\u0645\u0633\u062d') !== -1 || bt.indexOf('\u0625\u0639\u0627\u062f\u0629') !== -1 || bt.toLowerCase().indexOf('clear') !== -1 || btns.length === 1) {{
             if (btn.dataset.khClearBound !== '1') {{
               var cleanBtn = btn.cloneNode(true);
               cleanBtn.dataset.khClearBound = '1';
@@ -7028,14 +7150,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
   window.__khafarBindAllTouchPads = function() {{
     var allPads = document.querySelectorAll('canvas[id^="pad_"], .live-sig-dock canvas');
-    Array.prototype.forEach.call(allPads, function(c, idx) {{
-      setupSingleTouchPad(c, idx);
-    }});
+    Array.prototype.forEach.call(allPads, function(c, idx) {{ setupSingleTouchPad(c, idx); }});
   }};
 
-  // =========================================================
-  // 2) تخصيص نموذج تحليل السموم بـ 3 خانات توقيع متصلة بلوحة ضابط الخفر
-  // =========================================================
+  
   function applyToxicologyDirectorBlock(docRoot) {{
     var sheet = (docRoot.getElementById ? docRoot.getElementById('a4Sheet') : null)
       || (docRoot.querySelector ? docRoot.querySelector('#a4Sheet') : null);
@@ -7176,11 +7294,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     if (!dutySlotImg) {{
       dutySlotImg = ownerDoc.createElement('img');
+      dutySlotImg.id = 'slot_officer';
       dutySlotImg.className = 'sig-slot-img';
       dutySlotImg.style.display = 'none';
       dutySlotImg.alt = '';
     }}
-    dutySlotImg.id = 'slot_officer';
 
     function buildMiddleDutyBox() {{
       var dutyWrap = ownerDoc.createElement('div');
@@ -7232,6 +7350,24 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
           r.cells[0].colSpan = 3;
         }}
       }});
+    }} else if (bRow) {{
+      var midCombined = bodyCell.cloneNode(false);
+      if (hdrEl && bodyCell.contains(hdrEl)) {{
+        var hdrTop = hdrEl;
+        while (hdrTop.parentElement && hdrTop.parentElement !== bodyCell) {{
+          hdrTop = hdrTop.parentElement;
+        }}
+        var midHdrClone = hdrTop.cloneNode(true);
+        midHdrClone.textContent = 'ضابط الخفر';
+        midCombined.appendChild(midHdrClone);
+      }}
+      midCombined.appendChild(buildMiddleDutyBox());
+      bRow.insertBefore(midCombined, bodyCell);
+      if (bRow.children) {{
+        Array.prototype.forEach.call(bRow.children, function(ch) {{
+          ch.style.setProperty('width', '33.33%', 'important');
+        }});
+      }}
     }}
 
     var hdrInsideBody = hdrEl && bodyCell.contains(hdrEl) && bodyCell !== hdrEl;
@@ -7422,7 +7558,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     if (isIOSMode && isPrintMode && !skipCssZoom) {{
       sheet.style.setProperty('width', '100%', 'important');
     }}
-    if (skipCssZoom) return;
+
+    if (skipCssZoom) {{
+      return;
+    }}
 
     if (isPrintMode && naturalH > targetH) {{
       var z = Math.max(0.72, Math.floor((targetH / naturalH) * 1000) / 1000);
@@ -7433,91 +7572,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       sheet.style.setProperty('height', targetH + 'px', 'important');
     }}
   }}
-
-    // === KHAFAR_BLUE_SIG_START ===
-  function colorizeDataImgToBlue(imgEl) {{
-    try {{
-      if (!imgEl || imgEl.tagName !== 'IMG') return;
-      var curSrc = (imgEl.getAttribute('src') || '').trim();
-      if (!curSrc || curSrc.indexOf('data:image/') !== 0) return;
-      if (imgEl.dataset.blueSrc === curSrc) return;
-
-      var paintBlue = function(sourceImg) {{
-        try {{
-          var w = sourceImg.naturalWidth || sourceImg.width || 320;
-          var h = sourceImg.naturalHeight || sourceImg.height || 120;
-          if (w < 4 || h < 4) return;
-          var cv = document.createElement('canvas');
-          cv.width = w;
-          cv.height = h;
-          var cctx = cv.getContext('2d');
-          cctx.fillStyle = '#ffffff';
-          cctx.fillRect(0, 0, w, h);
-          cctx.drawImage(sourceImg, 0, 0, w, h);
-          var imData = cctx.getImageData(0, 0, w, h);
-          var d = imData.data;
-          for (var i = 0; i < d.length; i += 4) {{
-            var a = d[i + 3];
-            if (a < 12) {{
-              d[i] = 255; d[i + 1] = 255; d[i + 2] = 255; d[i + 3] = 255;
-              continue;
-            }}
-            var af = a / 255;
-            var r = Math.round(d[i] * af + 255 * (1 - af));
-            var g = Math.round(d[i + 1] * af + 255 * (1 - af));
-            var b = Math.round(d[i + 2] * af + 255 * (1 - af));
-            var lum = 0.299 * r + 0.587 * g + 0.114 * b;
-            if (lum >= 238) {{
-              d[i] = 255; d[i + 1] = 255; d[i + 2] = 255; d[i + 3] = 255;
-              continue;
-            }}
-            // عدم المساس بالأختام الخضراء أو الحمراء إن وجدت
-            if ((g > r + 28 && g > b + 20) || (r > b + 45 && r > g + 35)) {{
-              d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = 255;
-              continue;
-            }}
-            var strength = Math.min(1, ((255 - lum) / 220) * 1.18);
-            d[i]     = Math.round(255 * (1 - strength));
-            d[i + 1] = Math.round(255 * (1 - strength) + 68 * strength);
-            d[i + 2] = Math.round(255 * (1 - strength) + 204 * strength);
-            d[i + 3] = 255;
-          }}
-          cctx.putImageData(imData, 0, 0);
-          var blueDataUrl = cv.toDataURL('image/png');
-          imgEl.dataset.blueSrc = blueDataUrl;
-          imgEl.setAttribute('src', blueDataUrl);
-        }} catch (err) {{}}
-      }};
-
-      if (imgEl.complete && imgEl.naturalWidth > 0) {{
-        paintBlue(imgEl);
-      }} else {{
-        var loader = new Image();
-        loader.onload = function() {{ paintBlue(loader); }};
-        loader.src = curSrc;
-      }}
-    }} catch (e) {{}}
-  }}
-
-  function ensureAllSignaturesBlue(docRoot) {{
-    try {{
-      var sheet = (docRoot.getElementById ? docRoot.getElementById('a4Sheet') : null)
-        || (docRoot.querySelector ? docRoot.querySelector('#a4Sheet') : null);
-      if (!sheet) return;
-      sheet.querySelectorAll('table.sig-tbl img, img.sig-slot-img, img[id^="slot_"]').forEach(function(im) {{
-        colorizeDataImgToBlue(im);
-      }});
-      sheet.querySelectorAll('table.sig-tbl svg path, table.sig-tbl svg polyline, table.sig-tbl svg line').forEach(function( node ) {{
-        var st = (node.getAttribute('stroke') || '').toLowerCase();
-        if (st && st !== 'none' && st.indexOf('#fff') !== 0) {{
-          node.setAttribute('stroke', '#0044cc');
-        }}
-        node.style.setProperty('stroke', '#0044cc', 'important');
-      }});
-    }} catch (e) {{}}
-  }}
-  window.__khafarEnsureBlueSigs = ensureAllSignaturesBlue;
-  // === KHAFAR_BLUE_SIG_END ===
 
   function balanceSheetTypography(docRoot, targetH, isPrintMode, isIOSMode) {{
     ensureAllSignaturesBlue(docRoot);
@@ -7530,21 +7584,22 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   applyToxicologyDirectorBlock(document);
   window.__khafarBindAllTouchPads();
   window.syncAllLivePads();
+  if (typeof MutationObserver !== 'undefined') {{
+    var _pmo = new MutationObserver(function() {{
+      if (document.querySelector('canvas[id^="pad_"]:not([data-kh-touch-bound="1"]), .live-sig-dock canvas:not([data-kh-touch-bound="1"])')) window.__khafarBindAllTouchPads();
+    }});
+    try {{ _pmo.observe(document.body, {{ childList: true, subtree: true }}); }} catch (e) {{}}
+  }}
   balanceSheetTypography(document, 1045, false, false);
 
-  if (typeof MutationObserver !== 'undefined') {{
-    var padMo = new MutationObserver(function() {{
-      if (document.querySelector('canvas[id^="pad_"]:not([data-kh-touch-bound="1"]), .live-sig-dock canvas:not([data-kh-touch-bound="1"])')) {{
-        window.__khafarBindAllTouchPads();
-      }}
-    }});
-    try {{ padMo.observe(document.body, {{ childList: true, subtree: true }}); }} catch (e) {{}}
-  }}
-
   // =========================================================
-  // 4) شريط التكبير والتصغير السلس (دون حجب أحداث resize عن لوحات التوقيع)
+  // 4) شريط التكبير والتصغير السلس (5% إلى 200%)
   // =========================================================
   (function() {{
+    window.addEventListener('resize', function(ev) {{
+      ev.stopImmediatePropagation();
+    }}, true);
+
     var sheetEl = document.getElementById('a4Sheet');
     if (!sheetEl) return;
 
@@ -7587,18 +7642,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     window.__syncKhafarFrameHeight = function() {{
       try {{
         if (window.frameElement) {{
-          var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
-          var maxBottom = 0;
-          Array.prototype.forEach.call(document.body.children, function(el) {{
-            if (el.id === 'khafarHiddenPrintFrame' || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return;
-            var cs = window.getComputedStyle(el);
-            if (cs.display === 'none' || cs.position === 'fixed') return;
-            var r = el.getBoundingClientRect();
-            if (r.height > 0) {{
-              maxBottom = Math.max(maxBottom, r.bottom + scrollY);
-            }}
-          }});
-          var totalH = Math.ceil(maxBottom + 40);
+          var rect = viewport.getBoundingClientRect();
+          var totalH = Math.ceil((window.pageYOffset || document.documentElement.scrollTop || 0) + rect.top + sizer.offsetHeight + 36);
           if (totalH > 350) {{
             window.frameElement.style.height = totalH + 'px';
           }}
@@ -7642,12 +7687,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       }});
     }});
 
-    // تثبيت مقاس الورقة بعد أي مستمع resize قديم دون إيقاف حدث resize نفسه
-    window.addEventListener('resize', function() {{
-      sheetEl.style.setProperty('zoom', '1', 'important');
-      sheetEl.style.setProperty('transform', 'none', 'important');
-    }});
-
     if ((window.innerWidth || 900) < 820) {{
       setTimeout(fitStageToScreen, 80);
     }} else {{
@@ -7665,7 +7704,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   }})();
 
   // =========================================================
-  // 5) طباعة ومشاركة PDF (تحميل مكتبات PDF عند الطلب فقط لعدم تأخير لوحة التوقيع)
+  // 5) محرك توليد ومشاركة ملف PDF الحقيقي للآيفون (يعمل في وضع التطبيق المثبت Standalone)
   // =========================================================
   function loadExternalScript(url) {{
     return new Promise(function(resolve) {{
@@ -7691,22 +7730,29 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
   function getShareCapableWindow() {{
     var wins = [];
-    try {{ if (window.top && window.top.navigator && typeof window.top.navigator.share === 'function') wins.push(window.top); }} catch (e) {{}}
-    try {{ if (window.parent && window.parent !== window.top && window.parent.navigator && typeof window.parent.navigator.share === 'function') wins.push(window.parent); }} catch (e) {{}}
+    try {{
+      if (window.top && window.top.navigator && typeof window.top.navigator.share === 'function') wins.push(window.top);
+    }} catch (e) {{}}
+    try {{
+      if (window.parent && window.parent !== window.top && window.parent.navigator && typeof window.parent.navigator.share === 'function') wins.push(window.parent);
+    }} catch (e) {{}}
     if (window.navigator && typeof window.navigator.share === 'function') wins.push(window);
+
     for (var i = 0; i < wins.length; i++) {{
       var w = wins[i];
       try {{
         var b = new w.Blob(['%PDF-1.4'], {{ type: 'application/pdf' }});
         var f = new w.File([b], 'test.pdf', {{ type: 'application/pdf' }});
-        if (!w.navigator.canShare || w.navigator.canShare({{ files: [f] }})) return w;
+        if (!w.navigator.canShare || w.navigator.canShare({{ files: [f] }})) {{
+          return w;
+        }}
       }} catch (e) {{}}
     }}
     return wins[0] || null;
   }}
 
   function extractCleanPdfFileName() {{
-    var numMatch = (document.getElementById('a4Sheet') ? document.getElementById('a4Sheet').textContent : '').match(/\b(4\d{{7,11}}|6\d{{8,11}}|KHF-[A-Z0-9]+|\d{{6,10}})\b/);
+    var numMatch = (document.getElementById('a4Sheet') ? document.getElementById('a4Sheet').textContent : '').match(/\b(4\d{{7,11}}|KHF-[A-Z0-9]+|\d{{6,10}})\b/);
     var suffix = numMatch ? numMatch[1] : String(Date.now()).slice(-6);
     return 'Maroor_AlArdah_' + suffix + '.pdf';
   }}
@@ -7732,14 +7778,18 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
       }});
 
+      // حذف أي عنصر صورة فارغ أو مخفي حتى لا يتأخر محرك الرسم في iOS WebKit
       clone.querySelectorAll('img').forEach(function(im) {{
         var s = (im.getAttribute('src') || '').trim();
         var disp = (im.style && im.style.display) || '';
-        if (!s || s.length < 12 || disp === 'none') im.remove();
+        if (!s || s.length < 12 || disp === 'none') {{
+          im.remove();
+        }}
       }});
 
       stage.appendChild(clone);
       document.body.appendChild(stage);
+      ensureAllSignaturesBlue(clone);
       balanceSheetElement(clone, 1085, true, false, true);
 
       return new Promise(function(resolve) {{ setTimeout(resolve, 70); }}).then(function() {{
@@ -7756,8 +7806,19 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
         return capturePromise.catch(function() {{
           if (!window.html2canvas) throw new Error('PDF capture library unavailable');
-          return window.html2canvas(clone, {{ scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false }})
-            .then(function(cv) {{ return cv.toDataURL('image/jpeg', 0.92); }});
+          var lb = clone.querySelector('.legal-box-body');
+          if (lb) {{
+            lb.style.setProperty('text-align', 'right', 'important');
+            lb.style.setProperty('letter-spacing', '0px', 'important');
+          }}
+          return window.html2canvas(clone, {{
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            logging: false
+          }}).then(function(cv) {{
+            return cv.toDataURL('image/jpeg', 0.92);
+          }});
         }}).then(function(imgDataUrl) {{
           var cW = clone.offsetWidth || 794;
           var cH = Math.max(clone.offsetHeight || 0, clone.scrollHeight || 0, 1085);
@@ -7766,11 +7827,18 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
           var JsPdfCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
           var pdf = new JsPdfCtor({{ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true }});
           var pageW = 210, pageH = 297, margin = 4.5;
-          var maxW = pageW - margin * 2, maxH = pageH - margin * 2;
+          var maxW = pageW - margin * 2;
+          var maxH = pageH - margin * 2;
           var ratio = cW / cH;
-          var drawW = maxW, drawH = drawW / ratio;
-          if (drawH > maxH) {{ drawH = maxH; drawW = drawH * ratio; }}
-          pdf.addImage(imgDataUrl, 'JPEG', (pageW - drawW) / 2, margin, drawW, drawH, undefined, 'FAST');
+          var drawW = maxW;
+          var drawH = drawW / ratio;
+          if (drawH > maxH) {{
+            drawH = maxH;
+            drawW = drawH * ratio;
+          }}
+          var x = (pageW - drawW) / 2;
+          var y = margin;
+          pdf.addImage(imgDataUrl, 'JPEG', x, y, drawW, drawH, undefined, 'FAST');
           return pdf.output('arraybuffer');
         }}).catch(function(err) {{
           try {{ stage.remove(); }} catch (e) {{}}
@@ -7780,6 +7848,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }});
   }}
 
+  // استدعاء متزامن فوري (0ms) لقائمة مشاركة الآيفون بدون أي تأخير
   function triggerIosNativeShareSync(ab, fileName) {{
     var shareWin = getShareCapableWindow();
     if (!shareWin) return Promise.reject(new Error('WebShareUnavailable'));
@@ -7788,6 +7857,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     return shareWin.navigator.share({{ files: [file] }});
   }}
 
+  // طباعة مباشرة عبر النافذة العليا عند الحاجة داخل وضع التطبيق المثبت
   function triggerIosTopWindowPrint() {{
     try {{
       applyToxicologyDirectorBlock(document);
@@ -7835,7 +7905,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       var safariHref = '';
       try {{
         var topUrl = (window.top && window.top.location && window.top.location.href) ? window.top.location.href : window.location.href;
-        if (topUrl.indexOf('https://') === 0) safariHref = 'x-safari-' + topUrl;
+        if (topUrl.indexOf('https://') === 0) {{
+          safariHref = 'x-safari-' + topUrl;
+        }}
       }} catch (e) {{}}
 
       tray.innerHTML = ''
@@ -7864,9 +7936,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       }});
     }}
     tray.style.display = 'flex';
-    if (typeof window.__syncKhafarFrameHeight === 'function') setTimeout(window.__syncKhafarFrameHeight, 50);
+    if (typeof window.__syncKhafarFrameHeight === 'function') {{
+      setTimeout(window.__syncKhafarFrameHeight, 50);
+    }}
   }}
 
+  // =========================================================
+  // 6) زر الطباعة والمشاركة الرئيسي (الأندرويد والكمبيوتر كما هما والآيفون عبر ملف PDF الحقيقي)
+  // =========================================================
   var oldBtn = document.querySelector('#printOfficialBtn') || document.querySelector('.print-btn');
   if (oldBtn) {{
     var newBtn = oldBtn.cloneNode(true);
@@ -7881,7 +7958,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       window.syncAllLivePads();
 
       var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+      // على الآيفون (سواء تطبيق مثبت على الشاشة الرئيسية أو متصفح): مشاركة ملف PDF حقيقي بصفحة 1/1
       if (isIOS) {{
+        // إذا كان الملف مجهزا مسبقا ولم يتغير التوقيع افتح قائمة مشاركة الآيفون فورا في 0ms!
         if (window.__cachedIosPdfAb) {{
           triggerIosNativeShareSync(window.__cachedIosPdfAb, window.__cachedIosPdfName).catch(function(err) {{
             if (err && err.name === 'AbortError') return;
@@ -7889,16 +7969,21 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
           }});
           return;
         }}
+
         newBtn.disabled = true;
         newBtn.innerHTML = ' جاري تجهيز ملف PDF الرسمي (صفحة 1/1)...';
+
         var pdfName = extractCleanPdfFileName();
         buildOfficialPdfArrayBuffer().then(function(ab) {{
           window.__cachedIosPdfAb = ab;
           window.__cachedIosPdfName = pdfName;
           newBtn.disabled = false;
           newBtn.innerHTML = origBtnHtml;
+
+          // محاولة فتح قائمة مشاركة الآيفون تلقائيا فور الجاهزية
           triggerIosNativeShareSync(ab, pdfName).catch(function(err) {{
             if (err && err.name === 'AbortError') return;
+            // في حال انتهت مهلة النقرة في iOS أظهر زر الإرسال الفوري الجاهز أمام الفرد
             showIosShareReadyTray(newBtn);
           }});
         }}).catch(function() {{
@@ -7909,6 +7994,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         return;
       }}
 
+      // على الأندرويد والكمبيوتر: المسار السريع المخفي كما هو بدون أي تغيير
       var targetH = 1042;
       var sheetClone = document.getElementById('a4Sheet').cloneNode(true);
       sheetClone.style.zoom = '1';
@@ -9581,5 +9667,4 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
             if st.button("🧬 اختبار بصمة تجريبية", use_container_width=True):
                 test_b64 = generate_fingerprint_png_b64(f"TEST_{datetime.now().isoformat()}")
                 st.image(base64.b64decode(test_b64), caption="ختم الحبر التجريبي", width=130)
-
 _khafar_flush_fallback_save()
