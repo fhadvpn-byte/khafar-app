@@ -3,7 +3,7 @@ import streamlit as st
 import streamlit.components.v1 as comp
 from streamlit.delta_generator import DeltaGenerator as DG
 
-_KHAFAR_BAIL_VER = "v3"
+_KHAFAR_BAIL_VER = "v4"
 BAIL_ID = "decl_accident_bail"
 BAIL_TITLE = "إقرار كفالة حضورية وغرامية في حادث مروري"
 BAIL_OPT = "🛡️ " + BAIL_TITLE
@@ -100,31 +100,30 @@ function initBailedPad(){
   var p1=dock.querySelector('canvas[id^="pad_"]:not(#pad_officer)');
   if(!p1)return;
   dock.querySelectorAll('div,span,label,strong,b').forEach(function(el){
-    if(!el.children.length&&/المقر|المستلم|المواطن|الطرف الأول/.test(el.textContent||''))el.textContent='✍️ توقيع الكفيل الضامن';
+    if(!el.children.length&&/المقر|المستلم|المواطن|الطرف الأول/.test(el.textContent||''))el.textContent=' توقيع الكفيل الضامن';
   });
   var card=p1.parentElement;
   while(card&&card.parentElement!==dock)card=card.parentElement;
   if(!card)return;
   var c2=card.cloneNode(true);
   c2.querySelectorAll('div,span,label,strong,b').forEach(function(el){
-    if(!el.children.length&&(el.textContent||'').indexOf('توقيع')!==-1)el.textContent='✍️ توقيع المكفول (طرف الحادث)';
+    if(!el.children.length&&(el.textContent||'').indexOf('توقيع')!==-1)el.textContent=' توقيع المكفول (طرف الحادث)';
   });
   var cv=c2.querySelector('canvas');
   if(!cv)return;
-  cv.id='pad_bailed';delete cv.dataset.inkBound;delete cv.dataset.hasInk;
-  var ctx=cv.getContext('2d');ctx.clearRect(0,0,cv.width,cv.height);
+  cv.id='pad_bailed';
+  delete cv.dataset.khTouchBound;
+  delete cv.dataset.inkBound;
+  delete cv.dataset.hasInk;
+  var ctx=cv.getContext('2d');
+  if(ctx)ctx.clearRect(0,0,cv.width,cv.height);
   c2.querySelectorAll('button').forEach(function(b){
+    b.removeAttribute('onclick');
     b.onclick=function(ev){ev.preventDefault();if(window.clearLivePad)window.clearLivePad('bailed');};
   });
   card.parentNode.insertBefore(c2,card.nextSibling);
   if(typeof LIVE_PADS!=='undefined'&&Array.isArray(LIVE_PADS)&&LIVE_PADS.indexOf('bailed')===-1)LIVE_PADS.push('bailed');
-  var dr=false,lx=0,ly=0;
-  function pt(e){var r=cv.getBoundingClientRect(),t=(e.touches&&e.touches[0])||e;return[(t.clientX-r.left)*(cv.width/(r.width||1)),(t.clientY-r.top)*(cv.height/(r.height||1))];}
-  function st(e){dr=true;var p=pt(e);lx=p[0];ly=p[1];cv.dataset.hasInk='1';if(window.__padInk)window.__padInk['bailed']=true;}
-  function mv(e){if(!dr)return;if(e.cancelable)e.preventDefault();var p=pt(e);ctx.strokeStyle='#0b1f3a';ctx.lineWidth=2.3;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(p[0],p[1]);ctx.stroke();lx=p[0];ly=p[1];}
-  function en(){if(!dr)return;dr=false;if(window.syncPadToSlot)setTimeout(function(){window.syncPadToSlot('bailed');},20);}
-  cv.addEventListener('mousedown',st);cv.addEventListener('mousemove',mv);window.addEventListener('mouseup',en);
-  cv.addEventListener('touchstart',st,{passive:true});cv.addEventListener('touchmove',mv,{passive:false});cv.addEventListener('touchend',en,{passive:true});
+  if(typeof window.__khafarBindAllTouchPads==='function')window.__khafarBindAllTouchPads();
 }
 function fixBail(root){
   var s=root.getElementById?root.getElementById('a4Sheet'):root.querySelector('#a4Sheet');
@@ -149,6 +148,7 @@ function fixBail(root){
     Array.from(tbl.rows).forEach(function(r){if(r!==hr&&r!==br&&r.cells.length===1&&r.cells[0].colSpan===2)r.cells[0].colSpan=3;});
   }
   s.dataset.bailFixed='1';
+  if(root===document&&typeof window.__khafarBindAllTouchPads==='function')window.__khafarBindAllTouchPads();
 }
 try{fixBail(document);}catch(e){}
 addEventListener('load',function(){try{fixBail(document);}catch(e){}});
