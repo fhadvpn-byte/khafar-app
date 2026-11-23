@@ -16,7 +16,7 @@ from datetime import datetime, timezone, timedelta
 from PIL import Image, ImageDraw, ImageOps
 from abu_arish_impound import ABU_ARISH_IMPOUND_TEMPLATE
 from takmeel import TAKMEEL_FORMS, init_takmeel_db, render_takmeel_form
-import khafar_bail; khafar_bail.reset_run_state()
+import importlib, khafar_bail; khafar_bail = importlib.reload(khafar_bail) if getattr(khafar_bail, "_KHAFAR_BAIL_VER", "") != "v3" else khafar_bail; khafar_bail.reset_run_state()
 
 try:
     import qrcode
@@ -2384,6 +2384,7 @@ TRAFFIC_FORMS = {
         "legal_fn": _toxicology_legal,
     },
 }
+import khafar_bail; khafar_bail.register_catalog(locals(), globals())
 
 # المحضر الخامس داخل قائمة المحاضر الرسمية — البيانات من ABU_ARISH_IMPOUND_TEMPLATE
 TRAFFIC_FORMS[ABU_ARISH_IMPOUND_TEMPLATE["id"]] = _minutes_form_from_template(ABU_ARISH_IMPOUND_TEMPLATE)
