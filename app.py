@@ -17,6 +17,7 @@ from PIL import Image, ImageDraw, ImageOps
 from abu_arish_impound import ABU_ARISH_IMPOUND_TEMPLATE
 from takmeel import TAKMEEL_FORMS, init_takmeel_db, render_takmeel_form
 import importlib, khafar_bail; khafar_bail = importlib.reload(khafar_bail) if getattr(khafar_bail, "_KHAFAR_BAIL_VER", "") != "v4" else khafar_bail; khafar_bail.reset_run_state()
+import importlib, khafar_med_age; khafar_med_age = importlib.reload(khafar_med_age) if getattr(khafar_med_age, "_KHAFAR_MED_AGE_VER", "") != "v1" else khafar_med_age; khafar_med_age.reset_run_state()
 
 try:
     import qrcode
@@ -1239,6 +1240,7 @@ def _text_suggests_plural(text: str) -> bool | None:
     if any(tok in raw for tok in ("واحد", "واحدة", "فرد", "مفرد", "جثمان واحد", "مصاب واحد", "طرف واحد")):
         return False
     return None
+_text_suggests_plural = khafar_med_age.wrap_catalog_fn(_text_suggests_plural)
 
 
 def _extra_people_listed(text: str) -> bool:
@@ -1285,6 +1287,7 @@ def _detect_people_count(values: dict, form_id: str = "") -> int:
         if hint is False:
             return 1
     return 1
+_detect_people_count = khafar_med_age.wrap_catalog_fn(_detect_people_count)
 
 
 def _is_plural_case(values: dict, form_id: str = "") -> bool:
@@ -1330,6 +1333,7 @@ def _form_display_title(form_def: dict, values: dict, form_id: str = "") -> str:
     if fid == "med_morgue" or "جثمان / جثامين" in title:
         return "نموذج إيداع جثامين" if plural else "نموذج إيداع جثمان"
     return title
+_form_display_title = khafar_med_age.wrap_catalog_fn(_form_display_title)
 
 
 def _med_injury_legal(m: dict) -> str:
@@ -1372,11 +1376,13 @@ def _med_morgue_legal(m: dict) -> str:
     if plural and str(m.get("other_deceased") or "").strip():
         extras = f"، والبيان الإضافي للوفيات: ({_val(m, 'other_deceased')})"
     body_label = _agr("وبيانات الجثمان", "وبيانات الجثمان الأول", plural)
+    import khafar_med_age; khafar_med_age.register_catalog(locals(), globals())
     receive_clause = _agr(
         "استلام وإيداع الجثمان في الثلاجة رسمياً",
         "استلام وإيداع الجثامين في الثلاجة رسمياً",
         plural,
     )
+    import khafar_med_age; khafar_med_age.register_catalog(locals(), globals())
     report_clause = _agr(
         "وإجراء الكشف الطبي اللازم وموافاتنا بتقرير الوفاة المعتمد",
         "وإجراء الكشف الطبي اللازم وموافاتنا بتقارير الوفاة المعتمدة لكل حالة",
@@ -1390,6 +1396,7 @@ def _med_morgue_legal(m: dict) -> str:
         f"نأمل من سعادتكم الأمر بـ{receive_clause}، {report_clause}، "
         f"مع التقيد التام بالتوجيه النظامي التالي: ({_sel(m, 'forensic_order')})."
     )
+_med_morgue_legal = khafar_med_age.wrap_catalog_fn(_med_morgue_legal)
 
 
 def _settlement_legal(values: dict) -> str:
@@ -2384,6 +2391,7 @@ TRAFFIC_FORMS = {
         "legal_fn": _toxicology_legal,
     },
 }
+import khafar_med_age; khafar_med_age.register_catalog(locals(), globals())
 import khafar_bail; khafar_bail.register_catalog(locals(), globals())
 
 # المحضر الخامس داخل قائمة المحاضر الرسمية — البيانات من ABU_ARISH_IMPOUND_TEMPLATE
@@ -3432,6 +3440,7 @@ def _khafar_wrap_manual_archive(_orig_fn, _fn_name=""):
         return None
     return _wrapped
 
+import khafar_med_age; khafar_med_age.bind_functions(globals())
 def _khafar_flush_fallback_save():
     global _KHAFAR_ALLOW_WRITE
     import streamlit as _st
@@ -4435,6 +4444,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     form_id_now = str(rec.get("form_id") or "")
     form_title_now = str(rec.get("form_title") or "") + " " + str((form_def or {}).get("title") or "")
     is_toxicology = form_id_now == "med_toxicology" or "تحليل سموم" in form_title_now
+    import khafar_med_age; khafar_med_age.register_catalog(locals(), globals())
 
     # --- Duty cell ---
     if is_toxicology:
@@ -6759,6 +6769,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       if (!saved) return;
       if (saved.indexOf('data:image') !== 0) saved = 'data:image/png;base64,' + saved;
       slot.setAttribute('src', saved);
+      if (typeof colorizeDataImgToBlue === 'function') colorizeDataImgToBlue(slot);
       slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; max-height:48px !important; width:auto !important; max-width:95% !important; margin:3px auto 0 auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
       return;
     }}
@@ -6772,6 +6783,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     octx.drawImage(canvas, 0, 0);
     var dataUrl = out.toDataURL('image/png');
     slot.setAttribute('src', dataUrl);
+    if (typeof colorizeDataImgToBlue === 'function') colorizeDataImgToBlue(slot);
     slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; max-height:48px !important; width:auto !important; max-width:95% !important; margin:3px auto 0 auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
     try {{
       var b64 = (dataUrl.split(',')[1] || '');
@@ -6891,7 +6903,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       window.__padInk[padId] = true;
       window.__cachedIosPdfAb = null;
       var lw = strokeWidth();
-      ctx.fillStyle = '#0b1f3a';
+      ctx.fillStyle = '#0044cc';
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, lw * 0.52, 0, Math.PI * 2);
       ctx.fill();
@@ -6901,7 +6913,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       if (!isDrawing) return;
       var nextMidX = (lastX + pt.x) / 2;
       var nextMidY = (lastY + pt.y) / 2;
-      ctx.strokeStyle = '#0b1f3a';
+      ctx.strokeStyle = '#0044cc';
       ctx.lineWidth = strokeWidth();
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -7422,7 +7434,93 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
   }}
 
+    // === KHAFAR_BLUE_SIG_START ===
+  function colorizeDataImgToBlue(imgEl) {{
+    try {{
+      if (!imgEl || imgEl.tagName !== 'IMG') return;
+      var curSrc = (imgEl.getAttribute('src') || '').trim();
+      if (!curSrc || curSrc.indexOf('data:image/') !== 0) return;
+      if (imgEl.dataset.blueSrc === curSrc) return;
+
+      var paintBlue = function(sourceImg) {{
+        try {{
+          var w = sourceImg.naturalWidth || sourceImg.width || 320;
+          var h = sourceImg.naturalHeight || sourceImg.height || 120;
+          if (w < 4 || h < 4) return;
+          var cv = document.createElement('canvas');
+          cv.width = w;
+          cv.height = h;
+          var cctx = cv.getContext('2d');
+          cctx.fillStyle = '#ffffff';
+          cctx.fillRect(0, 0, w, h);
+          cctx.drawImage(sourceImg, 0, 0, w, h);
+          var imData = cctx.getImageData(0, 0, w, h);
+          var d = imData.data;
+          for (var i = 0; i < d.length; i += 4) {{
+            var a = d[i + 3];
+            if (a < 12) {{
+              d[i] = 255; d[i + 1] = 255; d[i + 2] = 255; d[i + 3] = 255;
+              continue;
+            }}
+            var af = a / 255;
+            var r = Math.round(d[i] * af + 255 * (1 - af));
+            var g = Math.round(d[i + 1] * af + 255 * (1 - af));
+            var b = Math.round(d[i + 2] * af + 255 * (1 - af));
+            var lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            if (lum >= 238) {{
+              d[i] = 255; d[i + 1] = 255; d[i + 2] = 255; d[i + 3] = 255;
+              continue;
+            }}
+            // عدم المساس بالأختام الخضراء أو الحمراء إن وجدت
+            if ((g > r + 28 && g > b + 20) || (r > b + 45 && r > g + 35)) {{
+              d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = 255;
+              continue;
+            }}
+            var strength = Math.min(1, ((255 - lum) / 220) * 1.18);
+            d[i]     = Math.round(255 * (1 - strength));
+            d[i + 1] = Math.round(255 * (1 - strength) + 68 * strength);
+            d[i + 2] = Math.round(255 * (1 - strength) + 204 * strength);
+            d[i + 3] = 255;
+          }}
+          cctx.putImageData(imData, 0, 0);
+          var blueDataUrl = cv.toDataURL('image/png');
+          imgEl.dataset.blueSrc = blueDataUrl;
+          imgEl.setAttribute('src', blueDataUrl);
+        }} catch (err) {{}}
+      }};
+
+      if (imgEl.complete && imgEl.naturalWidth > 0) {{
+        paintBlue(imgEl);
+      }} else {{
+        var loader = new Image();
+        loader.onload = function() {{ paintBlue(loader); }};
+        loader.src = curSrc;
+      }}
+    }} catch (e) {{}}
+  }}
+
+  function ensureAllSignaturesBlue(docRoot) {{
+    try {{
+      var sheet = (docRoot.getElementById ? docRoot.getElementById('a4Sheet') : null)
+        || (docRoot.querySelector ? docRoot.querySelector('#a4Sheet') : null);
+      if (!sheet) return;
+      sheet.querySelectorAll('table.sig-tbl img, img.sig-slot-img, img[id^="slot_"]').forEach(function(im) {{
+        colorizeDataImgToBlue(im);
+      }});
+      sheet.querySelectorAll('table.sig-tbl svg path, table.sig-tbl svg polyline, table.sig-tbl svg line').forEach(function( node ) {{
+        var st = (node.getAttribute('stroke') || '').toLowerCase();
+        if (st && st !== 'none' && st.indexOf('#fff') !== 0) {{
+          node.setAttribute('stroke', '#0044cc');
+        }}
+        node.style.setProperty('stroke', '#0044cc', 'important');
+      }});
+    }} catch (e) {{}}
+  }}
+  window.__khafarEnsureBlueSigs = ensureAllSignaturesBlue;
+  // === KHAFAR_BLUE_SIG_END ===
+
   function balanceSheetTypography(docRoot, targetH, isPrintMode, isIOSMode) {{
+    ensureAllSignaturesBlue(docRoot);
     applyToxicologyDirectorBlock(docRoot);
     var sheet = (docRoot.getElementById ? docRoot.getElementById('a4Sheet') : null)
       || (docRoot.querySelector ? docRoot.querySelector('#a4Sheet') : null);
@@ -7860,6 +7958,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 </body>
 </html>
 """
+import khafar_med_age; khafar_med_age.bind_functions(globals())
 import khafar_bail; khafar_bail.bind_functions(globals())
 
 
@@ -8787,6 +8886,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             with s2_col:
                 st.markdown("<div class='auth-panel'>", unsafe_allow_html=True)
                 is_toxicology_form = fid == "med_toxicology" or "تحليل سموم" in str(form_def.get("title") or "")
+                import khafar_med_age; khafar_med_age.register_catalog(locals(), globals())
                 if is_toxicology_form:
                     st.markdown("#### 2️⃣ مصادقة إدارة مرور منطقة جازان وتوثيق مستلم الخفر المناوب")
                     st.caption(f"التوثيق النصي لمستلم الخفر المناوب: {unit_display}")
