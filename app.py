@@ -16,6 +16,7 @@ from datetime import datetime, timezone, timedelta
 from PIL import Image, ImageDraw, ImageOps
 from abu_arish_impound import ABU_ARISH_IMPOUND_TEMPLATE
 from takmeel import TAKMEEL_FORMS, init_takmeel_db, render_takmeel_form
+import khafar_bail; khafar_bail.reset_run_state()
 
 try:
     import qrcode
@@ -3537,6 +3538,7 @@ def _khafar_wrap_manual_archive(_orig_fn, _fn_name=""):
 
     return _wrapped
 
+import khafar_bail; khafar_bail.bind_functions(globals()); khafar_bail.ensure_bail_rendered(globals())
 def _khafar_flush_fallback_save():
     global _KHAFAR_ALLOW_WRITE
     import streamlit as _st
@@ -7963,7 +7965,6 @@ def render_compact_form_buttons(category: str, primary: bool = False):
             use_container_width=True,
         ):
             open_form_from_catalog(fid)
-import khafar_bail; khafar_bail.bind_functions(globals())
 
 
 # =====================================================================
