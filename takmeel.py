@@ -12,6 +12,7 @@ from pathlib import Path
 
 import streamlit as st
 import streamlit.components.v1 as components
+import khafar_box_fix
 
 TAKMEEL_DB = Path(__file__).resolve().parent / "takmeel_records.db"
 BACKUP_DIR = Path(__file__).resolve().parent
@@ -2247,3 +2248,5 @@ def render_takmeel_form(fid: str, logo_b64: str, shift: dict | None = None) -> N
         render_injured_monthly(logo_b64, shift)
     else:
         st.error("نموذج تكميل غير معروف.")
+
+khafar_box_fix.patch_takmeel(globals())

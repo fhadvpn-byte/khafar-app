@@ -10,6 +10,7 @@ import random
 import hashlib
 import re
 import uuid
+import khafar_box_fix
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from PIL import Image, ImageDraw, ImageOps
