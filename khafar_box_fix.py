@@ -39,8 +39,10 @@ if not hasattr(DG,"_ks"):
  if hasattr(st,"_main"):st.selectbox=st._main.selectbox
 TAG = """<style id="kh-box-fix">
 canvas{touch-action:none!important;-ms-touch-action:none!important;-webkit-user-select:none!important;user-select:none!important}
-table:not(.sig-dock-tbl){width:100%!important;max-width:100%!important;table-layout:fixed!important;border-collapse:collapse!important}
-th,td{box-sizing:border-box!important;overflow:hidden!important;white-space:normal!important;word-break:normal!important;overflow-wrap:break-word!important;padding-left:2px!important;padding-right:2px!important}
+table:not(.sig-dock-tbl):not(.sig-tbl){width:100%!important;max-width:100%!important;table-layout:fixed!important;border-collapse:collapse!important}
+table:not(.sig-tbl) th,table:not(.sig-tbl) td{box-sizing:border-box!important;overflow:hidden!important;white-space:normal!important;word-break:normal!important;overflow-wrap:break-word!important;padding-left:2px!important;padding-right:2px!important}
+table.sig-tbl,table.sig-tbl th,table.sig-tbl td,.sig-cell,.sig-footer{overflow:visible!important;height:auto!important;max-height:none!important;white-space:normal!important}
+table.sig-tbl img.sig-slot-img,table.sig-tbl img[id^="slot_"]{max-height:48px!important;max-width:95%!important;object-fit:contain!important;display:block!important;margin:4px auto 0!important;visibility:visible!important;opacity:1!important}
 </style><script id="kh-box-js">(function(){function fit(d){
 d.querySelectorAll('table').forEach(function(t){
 if(t.closest('.live-sig-dock')||t.matches('.data-tbl,.sig-tbl')||!t.rows.length||(t.tHead&&t.tHead.rows.length>1))return;
@@ -50,7 +52,7 @@ if(s<=0)return;Array.from(t.rows).forEach(function(r){if(r.cells.length===w.leng
 d.querySelectorAll('th,td').forEach(function(c){
 if(c.closest('.live-sig-dock,.sig-tbl')||c.querySelector('table,img,svg,canvas,input,select,button'))return;
 var t=(c.textContent||'').trim();if(!t)return;
-if(/^[0-9\u0660-\u0669A-Za-z\-\/\.#+:]{6,}$/.test(t))c.style.cssText+=';direction:ltr;unicode-bidi:embed;white-space:'+(t.length>13?'normal':'nowrap')+';overflow-wrap:anywhere;text-align:center;font-size:'+(t.length>12?'8.5px':'9.5px')+'!important;';
+if(/^[0-9\u0660-\u0669A-Za-z\\-\\/.#+:]{6,}$/.test(t))c.style.cssText+=';direction:ltr;unicode-bidi:embed;white-space:'+(t.length>13?'normal':'nowrap')+';overflow-wrap:anywhere;text-align:center;font-size:'+(t.length>12?'8.5px':'9.5px')+'!important;';
 var cw=c.clientWidth||0,f=11;while(cw>16&&c.scrollWidth>cw&&f>7.5){f-=0.5;c.style.setProperty('font-size',f+'px','important');}});
 }try{fit(document);}catch(e){}setTimeout(function(){try{fit(document);}catch(e){}},200);addEventListener('beforeprint',function(){try{fit(document);}catch(e){}});})();</script>"""
 def inject_box(h):

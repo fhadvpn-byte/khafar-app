@@ -1664,6 +1664,8 @@ def _flee_waiver_legal(values: dict) -> str:
 
 
 def _waiver_signers(form_id: str, fields_map: dict) -> list[dict]:
+    fields_map = fields_map or {}
+    form_id = str(form_id or "")
     if form_id == "decl_settlement":
         signers = []
         for index in range(1, _count_parties(fields_map) + 1):
@@ -1726,6 +1728,28 @@ def _waiver_signers(form_id: str, fields_map: dict) -> list[dict]:
                 "sub": owner or "مالك الحيوان",
             })
         return signers
+    # كفالة: الكفيل + المكفول (خانتان مستقلتان)
+    if form_id in ("decl_accident_bail", "decl_bail") or "كفالة" in form_id:
+        guarantor = str(fields_map.get("guarantor_name") or "").strip()
+        bailed = str(fields_map.get("bailed_name") or "").strip()
+        return [
+            {
+                "pad": "guarantor",
+                "header": "إقرار وتوقيع الكفيل الضامن",
+                "name": guarantor,
+                "role": "الكفيل الضامن",
+                "pad_title": "لوحة توقيع: الكفيل الضامن",
+                "sub": guarantor or "الكفيل الضامن",
+            },
+            {
+                "pad": "bailed",
+                "header": "إقرار وتوقيع المكفول (طرف الحادث)",
+                "name": bailed,
+                "role": "المكفول",
+                "pad_title": "لوحة توقيع: المكفول",
+                "sub": bailed or "المكفول",
+            },
+        ]
     return []
 
 
@@ -2892,19 +2916,25 @@ def _apply_sig_pad_event_to_session(pad_id: str, event: dict | None) -> None:
     """يدمج نتيجة sig_pad ثنائي الاتجاه في session_state (Base64 PNG)."""
     if not event or not pad_id:
         return
-    pad_id = str(pad_id).strip()
+    # فضّل pad_id القادم من المكوّن إن وُجد
+    pad_from_event = str(event.get("pad_id") or "").strip()
+    pad_id = pad_from_event or str(pad_id).strip()
     action = str(event.get("action") or "")
     live = dict(st.session_state.get("live_sig_pads") or {})
     party = dict(st.session_state.get("party_stamps") or {})
     if action == "clear":
         live.pop(pad_id, None)
         party.pop(pad_id, None)
-        if pad_id in ("citizen", "p1"):
-            st.session_state.citizen_stamp_b64 = ""
+        if pad_id in ("citizen", "p1", "guarantor"):
+            if pad_id in ("citizen", "p1", "guarantor"):
+                # لا تمسح citizen إن وُجد طرف آخر محفوظ
+                if pad_id in ("citizen", "p1"):
+                    st.session_state.citizen_stamp_b64 = party.get("p1") or party.get("citizen") or ""
         if pad_id == "officer":
             st.session_state.officer_stamp_b64 = ""
         if pad_id == "duty":
             st.session_state.duty_stamp_b64 = ""
+        st.session_state["_khafar_sig_dirty"] = True
     else:
         payload = compress_signature_b64(strip_signature_data_url(event.get("data_url") or ""))
         if not payload:
@@ -2916,13 +2946,24 @@ def _apply_sig_pad_event_to_session(pad_id: str, event: dict | None) -> None:
             st.session_state.duty_stamp_b64 = payload
         else:
             party[pad_id] = payload
-            if pad_id in ("citizen", "p1") or not str(st.session_state.get("citizen_stamp_b64") or "").strip():
+            # مرادفات للخانة الأولى / المقر / الكفيل
+            if pad_id in ("citizen", "p1"):
                 st.session_state.citizen_stamp_b64 = payload
+                party.setdefault("citizen" if pad_id == "p1" else "p1", payload)
+            elif pad_id == "guarantor":
+                party["guarantor"] = payload
+                if not str(st.session_state.get("citizen_stamp_b64") or "").strip():
+                    st.session_state.citizen_stamp_b64 = payload
+            elif pad_id == "bailed":
+                party["bailed"] = payload
+            elif not str(st.session_state.get("citizen_stamp_b64") or "").strip():
+                st.session_state.citizen_stamp_b64 = payload
+        st.session_state["_khafar_sig_dirty"] = True
     st.session_state.live_sig_pads = live
     st.session_state.party_stamps = party
 
 
-def collect_signatures_map(rec: dict | None = None) -> dict:
+def collect_signatures_map(rec: dict | None = None, *, include_session: bool = True) -> dict:
     """يجمع كل تواقيع الأطراف من السجل و/أو session_state كقاموس pad_id → Base64."""
     out: dict[str, str] = {}
 
@@ -2933,14 +2974,18 @@ def collect_signatures_map(rec: dict | None = None) -> dict:
 
     rec = rec or {}
     fields = rec.get("fields") if isinstance(rec.get("fields"), dict) else {}
-    for src in (
+    sources = [
         rec.get("party_stamps"),
         rec.get("live_sig_pads"),
         fields.get("__party_stamps") if isinstance(fields, dict) else None,
         fields.get("__live_sig_pads") if isinstance(fields, dict) else None,
-        st.session_state.get("party_stamps") if hasattr(st, "session_state") else None,
-        st.session_state.get("live_sig_pads") if hasattr(st, "session_state") else None,
-    ):
+    ]
+    if include_session and hasattr(st, "session_state"):
+        sources.extend([
+            st.session_state.get("party_stamps"),
+            st.session_state.get("live_sig_pads"),
+        ])
+    for src in sources:
         if isinstance(src, dict):
             for k, v in src.items():
                 _put(str(k), v)
@@ -2960,9 +3005,13 @@ def collect_signatures_map(rec: dict | None = None) -> dict:
     elif isinstance(raw_json, dict):
         for k, v in raw_json.items():
             _put(str(k), v)
-    _put("citizen", rec.get("citizen_stamp_b64") or (st.session_state.get("citizen_stamp_b64") if hasattr(st, "session_state") else ""))
-    _put("officer", rec.get("officer_stamp_b64") or (st.session_state.get("officer_stamp_b64") if hasattr(st, "session_state") else ""))
-    _put("duty", rec.get("duty_stamp_b64") or (st.session_state.get("duty_stamp_b64") if hasattr(st, "session_state") else ""))
+    _put("citizen", rec.get("citizen_stamp_b64") or "")
+    _put("officer", rec.get("officer_stamp_b64") or "")
+    _put("duty", rec.get("duty_stamp_b64") or "")
+    if include_session and hasattr(st, "session_state"):
+        _put("citizen", st.session_state.get("citizen_stamp_b64"))
+        _put("officer", st.session_state.get("officer_stamp_b64"))
+        _put("duty", st.session_state.get("duty_stamp_b64"))
     return out
 
 
@@ -2971,15 +3020,26 @@ def embed_signatures_in_html(html: str, signatures: dict | None) -> str:
     if not html or not signatures:
         return html or ""
     style = (
-        "max-height:52px; max-width:100%; object-fit:contain; "
-        "display:block; margin:2px auto;"
+        "max-height:48px; max-width:95%; object-fit:contain; "
+        "display:block; margin:4px auto 0;"
     )
     out = html
-    for pad, raw in signatures.items():
+    # مرادفات شائعة: citizen ↔ p1 / guarantor في بعض النماذج
+    aliases = dict(signatures)
+    if aliases.get("p1") and not aliases.get("citizen"):
+        aliases["citizen"] = aliases["p1"]
+    if aliases.get("citizen") and not aliases.get("p1"):
+        aliases["p1"] = aliases["citizen"]
+    if aliases.get("guarantor") and not aliases.get("citizen"):
+        aliases.setdefault("citizen", aliases["guarantor"])
+    for pad, raw in aliases.items():
         b64 = strip_signature_data_url(raw)
         if not b64:
             continue
         pad_key = str(pad).strip()
+        if pad_key in ("officer", "duty"):
+            # تُحقن أيضاً في خاناتها الرسمية
+            pass
         slot_id = pad_key if pad_key.startswith("slot_") else f"slot_{pad_key}"
         img = (
             f'<img id="{slot_id}" class="sig-slot-img" '
@@ -2988,9 +3048,6 @@ def embed_signatures_in_html(html: str, signatures: dict | None) -> str:
         pattern = rf'<img[^>]*\bid=["\']{re.escape(slot_id)}["\'][^>]*>'
         if re.search(pattern, out, flags=re.I):
             out = re.sub(pattern, img, out, count=1, flags=re.I)
-        else:
-            # خانة بدون id مطابقة — لا نحقن عشوائياً
-            pass
     return out
 
 
@@ -3798,7 +3855,7 @@ def save_record_to_db(rec: dict, device_hash: str) -> bool:
 # === KHAFAR_MANUAL_ARCHIVE_START ===
 _KHAFAR_ORIG_FUNCS = {}
 _KHAFAR_ALLOW_WRITE = False
-_KHAFAR_LINE_TO_SITE = {9718: 9718}
+_KHAFAR_LINE_TO_SITE = {9849: 9849}
 _KHAFAR_USED_RETURN_SITES = {8910}
 _KHAFAR_READER_FN_NAMES = ['get_traffic_logo_b64']
 
@@ -3930,24 +3987,57 @@ def _khafar_wrap_manual_archive(_orig_fn, _fn_name=""):
         if _site_id is None:
             return _orig_fn(*args, **kwargs)
 
-        # تنفيذ الحفظ الفعلي بأحدث المدخلات فور ضغط الزر ثم تحديث عداد الأرشيف بالأعلى
-        if _st.session_state.pop("_khafar_save_requested", False):
+        # تنفيذ الحفظ الفعلي: زر الأرشيف اليدوي أو تحديث تلقائي بعد توقيع أي طرف
+        _manual = bool(_st.session_state.pop("_khafar_save_requested", False))
+        _sig_upd = bool(_st.session_state.pop("_khafar_sig_update", False))
+        if _manual or _sig_upd:
             _KHAFAR_ALLOW_WRITE = True
             try:
                 _khafar_clear_archive_caches()
-                _res_saved = _orig_fn(*args, **kwargs)
+                # استخدم أحدث سجل معلّق + تواقيع session (لا تعتمد على نسخة قديمة قبل التوقيع)
+                _args = list(args)
+                _pending = _st.session_state.get("_khafar_pending_archive_rec")
+                if isinstance(_pending, dict) and _pending.get("doc_no"):
+                    _args[0] = dict(_pending)
+                if _args and isinstance(_args[0], dict):
+                    _rec = dict(_args[0])
+                    _sigs = collect_signatures_map(_rec, include_session=True)
+                    _fields = dict(_rec.get("fields") or {})
+                    _party = {k: v for k, v in _sigs.items() if k not in ("officer", "duty") and v}
+                    if _party:
+                        _fields["__party_stamps"] = _party
+                        _rec["party_stamps"] = _party
+                    if _sigs:
+                        _fields["__live_sig_pads"] = dict(_sigs)
+                        _rec["live_sig_pads"] = dict(_sigs)
+                        for _pk, _pb in _sigs.items():
+                            _fields[f"__sig_{_pk}"] = _pb
+                        _rec["signatures_json"] = json.dumps(_sigs, ensure_ascii=False)
+                    if _sigs.get("citizen") or _sigs.get("p1") or _sigs.get("guarantor"):
+                        _rec["citizen_stamp_b64"] = (
+                            _sigs.get("citizen") or _sigs.get("p1") or _sigs.get("guarantor") or ""
+                        )
+                    if _sigs.get("officer"):
+                        _rec["officer_stamp_b64"] = _sigs["officer"]
+                    if _sigs.get("duty"):
+                        _rec["duty_stamp_b64"] = _sigs["duty"]
+                    _rec["fields"] = _fields
+                    _args[0] = _rec
+                _res_saved = _orig_fn(*_args, **kwargs)
                 _khafar_clear_archive_caches()
-                _st.session_state["_khafar_manual_save_flash"] = True
+                if _manual:
+                    _st.session_state["_khafar_manual_save_flash"] = True
                 _st.session_state.pop("_khafar_manual_save_err", None)
             except Exception as _exc:
                 _st.session_state["_khafar_manual_save_err"] = str(_exc)
                 _res_saved = None
             finally:
                 _KHAFAR_ALLOW_WRITE = False
-            try:
-                _st.rerun(scope="app")
-            except TypeError:
-                _st.rerun()
+            if _manual:
+                try:
+                    _st.rerun(scope="app")
+                except TypeError:
+                    _st.rerun()
             return _res_saved
 
         # حفظ نسخة احتياطية من المعاملات وعرض الزر الرسمي
@@ -4274,9 +4364,10 @@ def render_hide_st_cloud_badges() -> None:
 # =====================================================================
 def _sig_slot_img(b64: str, slot_id: str) -> str:
     slot_style = (
-        "max-height:52px; max-width:100%; object-fit:contain; "
-        "display:block; margin:2px auto; background:#ffffff !important; "
-        "mix-blend-mode:normal; border:none !important; box-shadow:none !important;"
+        "max-height:48px; max-width:95%; object-fit:contain; "
+        "display:block; margin:4px auto 0; background:#ffffff !important; "
+        "mix-blend-mode:normal; border:none !important; box-shadow:none !important; "
+        "visibility:visible; opacity:1;"
     )
     raw = strip_signature_data_url(b64)
     if raw:
@@ -5085,25 +5176,39 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         party_stamps = rec.get("party_stamps") or {}
         if not isinstance(party_stamps, dict):
             party_stamps = {}
-        if not party_stamps and isinstance(fields_map.get("__party_stamps"), dict):
-            party_stamps = fields_map.get("__party_stamps") or {}
-        live_pads = rec.get("live_sig_pads") or fields_map.get("__live_sig_pads") or {}
+        if isinstance(fields_map.get("__party_stamps"), dict):
+            party_stamps = {**(fields_map.get("__party_stamps") or {}), **party_stamps}
+        live_pads = rec.get("live_sig_pads") or {}
         if not isinstance(live_pads, dict):
             live_pads = {}
+        if isinstance(fields_map.get("__live_sig_pads"), dict):
+            live_pads = {**(fields_map.get("__live_sig_pads") or {}), **live_pads}
+        # دمج signatures_json / party_stamps (مسار الأرشيف والمعاينة)
+        _all_sigs = collect_signatures_map(
+            rec,
+            include_session=not bool(rec.get("_archive_view")),
+        )
+        for _sk, _sv in _all_sigs.items():
+            if _sk in ("officer", "duty"):
+                continue
+            live_pads.setdefault(_sk, _sv)
+            party_stamps.setdefault(_sk, _sv)
         sig_slots = []
         for signer in party_signers:
             pad = signer["pad"]
-            pad_b64 = (
-                str(party_stamps.get(pad) or "").strip()
-                or str(live_pads.get(pad) or "").strip()
-                or str(fields_map.get(f"__sig_{pad}") or "").strip()
+            pad_b64 = _resolve_stamp_b64(
+                party_stamps.get(pad),
+                live_pads.get(pad),
+                fields_map.get(f"__sig_{pad}"),
+                _all_sigs.get(pad),
+                rec.get("citizen_stamp_b64") if pad in ("citizen", "p1", "guarantor") else "",
+                party_stamps.get("citizen") if pad == "p1" else "",
+                party_stamps.get("p1") if pad == "citizen" else "",
             )
             if needs_party_live and not pad_b64:
                 inner = "<div class='sig-guide'>" + _sig_slot_img("", f"slot_{pad}") + "</div>"
             elif pad_b64:
                 inner = _sig_slot_img(pad_b64, f"slot_{pad}")
-            elif rec.get("citizen_stamp_b64") and len(party_signers) == 1:
-                inner = _sig_slot_img(rec["citizen_stamp_b64"], f"slot_{pad}")
             else:
                 inner = _sig_slot_img("", f"slot_{pad}")
             sig_slots.append((signer["header"], signer["name"], signer["role"], inner))
@@ -5405,7 +5510,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         page-break-inside: avoid; break-inside: avoid;
     }}
     .sig-cell {{
-        border: 1.4px solid #000000 !important; text-align: center; padding: 12px 10px !important; min-height: 95px; line-height: 1.65 !important; color: #000000 !important;
+        border: 1.4px solid #000000 !important; text-align: center; padding: 12px 10px !important;
+        min-height: 95px; line-height: 1.65 !important; color: #000000 !important;
+        overflow: visible !important; height: auto !important; max-height: none !important;
     }}
     .sig-head {{
         background: #f1f5f3; color: #000000 !important; font-size: 13px; font-weight: 800; padding: 9px !important; line-height: 1.65 !important; border: 1.4px solid #000000 !important;
@@ -5413,14 +5520,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .sig-grid .sig-person {{ font-size: 9px; }}
     .sig-grid .sig-role {{ font-size: 8.5px; }}
     .sig-grid .sig-slot-img, .sig-multi .sig-slot-img, .sig-tbl .sig-slot-img,
-    img.sig-slot-img, #slot_duty, #slot_officer, #slot_citizen {{
-        max-height: 50px !important; height: auto !important; max-width: 98% !important;
-        width: auto !important; object-fit: contain !important; display: inline-block !important;
+    img.sig-slot-img, img[id^="slot_"], #slot_duty, #slot_officer, #slot_citizen,
+    #slot_p1, #slot_p2, #slot_p3, #slot_p4, #slot_p5, #slot_guarantor, #slot_bailed {{
+        max-height: 48px !important; height: auto !important; max-width: 95% !important;
+        width: auto !important; object-fit: contain !important; display: block !important;
+        margin: 4px auto 0 !important;
         background: #ffffff !important; mix-blend-mode: normal !important;
-        border: none !important; box-shadow: none !important; visibility: visible !important;
+        border: none !important; box-shadow: none !important; visibility: visible !important; opacity: 1 !important;
     }}
-    td.sig-cell img.sig-slot-img, .sig-cell img.sig-slot-img {{
+    td.sig-cell img.sig-slot-img, .sig-cell img.sig-slot-img, table.sig-tbl td {{
         background: #ffffff !important; mix-blend-mode: normal !important;
+        overflow: visible !important;
     }}
     .sig-guide {{ background: #ffffff !important; }}
     .ios-print-hint {{
@@ -5667,7 +5777,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         word-break: normal !important; overflow-wrap: break-word; white-space: normal;
     }}
     table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #1e293b !important; padding: 8px !important; font-size: 12px; line-height: 1.45 !important; color: #000000 !important; font-weight: 800 !important; }}
-    table.sig-tbl td {{ border: 1px solid #1e293b !important; padding: 8px 6px !important; width: {col_width}; vertical-align: middle; height: auto; min-height: 76px; line-height: 1.45 !important; color: #000000 !important; font-weight: 700 !important; }}
+    table.sig-tbl td {{ border: 1px solid #1e293b !important; padding: 8px 6px !important; width: {col_width}; vertical-align: top; height: auto !important; min-height: 90px; max-height: none !important; overflow: visible !important; line-height: 1.45 !important; color: #000000 !important; font-weight: 700 !important; }}
     .sig-person {{ color: #000000 !important; font-weight: 800 !important; }}
     .sig-role {{ color: #000000 !important; font-weight: 700 !important; }}
     .sig-head {{ color: #000000 !important; font-weight: 800 !important; border: 1.4px solid #000000 !important; }}
@@ -9706,15 +9816,36 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 }
 
                 # معاينة بلا لوحات canvas فارغة — التواقيع من sig_pad تظهر كـ <img> فقط
+                _sigs_for_html = collect_signatures_map(ready_record)
                 a4_html = build_official_a4_html(
                     ready_record, form_def, logo_b64_global, interactive_sig=False
                 )
-                a4_html = embed_signatures_in_html(a4_html, collect_signatures_map(ready_record))
+                a4_html = embed_signatures_in_html(a4_html, _sigs_for_html)
                 ready_record["archived_html"] = a4_html
+                ready_record["signatures_json"] = json.dumps(_sigs_for_html, ensure_ascii=False)
                 st.write("")
 
                 _, hash_now = ensure_device_identity()
                 ref_number = str(ready_record.get("doc_no") or "").strip()
+                st.session_state["_khafar_pending_archive_rec"] = ready_record
+
+                # تحديث فوري لنفس KH عند إضافة/تعديل أي توقيع مواطن (تجاوز بوابة المسودة)
+                _sig_dirty = bool(st.session_state.pop("_khafar_sig_dirty", False))
+                _party_signed = any(
+                    k not in ("officer", "duty") and v
+                    for k, v in (_sigs_for_html or {}).items()
+                )
+                if hash_now and ref_number and (_sig_dirty or _party_signed or _sigs_for_html):
+                    try:
+                        # save_record_to_db غير ملفوف — UPSERT مباشر شامل HTML + signatures_json
+                        save_record_to_db(ready_record, hash_now)
+                        if _sig_dirty:
+                            st.caption(f"✅ تم تحديث تواقيع المواطنين في الأرشيف ({ref_number}).")
+                    except Exception as _sig_save_exc:
+                        st.warning(f"تعذّر تحديث تواقيع الأرشيف: {_sig_save_exc}")
+
+                # مسار زر الحفظ اليدوي في الأرشيف (يحدّث أيضاً عند الضغط)
+                st.session_state["_khafar_sig_update"] = bool(_sig_dirty or _party_signed)
                 if auto_save_to_archive(ready_record, hash_now):
                     st.success(f"تم حفظ/تحديث الوثيقة في الأرشيف المحلي ({ref_number}).")
                 elif ref_number:
@@ -9722,7 +9853,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
 
                 st.markdown("#### 📄 المعاينة الرسمية مقاس A4 (جاهزة للطباعة أو الحفظ كـ PDF)")
                 st.caption(
-                    "وقّع عبر اللوحات أعلاه ثم احفظ داخل كل لوحة — تظهر التواقيع مباشرة في خانات A4 والأرشيف. "
+                    "وقّع عبر اللوحات أعلاه — يُعتمد التوقيع تلقائياً عند رفع الإصبع ويُحفظ في الأرشيف فوراً. "
                     "اضغط زر الطباعة أعلى ورقة A4 (متوافق مع Safari والآيفون)."
                 )
                 preview_h = 1180
@@ -9794,17 +9925,20 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
                         "citizen_stamp_b64": r.get("citizen_stamp_b64")
                             or arch_sigs.get("citizen")
                             or arch_sigs.get("p1")
+                            or arch_sigs.get("guarantor")
                             or "",
                         "officer_stamp_b64": r.get("officer_stamp_b64") or arch_sigs.get("officer") or "",
                         "duty_stamp_b64": r.get("duty_stamp_b64") or arch_sigs.get("duty") or "",
                         "signatures_json": raw_sigs if isinstance(raw_sigs, str) else json.dumps(arch_sigs, ensure_ascii=False),
+                        "_archive_view": True,
                     }
+                arch_sigs_only = collect_signatures_map(r, include_session=False)
                 saved_html = str(r.get("archived_html") or "").strip()
                 if saved_html and "slot_" in saved_html:
-                    arch_html = embed_signatures_in_html(saved_html, collect_signatures_map(r))
+                    arch_html = embed_signatures_in_html(saved_html, arch_sigs_only)
                 else:
                     arch_html = build_official_a4_html(r, f_def, logo_b64_global, interactive_sig=False)
-                    arch_html = embed_signatures_in_html(arch_html, collect_signatures_map(r))
+                    arch_html = embed_signatures_in_html(arch_html, arch_sigs_only)
                 with c_edit:
                     if st.button("✏️ استدعاء وتعديل كسجل جديد", key=f"edit_{r['id']}", use_container_width=True):
                         values = {k: v for k, v in (arch_fields or {}).items() if not str(k).startswith("__")}

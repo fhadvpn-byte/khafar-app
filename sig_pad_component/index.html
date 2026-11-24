@@ -177,8 +177,32 @@
     ctx.stroke();
     lastX = pt.x; lastY = pt.y; midX = nextMidX; midY = nextMidY;
   }
+  var autoSaveTimer = null;
   function endDraw() {
     drawing = false;
+    // إرسال تلقائي إلى بايثون فور رفع الإصبع/الماوس (بدون اشتراط زر)
+    scheduleAutoSave();
+  }
+  function scheduleAutoSave() {
+    if (autoSaveTimer) {
+      try { clearTimeout(autoSaveTimer); } catch (e) {}
+      autoSaveTimer = null;
+    }
+    autoSaveTimer = setTimeout(function () {
+      autoSaveTimer = null;
+      if (restoring) return;
+      if (!hasInk && !canvasHasInk()) return;
+      var dataUrl = exportPng();
+      persistLocal(dataUrl);
+      statusEl.className = "ok";
+      statusEl.textContent = "تم اعتماد التوقيع تلقائياً.";
+      setValue({
+        action: "save",
+        data_url: dataUrl,
+        pad_id: padId,
+        ts: Date.now()
+      });
+    }, 180);
   }
 
   function onTouchStart(ev) {
