@@ -33,6 +33,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+from sig_pad_component import sig_pad
 
 
 def safe_rerun():
@@ -2740,7 +2741,7 @@ def make_ink_transparent_b64(raw_b64: str, max_w: int = 520, max_h: int = 180) -
     if payload.startswith("data:"):
         payload = payload.split(",", 1)[-1]
     try:
-        ink = (15, 45, 130)
+        ink = (0, 68, 204)  # حبر أزرق رسمي #0044cc
         img = Image.open(io.BytesIO(base64.b64decode(payload)))
         img = ImageOps.exif_transpose(img)
         if img.mode != "RGBA":
@@ -2818,8 +2819,35 @@ def make_ink_transparent_b64(raw_b64: str, max_w: int = 520, max_h: int = 180) -
 
 
 def compress_signature_b64(raw_b64: str) -> str:
-    """ضغط توقيع مستلم الخفر المناوب إلى PNG شفاف صغير مناسب للطباعة A4."""
+    """ضغط توقيع مستلم الخفر المناوب إلى PNG صغير بحبر أزرق رسمي #0044cc."""
     return make_ink_transparent_b64(raw_b64, max_w=480, max_h=160)
+
+
+def strip_signature_data_url(raw: str) -> str:
+    text = str(raw or "").strip()
+    if text.startswith("data:") and "," in text:
+        return text.split(",", 1)[-1].strip()
+    return text
+
+
+def consume_sig_pad_result(result, *, kind: str) -> dict | None:
+    """يعيد نتيجة اللوحة مرة واحدة لكل ختم زمني حتى لا تُعاد معالجة نفس الحفظ."""
+    if not result:
+        return None
+    if isinstance(result, str):
+        result = {"action": "save", "data_url": result, "ts": ""}
+    if not isinstance(result, dict):
+        return None
+    ts = str(result.get("ts") or "")
+    data_url = str(result.get("data_url") or "")
+    action = str(result.get("action") or "")
+    marker_key = f"_sigpad_ts_{kind}"
+    marker_val = ts or (action + ":" + data_url[:48])
+    if marker_val and st.session_state.get(marker_key) == marker_val:
+        return None
+    if marker_val:
+        st.session_state[marker_key] = marker_val
+    return result
 
 
 def _default_manager_settings() -> dict:
@@ -3295,7 +3323,8 @@ def format_live_gps(lat: float, lng: float) -> str:
 
 
 def signed_gps_pair(text: str) -> tuple[float, float] | None:
-    raw = str(text or "").strip()
+    raw = normalize_western_digits(str(text or "")).strip()
+    raw = raw.replace("\u2212", "-").replace("٫", ".")
     live = _LIVE_GPS_PAIR.match(raw)
     if live:
         lat, lng = float(live.group(1)), float(live.group(2))
@@ -3325,27 +3354,50 @@ def update_default_gps(device_hash: str, gps: str) -> None:
 
 
 def parse_gps_paste(text: str) -> tuple[float, float] | None:
-    """يستخرج الإحداثيات من نص خام أو رابط Google Maps / واتساب."""
-    raw = str(text or "").strip()
+    """يستخرج خط العرض والطول من رابط Google Maps أو إحداثيات خام، مع الأرقام العربية/الهندية."""
+    from urllib.parse import unquote
+
+    raw = normalize_western_digits(str(text or "")).strip()
     if not raw:
         return None
+    raw = unquote(unquote(raw.replace("+", " ")))
+    for src, dst in (
+        ("\u2212", "-"),
+        ("٫", "."),
+        ("،", ","),
+        ("؛", ","),
+        ("%2C", ","),
+        ("%2c", ","),
+        ("&amp;", "&"),
+    ):
+        raw = raw.replace(src, dst)
+    raw = re.sub(r"\s+", " ", raw).strip()
+
     direct = signed_gps_pair(raw)
     if direct:
         return direct
+
     patterns = (
+        r"[?&/#](?:q|ll|sll|center|query|daddr|saddr|destination)=(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)",
         r"[?&]q=(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)",
+        r"/maps(?:/place|/search)?[^@\s]*@(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)",
         r"@(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)",
         r"!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)",
-        r"destination=(-?\d+(?:\.\d+)?)%2C(-?\d+(?:\.\d+)?)",
-        r"(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)",
+        r"destination=(-?\d+(?:\.\d+)?)(?:,|%2[Cc])(-?\d+(?:\.\d+)?)",
+        r"(-?\d+(?:\.\d+)?)\s*°\s*([NSns])\s*,\s*(-?\d+(?:\.\d+)?)\s*°\s*([EWew])",
+        r"(-?\d+(?:\.\d+)?)\s*[,/]\s*(-?\d+(?:\.\d+)?)",
     )
     for pattern in patterns:
         match = re.search(pattern, raw, flags=re.IGNORECASE)
         if not match:
             continue
         try:
-            lat, lng = float(match.group(1)), float(match.group(2))
-        except ValueError:
+            if match.lastindex == 4:
+                lat = float(match.group(1)) * (1 if match.group(2).upper() == "N" else -1)
+                lng = float(match.group(3)) * (1 if match.group(4).upper() == "E" else -1)
+            else:
+                lat, lng = float(match.group(1)), float(match.group(2))
+        except (ValueError, TypeError):
             continue
         if -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0:
             return lat, lng
@@ -3353,8 +3405,8 @@ def parse_gps_paste(text: str) -> tuple[float, float] | None:
 
 
 def _query_gps_pair() -> tuple[float, float] | None:
-    lat_raw = str(st.query_params.get("gps_lat") or "").strip()
-    lon_raw = str(st.query_params.get("gps_lon") or "").strip()
+    lat_raw = normalize_western_digits(str(st.query_params.get("gps_lat") or "")).strip()
+    lon_raw = normalize_western_digits(str(st.query_params.get("gps_lon") or "")).strip()
     if lat_raw and lon_raw:
         try:
             lat, lng = float(lat_raw), float(lon_raw)
@@ -4599,6 +4651,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         rec.get("officer_stamp_b64"),
         live_pads_early.get("officer"),
         fields_early.get("__sig_officer"),
+        rec.get("saved_officer_sig_b64"),
+        rec.get("duty_sig_b64"),
     )
     duty_stamp_now = _resolve_stamp_b64(
         rec.get("duty_stamp_b64"),
@@ -9111,39 +9165,38 @@ if st.session_state.nav_tab == "النماذج الميدانية":
 
                 chosen_officer_auth = st.session_state.officer_auth_mode or "توقيع حي على الشاشة بالإصبع (لمستلم الخفر المناوب)"
                 use_saved_officer_sig = False
-                if not is_toxicology_form:
-                    manual_sig_key = f"manual_officer_sig_{_auth_sk}"
-                    if saved_officer_sig:
-                        st.success("✅ تم إدراج توقيع مستلم الخفر المناوب المحفوظ من الإعدادات تلقائياً")
-                        st.checkbox(
-                            "✏️ التوقيع يدوياً لهذا النموذج فقط",
-                            key=manual_sig_key,
-                            help="فعّل هذا الخيار لرسم/بصمة مؤقتة دون المساس بالتوقيع المحفوظ في الإعدادات.",
-                            disabled=st.session_state.officer_approved,
-                        )
-                        use_saved_officer_sig = not bool(st.session_state.get(manual_sig_key))
-                        if use_saved_officer_sig and not st.session_state.officer_approved:
-                            st.session_state.officer_stamp_b64 = saved_officer_sig
-                            st.session_state.officer_auth_mode = "توقيع محفوظ من الإعدادات (تلقائي)"
-                            chosen_officer_auth = st.session_state.officer_auth_mode
-                        elif st.session_state.get(manual_sig_key) and st.session_state.officer_auth_mode == "توقيع محفوظ من الإعدادات (تلقائي)":
-                            st.session_state.officer_stamp_b64 = ""
-                            st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لمستلم الخفر المناوب)"
-                    if not use_saved_officer_sig:
-                        officer_auth_opts = [
-                            "توقيع حي على الشاشة بالإصبع (لمستلم الخفر المناوب)",
-                            "بصمة رقمية (منفذ الشحن Type-C) لمستلم الخفر المناوب",
-                        ]
-                        officer_default_idx = 0
-                        if "بصمة" in (st.session_state.officer_auth_mode or ""):
-                            officer_default_idx = 1
-                        chosen_officer_auth = st.radio(
-                            "وسيلة توثيق مستلم الخفر المناوب:",
-                            officer_auth_opts,
-                            index=officer_default_idx,
-                            key=f"officer_auth_radio_{_auth_sk}",
-                            disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
-                        )
+                manual_sig_key = f"manual_officer_sig_{_auth_sk}"
+                if saved_officer_sig:
+                    st.success("✅ تم إدراج توقيع مستلم الخفر المناوب المحفوظ من الإعدادات تلقائياً")
+                    st.checkbox(
+                        "✏️ التوقيع يدوياً لهذا النموذج فقط",
+                        key=manual_sig_key,
+                        help="فعّل هذا الخيار لرسم/بصمة مؤقتة دون المساس بالتوقيع المحفوظ في الإعدادات.",
+                        disabled=st.session_state.officer_approved,
+                    )
+                    use_saved_officer_sig = not bool(st.session_state.get(manual_sig_key))
+                    if use_saved_officer_sig and not st.session_state.officer_approved:
+                        st.session_state.officer_stamp_b64 = saved_officer_sig
+                        st.session_state.officer_auth_mode = "توقيع محفوظ من الإعدادات (تلقائي)"
+                        chosen_officer_auth = st.session_state.officer_auth_mode
+                    elif st.session_state.get(manual_sig_key) and st.session_state.officer_auth_mode == "توقيع محفوظ من الإعدادات (تلقائي)":
+                        st.session_state.officer_stamp_b64 = ""
+                        st.session_state.officer_auth_mode = "توقيع حي على الشاشة بالإصبع (لمستلم الخفر المناوب)"
+                if not use_saved_officer_sig:
+                    officer_auth_opts = [
+                        "توقيع حي على الشاشة بالإصبع (لمستلم الخفر المناوب)",
+                        "بصمة رقمية (منفذ الشحن Type-C) لمستلم الخفر المناوب",
+                    ]
+                    officer_default_idx = 0
+                    if "بصمة" in (st.session_state.officer_auth_mode or ""):
+                        officer_default_idx = 1
+                    chosen_officer_auth = st.radio(
+                        "وسيلة توثيق مستلم الخفر المناوب:",
+                        officer_auth_opts,
+                        index=officer_default_idx,
+                        key=f"officer_auth_radio_{_auth_sk}",
+                        disabled=st.session_state.officer_approved or not st.session_state.citizen_locked,
+                    )
 
                 _form_sk = _stable_form_session_key()
                 manager_auto_now, manager_cfg_now = manager_auto_signature_active()
@@ -9201,18 +9254,14 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                             st.session_state.duty_stamp_b64 = str(manager_cfg_now.get("manager_sig_b64") or "")
                         else:
                             st.session_state.duty_stamp_b64 = ""
-                        if is_toxicology_form:
-                            # تحليل السموم فقط: لا يُشترط توقيع/بصمة مستلم الخفر المناوب ولا يُدرج التوقيع المحفوظ
-                            st.session_state.officer_auth_mode = "توثيق نصي لمستلم الخفر المناوب (بدون توقيع)"
-                            st.session_state.officer_stamp_b64 = ""
-                        elif use_saved_officer_sig and saved_officer_sig:
+                        if use_saved_officer_sig and saved_officer_sig:
                             st.session_state.officer_auth_mode = "توقيع محفوظ من الإعدادات (تلقائي)"
                             st.session_state.officer_stamp_b64 = saved_officer_sig
                         else:
                             st.session_state.officer_auth_mode = chosen_officer_auth
                             if "بصمة" in chosen_officer_auth:
                                 seed_off = f"{st.session_state.doc_no}_{officer_label}_OFFICER"
-                                st.session_state.officer_stamp_b64 = generate_fingerprint_png_b64(seed_off, ink_rgb=(15, 61, 46))
+                                st.session_state.officer_stamp_b64 = generate_fingerprint_png_b64(seed_off, ink_rgb=(0, 68, 204))
                             else:
                                 st.session_state.officer_stamp_b64 = ""
                         st.session_state.officer_approved = True
@@ -9221,14 +9270,14 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     if is_toxicology_form:
                         st.success(
                             f"تم الاعتماد: مصادقة إدارة مرور منطقة جازان ({st.session_state.duty_auth_mode}) • "
-                            f"توثيق مستلم الخفر المناوب نصياً بدون توقيع"
+                            f"ضابط الخفر ({st.session_state.officer_auth_mode})"
                         )
                     else:
                         st.success(
                             f"تم التوثيق: مستلم الخفر المناوب ({st.session_state.officer_auth_mode}) • "
                             f"وحدة الحوادث ({st.session_state.duty_auth_mode})"
                         )
-                    if st.session_state.officer_stamp_b64 and not is_toxicology_form:
+                    if st.session_state.officer_stamp_b64:
                         st.image(base64.b64decode(st.session_state.officer_stamp_b64), caption="ختم التوثيق المعتمد", width=105)
                 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -9273,7 +9322,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     live_pads.get("citizen"),
                     next(iter(party_stamps.values()), "") if party_stamps else "",
                 )
-                officer_b64 = _resolve_stamp_b64(st.session_state.officer_stamp_b64, live_pads.get("officer"))
+                officer_b64 = _resolve_stamp_b64(
+                    st.session_state.officer_stamp_b64,
+                    live_pads.get("officer"),
+                    saved_officer_sig,
+                )
                 duty_b64 = _resolve_stamp_b64(st.session_state.duty_stamp_b64, live_pads.get("duty"))
                 mgr_active, mgr_cfg = manager_auto_signature_active()
                 if mgr_active:
@@ -9298,6 +9351,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     "citizen_stamp_b64": citizen_b64,
                     "citizen_auth_mode": st.session_state.citizen_auth_mode,
                     "officer_stamp_b64": officer_b64,
+                    "saved_officer_sig_b64": saved_officer_sig,
                     "attachment_b64": st.session_state.attachment_b64,
                     "show_attachments_in_print": bool(st.session_state.get("show_attachments_in_print", True)),
                     "officer_full": officer_full_final,
@@ -9495,58 +9549,62 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 st.success("تم حفظ الإعدادات على هذا الجهاز فقط.")
                 safe_rerun()
 
-        # لوحة التوقيع خارج st.form لالتقاط Base64 لحظياً دون تعارض مع نموذج الحفظ
+        # لوحة التوقيع الثنائية الاتجاه — خارج st.form حتى يصل الرسم إلى بايثون دون جسر نصي
         st.markdown("##### ✍️ التوقيع المعتمد لمستلم الخفر المناوب (يُدرج تلقائياً في جميع النماذج)")
         st.caption("يُحفظ التوقيع على هذا الجهاز فقط (SQLite + localStorage) ولا يُوضع في الكوكيز حتى لا يتجاوز حد 4KB.")
-        _allow_ls_restore = not bool(
-            str(st.session_state.get(DUTY_SIG_KEY) or shift.get(DUTY_SIG_KEY) or "").strip()
+        officer_saved_now = str(st.session_state.get(DUTY_SIG_KEY) or shift.get(DUTY_SIG_KEY) or "").strip()
+        officer_pad_val = sig_pad(
+            key="officer_settings_sig_pad",
+            title="ارسم توقيع مستلم الخفر المناوب هنا (حبر أزرق رسمي #0044cc)",
+            subtitle="ارسم بالإصبع أو الماوس ثم اضغط «حفظ واعتماد التوقيع المرسوم» داخل اللوحة.",
+            saved=officer_saved_now,
+            ls_key=DUTY_SIG_LS_KEY,
+            pad_id="officer",
+            accent="#0044cc",
         )
-        render_officer_sig_bridge_listener(allow_ls_restore=_allow_ls_restore)
-        components.html(render_officer_sig_pad_html(), height=290, scrolling=False)
-        if st.session_state.pop("_clear_duty_sig_bridge", False):
-            st.session_state["duty_sig_bridge"] = ""
-        bridge_val = st.text_area(
-            "جسر التوقيع",
-            key="duty_sig_bridge",
-            height=68,
-            placeholder="DUTY_SIG_BRIDGE — يُملأ تلقائياً عند اعتماد التوقيع من اللوحة",
-            label_visibility="collapsed",
-        )
-        if bridge_val and str(bridge_val).strip() and str(bridge_val).strip() != str(st.session_state.get(DUTY_SIG_KEY) or ""):
-            compressed = compress_signature_b64(bridge_val)
-            if compressed:
-                st.session_state[DUTY_SIG_KEY] = compressed
-                st.session_state["_clear_duty_sig_bridge"] = True
-                if DEVICE_HASH:
-                    cur = get_device_shift(DEVICE_HASH)
-                    cur[DUTY_SIG_KEY] = compressed
-                    save_device_shift(DEVICE_HASH, cur)
-                st.toast("تم اعتماد توقيع مستلم الخفر المناوب من اللوحة", icon="✅")
-                safe_rerun()
+        officer_pad_event = consume_sig_pad_result(officer_pad_val, kind="officer")
+        if officer_pad_event:
+            action = str(officer_pad_event.get("action") or "")
+            _, hash_now = ensure_device_identity()
+            if action == "clear":
+                st.session_state[DUTY_SIG_KEY] = ""
+                if hash_now:
+                    cur = get_device_shift(hash_now)
+                    cur[DUTY_SIG_KEY] = ""
+                    save_device_shift(hash_now, cur)
+                st.success("تم مسح توقيع مستلم الخفر المناوب من الجهاز.")
+            else:
+                payload = compress_signature_b64(strip_signature_data_url(officer_pad_event.get("data_url") or ""))
+                if payload:
+                    st.session_state[DUTY_SIG_KEY] = payload
+                    if hash_now:
+                        cur = get_device_shift(hash_now)
+                        cur[DUTY_SIG_KEY] = payload
+                        save_device_shift(hash_now, cur)
+                    st.success("تم حفظ واعتماد توقيع مستلم الخفر المناوب من اللوحة.")
+                else:
+                    st.warning("تعذّر قراءة التوقيع المرسوم — أعد الرسم ثم احفظ من زر اللوحة.")
 
         sig_upload = st.file_uploader(
             "أو ارفع صورة توقيع شفافة (PNG/JPG) كخيار مساند",
             type=["png", "jpg", "jpeg", "webp"],
             key="duty_sig_upload",
-            help="يُفضّل خلفية شفافة أو بيضاء مع حبر أسود واضح.",
+            help="يُفضّل خلفية شفافة أو بيضاء. سيُحوَّل الحبر تلقائياً إلى الأزرق الرسمي #0044cc.",
         )
         up_col, del_col = st.columns(2)
         with up_col:
-            if st.button("💾 حفظ التوقيع المرفوع / الحالي في الجهاز", type="primary", use_container_width=True):
+            if st.button("💾 حفظ صورة التوقيع المرفوعة", type="primary", use_container_width=True):
                 payload = ""
                 if sig_upload is not None:
                     processed = process_uploaded_attachment(sig_upload)
                     payload = compress_signature_b64((processed or {}).get("b64") or "")
-                elif st.session_state.get(DUTY_SIG_KEY):
-                    payload = compress_signature_b64(st.session_state.get(DUTY_SIG_KEY) or "")
                 if not payload:
-                    st.warning("ارسم التوقيع في اللوحة أو ارفع صورة أولاً.")
+                    st.warning("ارفع صورة التوقيع أولاً، أو استخدم زر الحفظ داخل اللوحة بعد الرسم.")
                 else:
                     _, hash_now = ensure_device_identity()
                     if not _cookie_uid_ready:
                         st.caption("⏳ تتم مزامنة تعريف الجهاز مع المتصفح — الحفظ بالمعرّف الاحتياطي متاح الآن.")
                     st.session_state[DUTY_SIG_KEY] = payload
-                    st.session_state["_clear_duty_sig_bridge"] = True
                     cur = get_device_shift(hash_now)
                     cur[DUTY_SIG_KEY] = payload
                     save_device_shift(hash_now, cur)
@@ -9555,7 +9613,6 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
         with del_col:
             if st.button("🗑️ حذف / إعادة رسم توقيع مستلم الخفر المناوب", use_container_width=True):
                 st.session_state[DUTY_SIG_KEY] = ""
-                st.session_state["_clear_duty_sig_bridge"] = True
                 if DEVICE_HASH:
                     cur = get_device_shift(DEVICE_HASH)
                     cur[DUTY_SIG_KEY] = ""
@@ -9580,8 +9637,8 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
     with mgr_tab:
         st.markdown("### ✍️ اعتماد التوقيع الحي لمدير وحدة الحوادث")
         st.caption(
-            "محمي برمز سري. اعتمد التوقيع عبر تنزيل PNG من اللوحة ثم رفعه بالزر أدناه — "
-            "يُحفظ في SQLite وملف ثابت على السيرفر ويظهر لجميع أفراد الخفر تلقائياً."
+            "محمي برمز سري. ارسم على اللوحة ثم اضغط «حفظ واعتماد التوقيع المرسوم» داخلها، "
+            "أو ارفع صورة مساندة — يُحفظ في SQLite ويظهر لجميع أفراد الخفر تلقائياً بحبر أزرق رسمي."
         )
         if "manager_pin_ok" not in st.session_state:
             st.session_state.manager_pin_ok = False
@@ -9639,10 +9696,49 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 st.success("تم تحديث بيانات المدير وخيار الظهور التلقائي.")
                 safe_rerun()
 
-            st.markdown("##### 1️⃣ ارسم ثم نزّل ملف التوقيع الشفاف")
-            components.html(render_manager_sig_pad_html(), height=360, scrolling=False)
+            st.markdown("##### 1️⃣ ارسم ثم احفظ التوقيع من داخل اللوحة")
+            mgr_saved_now = str(mgr_now.get("manager_sig_b64") or "").strip()
+            mgr_pad_val = sig_pad(
+                key="manager_settings_sig_pad",
+                title="توقيع مدير وحدة الحوادث (إصبع أو قلم — حبر أزرق رسمي #0044cc)",
+                subtitle="بعد الرسم اضغط «حفظ واعتماد التوقيع المرسوم» داخل اللوحة لاعتماده فوراً لجميع الأفراد.",
+                saved=mgr_saved_now,
+                ls_key="khafar_manager_sig",
+                pad_id="manager",
+                accent="#c9a227",
+            )
+            mgr_pad_event = consume_sig_pad_result(mgr_pad_val, kind="manager")
+            if mgr_pad_event:
+                action = str(mgr_pad_event.get("action") or "")
+                if action == "clear":
+                    mgr_now = save_manager_signature_settings(
+                        mgr_name,
+                        mgr_title or DEFAULT_MANAGER_TITLE,
+                        "",
+                        auto_insert=bool(mgr_auto),
+                    )
+                    st.success("تم مسح توقيع المدير المعتمد.")
+                else:
+                    raw_b64 = strip_signature_data_url(mgr_pad_event.get("data_url") or "")
+                    if raw_b64:
+                        try:
+                            raw_bytes = base64.b64decode(raw_b64)
+                            saved = ingest_manager_signature_bytes(
+                                raw_bytes,
+                                mgr_name,
+                                mgr_title or DEFAULT_MANAGER_TITLE,
+                                auto_insert=bool(mgr_auto),
+                            )
+                            st.success(
+                                f"✅ تم اعتماد توقيع المدير من اللوحة: {saved.get('display_name') or DEFAULT_MANAGER_TITLE}"
+                            )
+                            mgr_now = saved
+                        except Exception as exc:
+                            st.error(f"تعذّر اعتماد توقيع اللوحة: {exc}")
+                    else:
+                        st.warning("ارسم التوقيع أولاً ثم اضغط حفظ داخل اللوحة.")
 
-            st.markdown("##### 2️⃣ ارفع الملف لاعتماده فوراً لجميع الأفراد")
+            st.markdown("##### 2️⃣ أو ارفع ملفاً لاعتماده فوراً لجميع الأفراد")
             mgr_upload = st.file_uploader(
                 "📤 أو ارفع/ثبّت صورة التوقيع المحفوظة هنا لاعتمادها فوراً لجميع الأفراد",
                 type=["png", "jpg", "jpeg", "webp"],

@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>لوحة التوقيع</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #0d1316;
+      font-family: Cairo, Tahoma, sans-serif;
+      color: #e2e8f0;
+      overflow: hidden;
+    }
+    .wrap {
+      background: #101820;
+      border: 1px solid var(--accent, #1e6b50);
+      border-radius: 12px;
+      padding: 10px;
+      margin: 6px;
+    }
+    .title {
+      font-weight: 800;
+      color: #f3cc7a;
+      font-size: 13px;
+      margin-bottom: 4px;
+      text-align: center;
+    }
+    .sub {
+      color: #94a3b8;
+      font-size: 11px;
+      text-align: center;
+      margin: 0 0 8px;
+      line-height: 1.45;
+      min-height: 14px;
+    }
+    canvas {
+      width: 100%;
+      height: 180px;
+      border: 1.5px dashed var(--accent, #0044cc);
+      border-radius: 8px;
+      background: #ffffff;
+      touch-action: none;
+      -ms-touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      cursor: crosshair;
+      display: block;
+      overscroll-behavior: none;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    button {
+      border: 1px solid #d4a853;
+      background: #112924;
+      color: #fff;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-weight: 800;
+      cursor: pointer;
+      font-size: 12.5px;
+      font-family: inherit;
+    }
+    button.primary {
+      background: #145a48;
+      border-color: #34d399;
+    }
+    .ok {
+      color: #34d399;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+      margin-top: 6px;
+      min-height: 18px;
+      line-height: 1.4;
+    }
+    .err { color: #fca5a5; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title" id="padTitle">ارسم التوقيع هنا (حبر أزرق رسمي #0044cc)</div>
+    <div class="sub" id="padSub"></div>
+    <canvas id="pad" width="900" height="220" tabindex="-1"></canvas>
+    <div class="actions">
+      <button type="button" class="primary" id="btnSave">💾 حفظ واعتماد التوقيع المرسوم</button>
+      <button type="button" id="btnClear">🧹 مسح اللوحة</button>
+    </div>
+    <div class="ok" id="padStatus"></div>
+  </div>
+  <script>
+(function () {
+  var INK = "#0044cc";
+  var CANVAS_W = 900;
+  var CANVAS_H = 220;
+  var canvas = document.getElementById("pad");
+  var ctx = canvas.getContext("2d", { willReadFrequently: true });
+  var statusEl = document.getElementById("padStatus");
+  var titleEl = document.getElementById("padTitle");
+  var subEl = document.getElementById("padSub");
+  var drawing = false;
+  var lastX = 0, lastY = 0, midX = 0, midY = 0;
+  var lastTouchTs = 0;
+  var hasInk = false;
+  var lsKey = "khafar_duty_sig";
+  var padId = "officer";
+  var restoring = false;
+  var lastSavedArg = "";
+
+  /* أبعاد الـ canvas ثابتة من HTML — يُمنع إعادة تعيين width/height هنا. */
+  function send(type, data) {
+    var msg = Object.assign({ isStreamlitMessage: true, type: type }, data || {});
+    try { window.parent.postMessage(msg, "*"); } catch (e) {}
+  }
+  function setReady() { send("streamlit:componentReady", { apiVersion: 1 }); }
+  function setHeight() {
+    var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 340);
+    send("streamlit:setFrameHeight", { height: h });
+  }
+  function setValue(value) {
+    send("streamlit:setComponentValue", { value: value, dataType: "json" });
+  }
+
+  function posFromClient(clientX, clientY) {
+    var r = canvas.getBoundingClientRect();
+    var rw = r.width || CANVAS_W;
+    var rh = r.height || CANVAS_H;
+    return {
+      x: (clientX - r.left) * (CANVAS_W / rw),
+      y: (clientY - r.top) * (CANVAS_H / rh)
+    };
+  }
+  function posFromEvent(e) {
+    var src = e;
+    if (e.touches && e.touches.length) src = e.touches[0];
+    else if (e.changedTouches && e.changedTouches.length) src = e.changedTouches[0];
+    return posFromClient(src.clientX, src.clientY);
+  }
+
+  function canvasHasInk() {
+    try {
+      var data = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H).data;
+      for (var i = 3; i < data.length; i += 16) {
+        if (data[i] > 18) return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function beginDraw(pt) {
+    drawing = true;
+    hasInk = true;
+    lastX = pt.x; lastY = pt.y; midX = pt.x; midY = pt.y;
+    ctx.fillStyle = INK;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  function moveDraw(pt) {
+    if (!drawing) return;
+    var nextMidX = (lastX + pt.x) / 2;
+    var nextMidY = (lastY + pt.y) / 2;
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 3.2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(midX, midY);
+    ctx.quadraticCurveTo(lastX, lastY, nextMidX, nextMidY);
+    ctx.stroke();
+    lastX = pt.x; lastY = pt.y; midX = nextMidX; midY = nextMidY;
+  }
+  function endDraw() {
+    drawing = false;
+  }
+
+  function onTouchStart(ev) {
+    lastTouchTs = Date.now();
+    if (ev.cancelable) ev.preventDefault();
+    ev.stopPropagation();
+    beginDraw(posFromEvent(ev));
+  }
+  function onTouchMove(ev) {
+    lastTouchTs = Date.now();
+    if (!drawing) return;
+    if (ev.cancelable) ev.preventDefault();
+    ev.stopPropagation();
+    moveDraw(posFromEvent(ev));
+  }
+  function onTouchEnd(ev) {
+    lastTouchTs = Date.now();
+    if (ev.cancelable) ev.preventDefault();
+    ev.stopPropagation();
+    endDraw();
+  }
+
+  canvas.addEventListener("touchstart", onTouchStart, { passive: false });
+  canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+  canvas.addEventListener("touchend", onTouchEnd, { passive: false });
+  canvas.addEventListener("touchcancel", onTouchEnd, { passive: false });
+
+  canvas.addEventListener("pointerdown", function (ev) {
+    if (ev.pointerType === "touch") return;
+    if (ev.cancelable) ev.preventDefault();
+    try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
+    beginDraw(posFromClient(ev.clientX, ev.clientY));
+  }, { passive: false });
+  canvas.addEventListener("pointermove", function (ev) {
+    if (ev.pointerType === "touch" || !drawing) return;
+    if (ev.cancelable) ev.preventDefault();
+    moveDraw(posFromClient(ev.clientX, ev.clientY));
+  }, { passive: false });
+  canvas.addEventListener("pointerup", function (ev) {
+    if (ev.pointerType === "touch") return;
+    endDraw();
+  });
+  canvas.addEventListener("mousedown", function (ev) {
+    if (Date.now() - lastTouchTs < 650 || ev.button !== 0) return;
+    ev.preventDefault();
+    beginDraw(posFromClient(ev.clientX, ev.clientY));
+  });
+  canvas.addEventListener("mousemove", function (ev) {
+    if (!drawing || Date.now() - lastTouchTs < 650) return;
+    ev.preventDefault();
+    moveDraw(posFromClient(ev.clientX, ev.clientY));
+  });
+  window.addEventListener("mouseup", function () {
+    if (Date.now() - lastTouchTs < 650) return;
+    endDraw();
+  });
+
+  function persistLocal(dataUrl) {
+    var raw = "";
+    if (dataUrl && dataUrl.indexOf(",") !== -1) raw = dataUrl.split(",")[1] || "";
+    try { if (lsKey) localStorage.setItem(lsKey, raw || dataUrl || ""); } catch (e) {}
+    try { if (padId) localStorage.setItem("pad_" + padId, dataUrl || ""); } catch (e) {}
+  }
+  function clearLocal() {
+    try { if (lsKey) localStorage.removeItem(lsKey); } catch (e) {}
+    try { if (padId) localStorage.removeItem("pad_" + padId); } catch (e) {}
+  }
+  function readLocal() {
+    var v = "";
+    try { v = localStorage.getItem("pad_" + padId) || ""; } catch (e) {}
+    if (!v) {
+      try { v = localStorage.getItem(lsKey) || ""; } catch (e2) {}
+    }
+    if (!v) return "";
+    if (v.indexOf("data:image") === 0) return v;
+    return "data:image/png;base64," + v;
+  }
+
+  function restoreFromUrl(url, done) {
+    if (!url) { if (done) done(false); return; }
+    restoring = true;
+    var img = new Image();
+    img.onload = function () {
+      try {
+        ctx.drawImage(img, 0, 0, CANVAS_W, CANVAS_H);
+        hasInk = canvasHasInk();
+      } catch (e) {}
+      restoring = false;
+      if (done) done(true);
+    };
+    img.onerror = function () {
+      restoring = false;
+      if (done) done(false);
+    };
+    img.src = url;
+  }
+
+  function exportPng() {
+    var out = document.createElement("canvas");
+    out.width = CANVAS_W;
+    out.height = CANVAS_H;
+    var octx = out.getContext("2d");
+    octx.fillStyle = "#ffffff";
+    octx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    octx.drawImage(canvas, 0, 0);
+    return out.toDataURL("image/png");
+  }
+
+  document.getElementById("btnSave").onclick = function () {
+    if (!hasInk && !canvasHasInk()) {
+      statusEl.className = "ok err";
+      statusEl.textContent = "ارسم التوقيع أولاً على اللوحة.";
+      return;
+    }
+    var dataUrl = exportPng();
+    persistLocal(dataUrl);
+    statusEl.className = "ok";
+    statusEl.textContent = "تم حفظ واعتماد التوقيع المرسوم.";
+    setValue({
+      action: "save",
+      data_url: dataUrl,
+      pad_id: padId,
+      ts: Date.now()
+    });
+  };
+
+  document.getElementById("btnClear").onclick = function () {
+    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    hasInk = false;
+    drawing = false;
+    clearLocal();
+    statusEl.className = "ok";
+    statusEl.textContent = "تم مسح اللوحة.";
+    setValue({
+      action: "clear",
+      data_url: "",
+      pad_id: padId,
+      ts: Date.now()
+    });
+  };
+
+  function applyArgs(args) {
+    args = args || {};
+    if (args.title) titleEl.textContent = String(args.title);
+    if (args.subtitle !== undefined) subEl.textContent = String(args.subtitle || "");
+    if (args.ls_key) lsKey = String(args.ls_key);
+    if (args.pad_id) padId = String(args.pad_id);
+    if (args.accent) {
+      document.documentElement.style.setProperty("--accent", String(args.accent));
+    }
+    var saved = String(args.saved || "");
+    if (saved && saved.indexOf("data:image") !== 0 && saved.length > 32) {
+      saved = "data:image/png;base64," + saved;
+    }
+    if (canvasHasInk() || hasInk) {
+      lastSavedArg = saved;
+      return;
+    }
+    if (saved && saved !== lastSavedArg) {
+      lastSavedArg = saved;
+      restoreFromUrl(saved);
+      return;
+    }
+    var local = readLocal();
+    if (local) restoreFromUrl(local);
+  }
+
+  window.addEventListener("message", function (ev) {
+    var data = ev.data || {};
+    if (!data || data.type !== "streamlit:render") return;
+    applyArgs(data.args || {});
+    setHeight();
+  });
+
+  setReady();
+  setHeight();
+  setTimeout(setHeight, 80);
+  setTimeout(setHeight, 400);
+})();
+  </script>
+</body>
+</html>
