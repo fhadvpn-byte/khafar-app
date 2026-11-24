@@ -2,7 +2,7 @@ import copy, inspect, json, re
 import streamlit as st
 from streamlit.delta_generator import DeltaGenerator as DG
 
-_KHAFAR_MED_AGE_VER = "v3"
+_KHAFAR_MED_AGE_VER = "v4"
 
 _AR_DIGITS = "".join(chr(0x0660 + i) for i in range(10))
 _FA_DIGITS = "".join(chr(0x06F0 + i) for i in range(10))
@@ -126,12 +126,22 @@ def _is_age_field(fd) -> bool:
             return True
     return False
 
-def _inject_age_into_form_dict(fm: dict) -> bool:
+def _age_sample_for_label(age_lbl: str) -> str:
+    if age_lbl == W_AGE_INJURED:
+        return "28"
+    if age_lbl == W_AGE_DECEASED:
+        return "38"
+    if age_lbl == W_AGE_TOX:
+        return "29"
+    return "30"
+
+
+def _inject_age_into_form_dict(fm: dict, form_id: str = "") -> bool:
     blob = _dict_text_blob(fm)
     if any(ex in blob for ex in EXCLUDED_KEYWORDS):
         return False
 
-    fid = next((str(fm[k]) for k in ("id", "key", "code", "form_id", "slug") if isinstance(fm.get(k), str) and fm.get(k)), "med")
+    fid = (form_id or "").strip() or next((str(fm[k]) for k in ("id", "key", "code", "form_id", "slug") if isinstance(fm.get(k), str) and fm.get(k)), "med")
     _STATE["med_ids"].add(fid)
 
     flk = None
@@ -202,6 +212,8 @@ def _inject_age_into_form_dict(fm: dict) -> bool:
         for tk in ("type", "kind", "widget", "input_type"):
             if tk in new_fd and str(new_fd[tk]).lower() in ("select", "selectbox", "textarea"):
                 new_fd[tk] = "text"
+        age_sample = _age_sample_for_label(age_lbl)
+        new_fd["sample"] = age_sample
         for dk in ("default", "value", "val", "initial"):
             if dk in new_fd:
                 new_fd[dk] = ""
@@ -249,7 +261,8 @@ def _scan_med_catalog(obj, seen=None, depth=0) -> int:
             for item in obj:
                 if isinstance(item, dict):
                     if (ck and item.get(ck) == seed.get(ck)) or (not ck and (_is_med_seed_dict(item) or any(w in _dict_text_blob(item) for w in MED_KEYWORDS))):
-                        if _inject_age_into_form_dict(item):
+                        item_id = next((str(item[ik]) for ik in ("id", "key", "code", "form_id", "slug") if isinstance(item.get(ik), str) and item.get(ik)), "")
+                        if _inject_age_into_form_dict(item, form_id=item_id):
                             count += 1
             return count
         for x in obj:
@@ -265,7 +278,7 @@ def _scan_med_catalog(obj, seen=None, depth=0) -> int:
                 if isinstance(v, dict):
                     if (ck and v.get(ck) == seed.get(ck)) or (not ck and (_is_med_seed_dict(v) or any(w in _dict_text_blob(v) for w in MED_KEYWORDS))):
                         _STATE["med_ids"].add(str(k))
-                        if _inject_age_into_form_dict(v):
+                        if _inject_age_into_form_dict(v, form_id=str(k)):
                             count += 1
             return count
         for k, v in list(obj.items()):

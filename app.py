@@ -1207,6 +1207,96 @@ def _field_is_visible(field: dict, fields_map: dict) -> bool:
     return True
 
 
+_DEMO_SCENE_OFFICER = "الرقيب أول / سالم بن أحمد بن يحيى المالكي — دورية ميدانية 14"
+_DEMO_AGE_BY_FORM = {
+    "med_injury": "28",
+    "med_morgue": "38",
+    "med_toxicology": "29",
+}
+_DEMO_CLASS_BY_FORM = {
+    "med_injury": ("cases_mode", "عدة مصابين في حادث مروري (مرفق بيانهم)"),
+    "med_morgue": ("deceased_count", "عدة جثامين (أكثر من متوفى في الحادث)"),
+}
+_DEMO_OTHER_DECEASED = (
+    "2- فهد بن حسن بن علي القحطاني | هوية: 1075544332 - سعودي - 41 عاماً | مرافق بالمركبة."
+)
+_DEMO_KEY_FALLBACKS = {
+    "scene_officer": _DEMO_SCENE_OFFICER,
+    "other_deceased": _DEMO_OTHER_DECEASED,
+    "incident_loc": "تقاطع طريق الملك فهد مع شارع السوق بمحافظة العارضة",
+    "party_phone": "0553319082",
+    "party_id": "1087654321",
+    "party_name": "عبدالرحمن بن محمد بن علي السبيعي",
+}
+
+
+def apply_demo_fill_to_open_form(fid: str, form_def: dict) -> None:
+    """تعبئة كل مفاتيح session_state الظاهرة للنموذج المفتوح ببيانات مرورية مترابطة."""
+    import khafar_bail
+
+    assigned = {}
+    age_val = _DEMO_AGE_BY_FORM.get(fid, "30")
+    class_key, class_val = _DEMO_CLASS_BY_FORM.get(fid, (None, None))
+
+    for fld in form_def.get("fields") or []:
+        key = str(fld.get("key") or "")
+        if not key:
+            continue
+        sample = fld.get("sample")
+        label = str(fld.get("label") or "")
+        if sample in (None, ""):
+            if key in _DEMO_KEY_FALLBACKS:
+                sample = _DEMO_KEY_FALLBACKS[key]
+            elif key.endswith("_person_age") or key.endswith("_age") or "عمر" in label:
+                sample = age_val
+            else:
+                sample = ""
+        if key == "other_deceased" and str(sample).strip() in ("", "2- ...", "2-…", "2-"):
+            sample = _DEMO_OTHER_DECEASED
+        opts = list(fld.get("options") or [])
+        ftype = str(fld.get("type") or "")
+        if class_key and key == class_key and class_val:
+            sample = class_val
+        if ftype == "select" and opts and sample not in opts:
+            sample = opts[0]
+        assigned[key] = sample
+
+    for fld in form_def.get("fields") or []:
+        rule = fld.get("visible_if") or {}
+        contains = str(rule.get("contains_any") or "")
+        if "أخرى" in contains:
+            parent_val = str(assigned.get(rule.get("key"), "") or "")
+            if "أخرى" not in parent_val:
+                assigned[fld["key"]] = ""
+
+    for key, sample in assigned.items():
+        st.session_state[f"inp_{fid}_{key}"] = sample
+
+    if fid in _DEMO_AGE_BY_FORM or any(
+        str(fld.get("key") or "").endswith(("_person_age", "_age"))
+        or "عمر" in str(fld.get("label") or "")
+        for fld in (form_def.get("fields") or [])
+    ):
+        for extra_key in (f"{fid}_person_age", "med_person_age", "person_age"):
+            st.session_state[f"inp_{fid}_{extra_key}"] = age_val
+        for sk in list(st.session_state.keys()):
+            s = str(sk)
+            if s.startswith(f"inp_{fid}_") and s.endswith(("_person_age", "_age")):
+                st.session_state[sk] = age_val
+            if s.startswith("_kh_imp_med_age_") or s.startswith("_kh_med_age_fb_"):
+                st.session_state[sk] = age_val
+
+    bail_id = getattr(khafar_bail, "BAIL_ID", "decl_accident_bail")
+    if fid == bail_id or "كفالة" in str(form_def.get("title") or ""):
+        for spec in khafar_bail.BAIL_SPECS:
+            key, dflt = spec[0], spec[3]
+            val = assigned.get(key)
+            if val in (None, ""):
+                val = dflt
+            st.session_state[f"inp_{fid}_{key}"] = val
+            st.session_state[f"_bi_{key}"] = val
+
+
 _PARTY_ORDINALS = ["", "الأول", "الثاني", "الثالث", "الرابع", "الخامس"]
 _COUNT_TOKEN = {1: "(2)", 2: "(2)", 3: "(3)", 4: "(4)", 5: "(5)"}
 
@@ -2146,7 +2236,7 @@ TRAFFIC_FORMS = {
              "a4_compose": {"fmt": "{value}", "append_if": "items_action_other", "append_fmt": " — {extra}"}},
             _other_field("items_action", "اكتب التصرف يدوياً"),
             {"key": "scene_officer", "label": "رتبة واسم مباشر الواقعة / الدورية الميدانية (اختياري)", "type": "text",
-             "sample": "", "placeholder": "يُذكر عند اختلافه عن مستلم الخفر المناوب"},
+             "sample": "الرقيب أول / سالم بن أحمد بن يحيى المالكي — دورية ميدانية 14", "placeholder": "يُذكر عند اختلافه عن مستلم الخفر المناوب"},
         ],
         "legal_fn": lambda m: (
             f"إنه في الزمان والمكان المثبتين آلياً بترويسة هذا المحضر، واستناداً للمسوغ النظامي ({_sel(m, 'legal_reason')}) في المعاملة رقم ({_val(m, 'incident_no')})، "
@@ -2189,7 +2279,7 @@ TRAFFIC_FORMS = {
             {"key": "impound_loc", "label": "ساحة الحجز المودعة بها المركبة", "type": "text", "sample": "ساحة حجز المرور بالعارضة"},
             {"key": "pre_tow_state", "label": "حالة الهيكل الخارجي قبل الرفع على السطحة", "type": "text", "sample": "خدوش سابقة بالصدام الخلفي والزجاج سليم والأبواب مقفلة"},
             {"key": "scene_officer", "label": "رتبة واسم مباشر الواقعة / الدورية الميدانية (اختياري)", "type": "text",
-             "sample": "", "placeholder": "يُذكر عند اختلافه عن مستلم الخفر المناوب"},
+             "sample": "الرقيب أول / سالم بن أحمد بن يحيى المالكي — دورية ميدانية 14", "placeholder": "يُذكر عند اختلافه عن مستلم الخفر المناوب"},
         ],
         "legal_fn": lambda m: (
             f"بناءً على الصلاحيات النظامية المخولة لرجال المرور بموجب نظام المرور ولائحته التنفيذية، جرى في الزمان والمكان الموضحين بترويسة المحضر رقم ({_val(m, 'incident_no')}) "
@@ -2225,7 +2315,7 @@ TRAFFIC_FORMS = {
              "sample": "العريف سعيد بن محمد العسيري", "prefill_sample": True},
             {"key": "officer_note", "label": "إفادة راصد المخالفة التفصيلية", "type": "textarea", "sample": "أثناء مباشرة تنظيم الحركة المرورية جرى إدخال حرف (ج) بدلاً من (ح) بالخطأ للوحة المركبة المخالفة الفعلية، والمركبة المسجل عليها الإشعار لم تكن بالموقع."},
             {"key": "scene_officer", "label": "رتبة واسم مباشر الواقعة / الدورية الميدانية (اختياري)", "type": "text",
-             "sample": "", "placeholder": "يُذكر عند اختلافه عن مستلم الخفر المناوب"},
+             "sample": "الرقيب أول / سالم بن أحمد بن يحيى المالكي — دورية ميدانية 14", "placeholder": "يُذكر عند اختلافه عن مستلم الخفر المناوب"},
         ],
         "legal_fn": lambda m: (
             f"نرفع هذا المحضر الرسمي بشأن المخالفة المرورية رقم ({_val(m, 'incident_no')}) المقيدة بتاريخ ({_val(m, 'viol_datetime')}) على اللوحة ({_val(m, 'plate_no')})، "
@@ -2260,7 +2350,7 @@ TRAFFIC_FORMS = {
             {"key": "facts_detail", "label": "تفاصيل الوقائع المشاهدة عياناً بالموقع", "type": "textarea", "sample": "عند مباشرة الموقع تبين ارتطام المركبة المذكورة بعمود الإنارة رقم (48) بالجزيرة الوسطية مما أدى لميلان العمود وانكشاف الكيبل الأرضي دون إصابات بشرية."},
             {"key": "taken_measure", "label": "الإجراء الفوري المتخذ في الموقع", "type": "textarea", "sample": "تأمين الموقع بالدورية التحذيرية وإشعار طوارئ البلدية والكهرباء لمباشرة العمود واستكمال إجراءات الحادث."},
             {"key": "scene_officer", "label": "رتبة واسم مباشر الواقعة / الدورية الميدانية (اختياري)", "type": "text",
-             "sample": "", "placeholder": "يُذكر عند اختلافه عن مستلم الخفر المناوب"},
+             "sample": "الرقيب أول / سالم بن أحمد بن يحيى المالكي — دورية ميدانية 14", "placeholder": "يُذكر عند اختلافه عن مستلم الخفر المناوب"},
         ],
         "legal_fn": lambda m: (
             f"إنه في الزمان والمكان المثبتين آلياً بترويسة المحضر رقم ({_val(m, 'incident_no')})، وأثناء قيامنا بمهام العمل الميداني باشرنا واقعة ({_sel(m, 'incident_kind')}) "
@@ -2285,7 +2375,7 @@ TRAFFIC_FORMS = {
             {"key": "cases_mode", "label": "تصنيف الإحالة والعدد", "type": "select", "options": [
                 "مصاب واحد في حادث مروري",
                 "عدة مصابين في حادث مروري (مرفق بيانهم)"
-            ], "sample": "مصاب واحد في حادث مروري"},
+            ], "sample": "عدة مصابين في حادث مروري (مرفق بيانهم)"},
             {"key": "party_name", "label": "اسم المصاب الرباعي", "type": "text", "sample": "موسى بن يحيى بن أحمد خبراني"},
             {"key": "party_id", "label": "رقم الهوية / الإقامة والجنسية", "type": "text", "sample": "1098877665 - سعودي"},
             {"key": "plate_no", "label": "بيانات المركبة وصفته بالحادث", "type": "text", "sample": "تويوتا هايلوكس (ب ر د 3318) - قائد المركبة"},
@@ -2325,7 +2415,7 @@ TRAFFIC_FORMS = {
             {"key": "deceased_count", "label": "تصنيف حالة الإيداع والعدد", "type": "select", "options": [
                 "جثمان واحد (متوفى واحد)",
                 "عدة جثامين (أكثر من متوفى في الحادث)"
-            ], "sample": "جثمان واحد (متوفى واحد)"},
+            ], "sample": "عدة جثامين (أكثر من متوفى في الحادث)"},
             {"key": "party_name", "label": "اسم المتوفى الأول (أو مجهول الهوية مع أوصافه)", "type": "text", "sample": "عبدالله بن حسن بن علي"},
             {"key": "party_id", "label": "رقم الهوية / الإقامة والجنسية والعمر", "type": "text", "sample": "1043322110 - سعودي - 38 عاماً"},
             {"key": "plate_no", "label": "المركبة ورقم اللوحة وصفة المتوفى بالحادث", "type": "text", "sample": "صالون لاندكروزر (ب ح ط 9879) - قائد المركبة"},
@@ -2346,7 +2436,7 @@ TRAFFIC_FORMS = {
              "a4_compose": {"fmt": "{value}", "append_if": "forensic_order_other", "append_fmt": " — {extra}"}},
             _other_field("forensic_order", "اكتب التوجيه يدوياً"),
             {"key": "other_deceased", "label": "بيانات الجثامين الإضافية عند تعدد الوفيات (الاسم، الهوية، الصفة)", "type": "textarea",
-             "sample": "2- ...",
+             "sample": "2- فهد بن حسن بن علي القحطاني | هوية: 1075544332 - سعودي - 41 عاماً | مرافق بالمركبة.",
              "visible_if": {"key": "deceased_count", "contains_any": ["عدة جثامين"]}},
         ],
         "legal_fn": _med_morgue_legal,
@@ -3829,7 +3919,7 @@ def render_hide_st_cloud_badges() -> None:
 def _sig_slot_img(b64: str, slot_id: str) -> str:
     slot_style = (
         "max-height:50px; height:auto; max-width:98%; width:auto; object-fit:contain; "
-        "display:inline-block; background:#ffffff !important; mix-blend-mode:multiply; "
+        "display:inline-block; background:#ffffff !important; mix-blend-mode:normal; "
         "border:none !important; box-shadow:none !important;"
     )
     if b64:
@@ -3891,7 +3981,7 @@ def render_officer_sig_pad_html() -> str:
   .ok{{color:#34d399;font-size:12px;font-weight:700;text-align:center;margin-top:6px;min-height:18px}}
 </style></head><body>
 <div class="wrap">
-  <div class="title">ارسم توقيع مستلم الخفر المناوب هنا (خط أسود حاد للطباعة)</div>
+  <div class="title">ارسم توقيع مستلم الخفر المناوب هنا (حبر أزرق رسمي #0044cc)</div>
   <canvas id="pad_officer_settings" width="900" height="220" tabindex="-1"></canvas>
   <div class="actions">
     <button type="button" id="btnClear">مسح اللوحة</button>
@@ -3904,6 +3994,14 @@ def render_officer_sig_pad_html() -> str:
   var canvas = document.getElementById('pad_officer_settings');
   var ctx = canvas.getContext('2d');
   var drawing = false;
+  function fillWhite(){{
+    ctx.save();
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.restore();
+  }}
+  fillWhite();
   function pos(e){{
     var r = canvas.getBoundingClientRect();
     var src = (e.touches && e.touches[0]) ? e.touches[0] : e;
@@ -3914,7 +4012,7 @@ def render_officer_sig_pad_html() -> str:
     if (!drawing) return; if (e.cancelable) e.preventDefault(); e.stopPropagation();
     var p = pos(e);
     ctx.lineWidth = 3.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#000000'; ctx.lineTo(p.x, p.y); ctx.stroke();
+    ctx.strokeStyle = '#0044cc'; ctx.lineTo(p.x, p.y); ctx.stroke();
   }}
   function end(e){{ if (e && e.cancelable) e.preventDefault(); drawing = false; }}
   canvas.addEventListener('pointerdown', start, {{passive:false}});
@@ -3926,17 +4024,25 @@ def render_officer_sig_pad_html() -> str:
   canvas.addEventListener('touchmove', move, {{passive:false}});
   canvas.addEventListener('touchend', end, {{passive:false}});
   document.getElementById('btnClear').onclick = function(){{
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+    fillWhite();
     document.getElementById('padStatus').textContent = '';
   }};
   document.getElementById('btnAdopt').onclick = function(){{
-    var blank = document.createElement('canvas');
-    blank.width = canvas.width; blank.height = canvas.height;
-    if (canvas.toDataURL() === blank.toDataURL()) {{
+    var probe = document.createElement('canvas');
+    probe.width = canvas.width; probe.height = canvas.height;
+    var pctx = probe.getContext('2d');
+    pctx.fillStyle = '#ffffff'; pctx.fillRect(0,0,probe.width,probe.height);
+    if (canvas.toDataURL() === probe.toDataURL()) {{
       document.getElementById('padStatus').textContent = 'ارسم التوقيع أولاً';
       return;
     }}
-    var dataUrl = canvas.toDataURL('image/png');
+    var out = document.createElement('canvas');
+    out.width = canvas.width; out.height = canvas.height;
+    var octx = out.getContext('2d');
+    octx.fillStyle = '#ffffff';
+    octx.fillRect(0, 0, out.width, out.height);
+    octx.drawImage(canvas, 0, 0);
+    var dataUrl = out.toDataURL('image/png');
     var b64 = dataUrl.split(',')[1] || '';
     try {{ localStorage.setItem('{DUTY_SIG_LS_KEY}', b64); }} catch (e) {{}}
     try {{
@@ -4557,44 +4663,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     import khafar_med_age; khafar_med_age.register_catalog(locals(), globals())
 
     # --- Duty cell ---
-    if is_toxicology:
-        # خطاب تحليل السموم فقط: ختم إدارة مرور منطقة جازان + توثيق نصي لمستلم الخفر المناوب بدون خانة توقيع
-        tox_officer_name = str(rec.get("officer_full") or "").strip()
-        for _pfx in ("مستلم الخفر المناوب /", "مستلم الخفر المناوب/", "مستلم الخفر المناوب -", "مستلم الخفر المناوب-"):
-            if tox_officer_name.startswith(_pfx):
-                tox_officer_name = tox_officer_name[len(_pfx):].strip()
-                break
-        tox_officer_line = (
-            '<div style="margin-top:8px;font-size:12px;font-weight:800;color:#000000 !important;'
-            'line-height:1.45;text-align:center;">'
-            f"توثيق مستلم الخفر المناوب: {html.escape(tox_officer_name or '—')}"
-            "</div>"
-        )
-        if duty_stamp_now:
-            duty_box_inner = _sig_slot_img(duty_stamp_now, "slot_duty") + tox_officer_line
-        elif needs_duty_pad:
-            duty_box_inner = (
-                "<div class='sig-guide'>"
-                + _sig_slot_img("", "slot_duty")
-                + guide_hint
-                + "</div>"
-                + tox_officer_line
-            )
-        elif "ختم" in duty_mode or not duty_mode:
-            duty_box_inner = (
-                '<div style="display:inline-block; border:1.5px solid #000000; color:#000000; '
-                'padding:6px 12px; border-radius:5px; font-size:12px; font-weight:800; '
-                'line-height:1.45; max-width:96%;">'
-                "ختم المصادقة النظامي لإدارة مرور منطقة جازان"
-                "</div>"
-                + tox_officer_line
-            )
-        else:
-            duty_box_inner = _sig_slot_img("", "slot_duty") + tox_officer_line
-        # لا تُعرض لوحة/خانة توقيع لمستلم الخفر المناوب في هذا الخطاب
-        needs_officer_pad = False
-        officer_box_inner = ""
-    elif duty_stamp_now:
+    if duty_stamp_now:
         duty_box_inner = _sig_slot_img(duty_stamp_now, "slot_duty")
         if manager_auto:
             duty_box_inner += (
@@ -4611,17 +4680,23 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + "</div>"
         )
     elif "ختم" in duty_mode or not duty_mode:
-        duty_box_inner = """
-            <div style="display:inline-block; border:1.5px solid #000000; color:#000000; padding:3px 10px; border-radius:5px; font-size:11.5px; font-weight:800;">
-                مُصادق ومُعتمد نظاماً
-            </div>
-        """
+        duty_stamp_label = (
+            "ختم المصادقة النظامي لإدارة مرور منطقة جازان"
+            if is_toxicology and not manager_auto
+            else "مُصادق ومُعتمد نظاماً"
+        )
+        duty_box_inner = (
+            '<div style="display:inline-block; border:1.5px solid #000000; color:#000000; '
+            'padding:3px 10px; border-radius:5px; font-size:11.5px; font-weight:800;">'
+            f"{html.escape(duty_stamp_label)}"
+            "</div>"
+        )
     else:
         duty_box_inner = _sig_slot_img("", "slot_duty")
 
-    # جدول التوقيعات ثابت بـ 3 أعمدة للنماذج العادية، وشبكة مضغوطة لنماذج التنازل متعددة الأطراف
-    # (تحليل السموم: عمودان فقط — جهة الاستلام + مصادقة إدارة مرور منطقة جازان)
-    col_width = "50%" if is_toxicology else "33.3%"
+    # جدول التوقيعات ثابت بـ 3 أعمدة (جهة الاستلام + ضابط/مستلم الخفر + وحدة الحوادث)
+    # بما في ذلك نموذج تحليل السموم ذي الخانات الثلاث.
+    col_width = "33.3%"
     party_signers = _waiver_signers(form_id_now, fields_map)
     multi_sig = bool(party_signers)
     needs_party_live = multi_sig and interactive_sig and ("توقيع حي" in citizen_mode)
@@ -4674,12 +4749,13 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 inner = _sig_slot_img("", f"slot_{pad}")
             sig_slots.append((signer["header"], signer["name"], signer["role"], inner))
         duty_name_now = manager_duty_full or str(rec.get("duty_full") or "")
-        if not is_toxicology:
+        if is_toxicology:
+            tox_duty_header = "وحدة الحوادث" if manager_auto else "مصادقة إدارة مرور منطقة جازان"
+            sig_slots.append(("ضابط الخفر", str(rec.get("officer_full") or ""), "", officer_box_inner))
+            sig_slots.append((tox_duty_header, duty_name_now if manager_auto else "", "", duty_box_inner))
+        else:
             sig_slots.append(("مستلم الخفر المناوب", str(rec.get("officer_full") or ""), "", officer_box_inner))
             sig_slots.append(("وحدة الحوادث", duty_name_now, "", duty_box_inner))
-        else:
-            tox_duty_header = "وحدة الحوادث" if manager_auto else "مصادقة إدارة مرور منطقة جازان"
-            sig_slots.append((tox_duty_header, duty_name_now if manager_auto else "", "", duty_box_inner))
         grid_cols = 3 if len(sig_slots) <= 3 else 4
         sig_rows = []
         for start in range(0, len(sig_slots), grid_cols):
@@ -4715,18 +4791,23 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 <table class="sig-tbl">
                     <thead>
                         <tr>
-                            <th style="width:50%;">{html.escape(col1_header)}</th>
-                            <th style="width:50%;">{html.escape(tox_right_header)}</th>
+                            <th style="width:{col_width};">{html.escape(col1_header)}</th>
+                            <th style="width:{col_width};">ضابط الخفر</th>
+                            <th style="width:{col_width};">{html.escape(tox_right_header)}</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td style="width:50%;">
+                            <td style="width:{col_width};">
                                 {col1_name_html}
                                 {col1_role_html}
                                 {citizen_box_inner}
                             </td>
-                            <td style="width:50%;">
+                            <td style="width:{col_width};">
+                                <div class="sig-person">{html.escape(str(rec.get('officer_full') or ''))}</div>
+                                {officer_box_inner}
+                            </td>
+                            <td style="width:{col_width};">
                                 {duty_name_html if manager_auto else ""}
                                 {duty_box_inner}
                             </td>
@@ -4779,9 +4860,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     elif needs_citizen_pad:
         live_pad_ids.append("citizen")
         dock_cards.append(_live_pad_card("citizen", citizen_pad_title, citizen_pad_sub))
-    if needs_officer_pad and not is_toxicology:
+    if needs_officer_pad:
         live_pad_ids.append("officer")
-        dock_cards.append(_live_pad_card("officer", "لوحة توقيع: مستلم الخفر المناوب", rec.get("officer_full", "")))
+        officer_pad_title = "لوحة توقيع: ضابط الخفر" if is_toxicology else "لوحة توقيع: مستلم الخفر المناوب"
+        dock_cards.append(_live_pad_card("officer", officer_pad_title, rec.get("officer_full", "")))
     if needs_duty_pad:
         live_pad_ids.append("duty")
         duty_pad_title = (
@@ -4975,11 +5057,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     img.sig-slot-img, #slot_duty, #slot_officer, #slot_citizen {{
         max-height: 50px !important; height: auto !important; max-width: 98% !important;
         width: auto !important; object-fit: contain !important; display: inline-block !important;
-        background: #ffffff !important; mix-blend-mode: multiply !important;
+        background: #ffffff !important; mix-blend-mode: normal !important;
         border: none !important; box-shadow: none !important; visibility: visible !important;
     }}
     td.sig-cell img.sig-slot-img, .sig-cell img.sig-slot-img {{
-        background: #ffffff !important; mix-blend-mode: multiply !important;
+        background: #ffffff !important; mix-blend-mode: normal !important;
     }}
     .sig-guide {{ background: #ffffff !important; }}
     .ios-print-hint {{
@@ -4991,7 +5073,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         .sig-tbl .sig-slot-img, .sig-grid .sig-slot-img, .sig-multi .sig-slot-img, img.sig-slot-img {{
             display: inline-block !important; visibility: visible !important; opacity: 1 !important;
             max-height: 50px !important; height: auto !important;
-            background: #ffffff !important; mix-blend-mode: multiply !important;
+            background: #ffffff !important; mix-blend-mode: normal !important;
             border: none !important; box-shadow: none !important;
             -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
         }}
@@ -5634,7 +5716,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     </div>
 </div>
 <script>
-    const PEN_COLOR = '#0d47a1';
+    const PEN_COLOR = '#0044cc';
     const LIVE_PADS = {json.dumps(live_pad_ids, ensure_ascii=False)};
     const PRELOADED_SIGS = {json.dumps(preloaded_live_sigs, ensure_ascii=False)};
     const DOC_SIG_KEY = {json.dumps(
@@ -6803,10 +6885,22 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   }}
 
   function findSlotForPad(padId) {{
-    var direct = document.getElementById('slot_' + padId);
-    if (direct) return direct;
-    if (padId === 'officer' || padId === 'duty' || padId === 'khafar') {{
-      return document.querySelector('#a4Sheet img#slot_officer, #a4Sheet img#slot_khafar_duty_tox, #a4Sheet img#slot_duty');
+    if (!padId) return null;
+    var exact = document.getElementById('slot_' + padId);
+    if (exact) return exact;
+    try {{
+      exact = document.querySelector('#a4Sheet img#slot_' + padId);
+      if (exact) return exact;
+    }} catch (e) {{}}
+    var aliases = {{
+      officer: ['slot_officer', 'slot_khafar_duty_tox'],
+      khafar: ['slot_officer', 'slot_khafar_duty_tox'],
+      duty: ['slot_duty']
+    }};
+    var ids = aliases[padId] || [];
+    for (var ai = 0; ai < ids.length; ai++) {{
+      var el = document.getElementById(ids[ai]);
+      if (el) return el;
     }}
     return null;
   }}
@@ -7169,6 +7263,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     if (!isTox) return;
 
+    var existingTbl = sheet.querySelector('table.sig-tbl');
+    if (existingTbl && existingTbl.rows && existingTbl.rows[0] && existingTbl.rows[0].cells && existingTbl.rows[0].cells.length >= 3) {{
+      var hasOfficerSlot = !!sheet.querySelector('#slot_officer');
+      var hasDutySlot = !!sheet.querySelector('#slot_duty');
+      if (hasOfficerSlot && hasDutySlot) {{
+        sheet.dataset.toxThreeColFixed = '1';
+        return;
+      }}
+    }}
+
     if (docRoot === document) {{
       docRoot.querySelectorAll('div, span, label, strong, b').forEach(function(el) {{
         if (el.children.length === 0 && !sheet.contains(el)) {{
@@ -7285,6 +7389,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         if (rightHospCell && rightHospCell.contains(cand)) continue;
         if (unitHeadSigs.indexOf(cand) !== -1) continue;
         var sid = (cand.id || '').toLowerCase();
+        if (sid === 'slot_duty' || sid.indexOf('duty') !== -1) continue;
         if (sid.indexOf('hosp') === -1 && sid.indexOf('lab') === -1 && sid.indexOf('cit') === -1 && sid.indexOf('party') === -1) {{
           dutySlotImg = cand;
           break;
@@ -7298,6 +7403,18 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       dutySlotImg.className = 'sig-slot-img';
       dutySlotImg.style.display = 'none';
       dutySlotImg.alt = '';
+    }} else {{
+      var stolenId = (dutySlotImg.id || '').toLowerCase();
+      if (stolenId === 'slot_duty' || stolenId.indexOf('duty') !== -1) {{
+        var freshOfficer = ownerDoc.createElement('img');
+        freshOfficer.id = 'slot_officer';
+        freshOfficer.className = 'sig-slot-img';
+        freshOfficer.style.display = 'none';
+        freshOfficer.alt = '';
+        dutySlotImg = freshOfficer;
+      }} else if (!dutySlotImg.id || stolenId.indexOf('officer') === -1) {{
+        dutySlotImg.id = 'slot_officer';
+      }}
     }}
 
     function buildMiddleDutyBox() {{
@@ -8470,15 +8587,15 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     safe_rerun()
             with top_bar2:
                 if st.button("⚡ تعبئة بيانات تجريبية فورية", type="primary", use_container_width=True, disabled=st.session_state.citizen_locked):
-                    for fld in form_def["fields"]:
-                        st.session_state[f"inp_{fid}_{fld['key']}"] = fld["sample"]
+                    apply_demo_fill_to_open_form(fid, form_def)
                     if form_uses_reference_number(form_def):
                         primary_ref = form_primary_ref_field_key(form_def)
-                        sample_ref = ""
-                        for fld in form_def["fields"]:
-                            if fld.get("key") == primary_ref:
-                                sample_ref = str(fld.get("sample") or "")
-                                break
+                        sample_ref = str(st.session_state.get(f"inp_{fid}_{primary_ref}") or "")
+                        if not sample_ref:
+                            for fld in form_def["fields"]:
+                                if fld.get("key") == primary_ref:
+                                    sample_ref = str(fld.get("sample") or "")
+                                    break
                         sample_ref = normalize_western_digits(sample_ref.strip())
                         st.session_state[f"manual_ref_inp_{fid}"] = sample_ref
                         st.session_state.manual_ref_no = sample_ref

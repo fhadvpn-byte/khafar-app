@@ -3,7 +3,7 @@ import streamlit as st
 import streamlit.components.v1 as comp
 from streamlit.delta_generator import DeltaGenerator as DG
 
-_KHAFAR_BAIL_VER = "v5"
+_KHAFAR_BAIL_VER = "v6"
 BAIL_ID = "decl_accident_bail"
 BAIL_TITLE = "إقرار كفالة حضورية وغرامية في حادث مروري"
 BAIL_OPT = "🛡️ " + BAIL_TITLE
@@ -17,11 +17,13 @@ def reset_run_state():
     _STATE["built"] = False
 
 BAIL_SPECS = [
-    ("bail_acc_no", "رقم الحادث / المحضر", "text", "", "مثال: 6004996132 أو رقم المحضر", False),
+    ("bail_acc_no", "رقم الحادث / المحضر", "text", "460987241", "مثال: 6004996132 أو رقم المحضر", False),
     ("bail_kind", "نوع الكفالة المعتمدة", "select", "كفالة حضورية وغرامية", [
         "كفالة حضورية وغرامية", "كفالة حضورية", "كفالة غرامية (مالية)"
     ], False),
-    ("bail_acc_date_loc", "تاريخ وموقع الحادث", "text", "", "مثال: 1448/06/14هـ — العارضة الشارع العام", False),
+    ("bail_acc_date_loc", "تاريخ وموقع الحادث", "text",
+     "1448/06/18هـ — تقاطع طريق الملك فهد مع شارع السوق بمحافظة العارضة",
+     "مثال: 1448/06/14هـ — العارضة الشارع العام", False),
     ("bail_party_status", "صفة المكفول وموجب الكفالة", "select", "الطرف الأول (خطأ 100%) — بدون تأمين ساري", [
         "الطرف الأول (خطأ 100%) — بدون تأمين ساري",
         "الطرف الأول (مشترك بالخطأ) — بدون تأمين ساري",
@@ -29,14 +31,20 @@ BAIL_SPECS = [
         "قائد مركبة بدون رخصة قيادة سارية",
         "قيد استكمال التحقيق وتقدير التلفيات",
     ], False),
-    ("bailed_name", "اسم المكفول (طرف الحادث - رباعياً)", "text", "", "الاسم الرباعي للمكفول", False),
-    ("bailed_id_nat", "رقم هوية / إقامة المكفول والجنسية", "text", "", "مثال: 1089911223 - سعودي", False),
-    ("bailed_phone", "رقم جوال المكفول", "text", "", "05xxxxxxxx", False),
-    ("bailed_vehicle", "بيانات مركبة المكفول ورقم اللوحة", "text", "", "مثال: تويوتا هايلكس (أ ب ج 1234)", False),
-    ("guarantor_name", "اسم الكفيل الضامن (رباعياً)", "text", "", "الاسم الرباعي للكفيل الحاضر", False),
-    ("guarantor_id", "رقم الهوية الوطنية للكفيل", "text", "", "10 أرقام (سجل مدني ساري)", False),
-    ("guarantor_phone_rel", "رقم جوال الكفيل وصلة القرابة", "text", "", "مثال: 05xxxxxxxx — شقيق / والد", False),
-    ("guarantor_work_addr", "جهة عمل الكفيل والعنوان الوطني", "text", "", "مثال: موظف حكومي — العارضة", False),
+    ("bailed_name", "اسم المكفول (طرف الحادث - رباعياً)", "text",
+     "أحمد بن سعيد بن محمد العريشي", "الاسم الرباعي للمكفول", False),
+    ("bailed_id_nat", "رقم هوية / إقامة المكفول والجنسية", "text",
+     "1087766554 - سعودي", "مثال: 1089911223 - سعودي", False),
+    ("bailed_phone", "رقم جوال المكفول", "text", "0553344789", "05xxxxxxxx", False),
+    ("bailed_vehicle", "بيانات مركبة المكفول ورقم اللوحة", "text",
+     "نيسان صني فضي (س ع د 2291)", "مثال: تويوتا هايلكس (أ ب ج 1234)", False),
+    ("guarantor_name", "اسم الكفيل الضامن (رباعياً)", "text",
+     "عبدالله بن سعيد بن محمد العريشي", "الاسم الرباعي للكفيل الحاضر", False),
+    ("guarantor_id", "رقم الهوية الوطنية للكفيل", "text", "1023344556", "10 أرقام (سجل مدني ساري)", False),
+    ("guarantor_phone_rel", "رقم جوال الكفيل وصلة القرابة", "text",
+     "0509988776 — شقيق", "مثال: 05xxxxxxxx — شقيق / والد", False),
+    ("guarantor_work_addr", "جهة عمل الكفيل والعنوان الوطني", "text",
+     "موظف بلدية محافظة العارضة — حي السوق، العارضة", "مثال: موظف حكومي — العارضة", False),
     ("bail_scope", "التزام الكفالة والحقوق المترتبة", "text",
      "إحضار المكفول لدى قسم مرور العارضة أو المحكمة المختصة متى طُلب وسداد ما يثبت شرعاً ونظاماً من حقوق خاصة أو تلفيات",
      "تفصيل الالتزام أو مبلغ التقدير إن وجد", True),
@@ -187,15 +195,17 @@ def _adapt_fields(proto_fields, all_forms):
         out = []
         for key, lbl, ftype, dflt, ph_opts, is_full in BAIL_SPECS:
             it = copy.deepcopy(f0)
-            for k in ("options", "choices", "items", "opts", "full", "full_width", "wide", "span", "colspan"): it.pop(k, None)
+            for k in ("options", "choices", "items", "opts", "full", "full_width", "wide", "span", "colspan", "visible_if", "hide_if"): it.pop(k, None)
             it[kk], it[lk] = key, lbl
             if ftype == "select" and ok:
                 if tk: it[tk] = sel_t
                 it[ok] = list(ph_opts)
                 if dk: it[dk] = dflt
             else:
+                if tk: it[tk] = "textarea" if is_full else "text"
                 if dk: it[dk] = dflt
                 if pk and isinstance(ph_opts, str): it[pk] = ph_opts
+            it["sample"] = dflt if isinstance(dflt, str) else (dflt or "")
             if is_full and wk: it[wk[0]] = wk[1]
             out.append(it)
         return out
@@ -246,15 +256,17 @@ def _adapt_fields(proto_fields, all_forms):
         out = []
         for key, lbl, ftype, dflt, ph_opts, is_full in BAIL_SPECS:
             it = copy.deepcopy(f0)
-            for k in ("options", "choices", "items", "opts", "full", "full_width", "wide", "span", "colspan"): it.pop(k, None)
+            for k in ("options", "choices", "items", "opts", "full", "full_width", "wide", "span", "colspan", "visible_if", "hide_if"): it.pop(k, None)
             it[kk], it[lk] = key, lbl
             if ftype == "select" and ok:
                 if tk: it[tk] = sel_t
                 it[ok] = list(ph_opts)
                 if dk: it[dk] = dflt
             else:
+                if tk: it[tk] = "textarea" if is_full else "text"
                 if dk: it[dk] = dflt
                 if pk and isinstance(ph_opts, str): it[pk] = ph_opts
+            it["sample"] = dflt if isinstance(dflt, str) else (dflt or "")
             if is_full and wk: it[wk[0]] = wk[1]
             out.append(it)
         return out
