@@ -328,6 +328,24 @@ section[data-testid="stSidebar"] { display: none !important; }
     font-size: 12.5px;
     margin-top: 1px;
 }
+.header-ui-title {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-height: 54px;
+    margin: 0;
+    padding: 0;
+    font-weight: 800;
+    font-size: 1.35rem;
+    line-height: 1.2;
+    color: #f0c75e;
+    text-align: right;
+}
+@media (max-width: 768px) {
+    .header-ui-title {
+        font-size: 1.1rem;
+    }
+}
 .logo-frame {
     width: 54px;
     height: 54px;
@@ -8474,11 +8492,7 @@ st.markdown(f"""
     <div class="header-brand-row">
         <div class="header-brand-inline">
             {header_logo_widget}
-            <div class="official-5lines-compact">
-                <div>المملكة العربية السعودية · وزارة الداخلية</div>
-                <div>الأمن العام - الإدارة العامة للمرور</div>
-                <div class="dept-line">إدارة مرور جازان · قسم مرور العارضة</div>
-            </div>
+            <div class="header-ui-title">قسم مرور العارضة</div>
         </div>
     </div>
 </div>
