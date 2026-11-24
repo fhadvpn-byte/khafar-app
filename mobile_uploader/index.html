@@ -20,49 +20,72 @@
       background: var(--bg);
       border: 1.5px solid rgba(212,175,55,0.45);
       border-radius: 14px;
-      padding: 12px;
+      padding: 10px;
       margin: 2px;
       box-sizing: border-box;
     }
-    .title { font-weight:900; font-size:14px; color:var(--gold-soft); margin:0 0 4px; text-align:right; }
-    .sub { font-size:12px; color:var(--muted); font-weight:700; margin:0 0 10px; line-height:1.45; text-align:right; }
-    .drop {
-      border: 1.5px dashed rgba(212,175,55,0.45);
-      border-radius: 12px;
-      padding: 14px 10px;
-      text-align: center;
-      background: rgba(10,33,26,0.55);
-      margin-bottom: 10px;
-      font-size: 12.5px;
-      font-weight: 700;
+    .sub {
+      font-size: 12px;
       color: var(--muted);
-      transition: border-color .15s, background .15s;
+      font-weight: 700;
+      margin: 0 0 8px;
+      line-height: 1.4;
+      text-align: right;
     }
-    .drop.over { border-color: var(--gold); background: rgba(20,108,78,0.25); color: var(--text); }
-    .actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:stretch; }
-    .actions button {
-      flex: 1 1 140px;
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: stretch;
+      margin-bottom: 8px;
+    }
+    .actions label.btn {
+      flex: 1 1 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       border: 1.5px solid var(--gold);
       background: linear-gradient(135deg, #146C4E 0%, #0D4A35 100%);
       color: #fff;
       border-radius: 10px;
-      padding: 11px 10px;
+      padding: 11px 8px;
       font-weight: 800;
       font-size: 13px;
       font-family: inherit;
       cursor: pointer;
       min-height: 46px;
+      box-sizing: border-box;
+      text-align: center;
+      user-select: none;
+      -webkit-user-select: none;
     }
-    .actions button.secondary {
+    .actions label.btn.secondary {
       background: var(--card);
       border-color: rgba(212,175,55,0.35);
     }
-    .actions button:disabled { opacity: .45; cursor: not-allowed; }
+    .actions label.btn.disabled {
+      opacity: .45;
+      pointer-events: none;
+      cursor: not-allowed;
+    }
+    .drop {
+      border: 1.5px dashed rgba(212,175,55,0.45);
+      border-radius: 12px;
+      padding: 12px 10px;
+      text-align: center;
+      background: rgba(10,33,26,0.55);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .drop.over { border-color: var(--gold); background: rgba(20,108,78,0.25); color: var(--text); }
     .thumbs {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-top: 10px;
+      margin-top: 8px;
     }
     .thumb {
       position: relative;
@@ -116,34 +139,46 @@
       padding: 0;
       font-size: 12px;
     }
-    .ok { margin-top: 8px; font-size: 12px; font-weight: 800; color: #86efac; min-height: 16px; text-align: right; }
+    .ok { margin-top: 6px; font-size: 12px; font-weight: 800; color: #86efac; min-height: 14px; text-align: right; }
     .err { color: #fca5a5; }
-    input[type=file] { display: none !important; }
+    /* إخفاء المدخلات بدون display:none حتى يعمل label for على الجوال */
+    .file-inputs input[type="file"] {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      opacity: 0 !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      margin: -1px !important;
+      padding: 0 !important;
+      border: 0 !important;
+    }
   </style>
 </head>
 <body>
   <div id="uploaderCard">
-    <div class="title" id="title">إرفاق ملفات</div>
-    <div class="sub" id="subtitle">اختر من المعرض أو صوّر مباشرة — متوافق مع أندرويد والآيفون</div>
-    <div class="drop" id="dropZone">أسقط الملفات هنا (للكمبيوتر) أو استخدم الأزرار أدناه للجوال</div>
+    <div class="sub" id="subtitle">المعرض أو الكاميرا — متوافق مع أندرويد والآيفون</div>
     <div class="actions">
-      <button type="button" id="btnGallery">🖼️ معرض الصور</button>
-      <button type="button" id="btnCamera">📷 تصوير بالكاميرا</button>
-      <button type="button" id="btnPdf" class="secondary" hidden>📄 ملف / PDF</button>
+      <label class="btn" id="lblGallery" for="inp_gallery">🖼️ معرض الصور</label>
+      <label class="btn" id="lblCamera" for="inp_cam">📷 الكاميرا</label>
+      <label class="btn secondary" id="lblPdf" for="inp_pdf" hidden>📄 ملف PDF</label>
     </div>
+    <div class="drop" id="dropZone" role="button" tabindex="0">أسقط الملفات هنا أو اضغط لفتح المعرض</div>
     <div class="thumbs" id="thumbs"></div>
     <div class="ok" id="status"></div>
   </div>
 
-  <input type="file" id="inpGallery" accept="image/*" />
-  <input type="file" id="inpCamera" accept="image/*" capture="environment" />
-  <input type="file" id="inpPdf" accept="application/pdf,image/*,.pdf" />
+  <div class="file-inputs" aria-hidden="true">
+    <input type="file" id="inp_gallery" accept="image/*" />
+    <input type="file" id="inp_cam" accept="image/*" capture="environment" />
+    <input type="file" id="inp_pdf" accept="application/pdf,.pdf,image/*" />
+  </div>
 
   <script>
 (function () {
   var MAX_EDGE = 1600;
   var JPEG_Q = 0.85;
-  var files = []; // {id, name, type, size, data_b64, preview}
+  var files = [];
   var cfg = {
     title: "",
     subtitle: "",
@@ -156,29 +191,32 @@
   var lastArgsSig = "";
   var lastHeight = 0;
   var lastWidth = window.innerWidth || 0;
+  var renderSeen = false;
 
   var cardEl = document.getElementById("uploaderCard");
-  var titleEl = document.getElementById("title");
   var subEl = document.getElementById("subtitle");
   var dropZone = document.getElementById("dropZone");
   var thumbsEl = document.getElementById("thumbs");
   var statusEl = document.getElementById("status");
-  var btnGallery = document.getElementById("btnGallery");
-  var btnCamera = document.getElementById("btnCamera");
-  var btnPdf = document.getElementById("btnPdf");
-  var inpGallery = document.getElementById("inpGallery");
-  var inpCamera = document.getElementById("inpCamera");
-  var inpPdf = document.getElementById("inpPdf");
+  var lblGallery = document.getElementById("lblGallery");
+  var lblCamera = document.getElementById("lblCamera");
+  var lblPdf = document.getElementById("lblPdf");
+  var inpGallery = document.getElementById("inp_gallery");
+  var inpCamera = document.getElementById("inp_cam");
+  var inpPdf = document.getElementById("inp_pdf");
 
   function send(type, data) {
     var msg = Object.assign({ isStreamlitMessage: true, type: type }, data || {});
     try { window.parent.postMessage(msg, "*"); } catch (e) {}
   }
-  function setReady() { send("streamlit:componentReady", { apiVersion: 1 }); }
-  function setHeight() {
+  function setReady() {
+    send("streamlit:componentReady", { apiVersion: 1 });
+  }
+  function syncHeight() {
     if (!cardEl) return;
-    var h = Math.ceil((cardEl.offsetHeight || 0) + 4);
-    h = Math.min(Math.max(h, 115), 520);
+    var rect = cardEl.getBoundingClientRect();
+    var h = Math.ceil((rect && rect.height ? rect.height : cardEl.offsetHeight || 0) + 16);
+    h = Math.min(Math.max(h, 165), 560);
     if (lastHeight && Math.abs(h - lastHeight) <= 3) return;
     lastHeight = h;
     send("streamlit:setFrameHeight", { height: h });
@@ -219,9 +257,10 @@
     renderThumbs();
     statusEl.className = "ok";
     statusEl.textContent = files.length
-      ? ("✅ تم تجهيز " + files.length + " مرفق — جاهز للظهور في التقرير")
+      ? ("✅ تم تجهيز " + files.length + " مرفق")
       : "";
-    setTimeout(setHeight, 30);
+    setTimeout(syncHeight, 30);
+    setTimeout(syncHeight, 80);
   }
 
   function renderThumbs() {
@@ -237,6 +276,7 @@
       } else {
         var img = document.createElement("img");
         img.alt = f.name || "صورة";
+        img.onload = function () { syncHeight(); };
         if (f.preview) img.src = f.preview;
         else img.src = "data:" + (f.type || "image/jpeg") + ";base64," + f.data_b64;
         card.appendChild(img);
@@ -249,7 +289,8 @@
       rm.type = "button";
       rm.className = "rm";
       rm.textContent = "✕";
-      rm.onclick = function () {
+      rm.onclick = function (ev) {
+        if (ev) { ev.preventDefault(); ev.stopPropagation(); }
         files = files.filter(function (x) { return x.id !== f.id; });
         emit();
       };
@@ -349,7 +390,6 @@
         };
       });
     }).catch(function () {
-      // HEIC خام أو فشل فك الترميز — أرسل البايتات لبايثون
       return file.arrayBuffer().then(function (ab) {
         return {
           id: uid(),
@@ -417,8 +457,7 @@
     });
   }
 
-  function bindInput(inp, multiple) {
-    inp.multiple = !!multiple;
+  function bindInput(inp) {
     inp.addEventListener("change", function () {
       var list = inp.files;
       ingestFileList(list);
@@ -426,24 +465,24 @@
     });
   }
 
-  bindInput(inpGallery, true);
-  bindInput(inpCamera, false);
-  bindInput(inpPdf, true);
+  bindInput(inpGallery);
+  bindInput(inpCamera);
+  bindInput(inpPdf);
 
-  btnGallery.addEventListener("click", function () {
+  function openGallery() {
     if (cfg.disabled) return;
-    inpGallery.multiple = !!cfg.multiple;
-    inpGallery.click();
+    try { inpGallery.click(); } catch (e) {}
+  }
+
+  dropZone.addEventListener("click", function (ev) {
+    ev.preventDefault();
+    openGallery();
   });
-  btnCamera.addEventListener("click", function () {
-    if (cfg.disabled) return;
-    inpCamera.multiple = false;
-    inpCamera.click();
-  });
-  btnPdf.addEventListener("click", function () {
-    if (cfg.disabled || !cfg.allow_pdf) return;
-    inpPdf.multiple = !!cfg.multiple;
-    inpPdf.click();
+  dropZone.addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      openGallery();
+    }
   });
 
   ;["dragenter", "dragover"].forEach(function (evName) {
@@ -468,54 +507,53 @@
   function applyArgs(args) {
     args = args || {};
     var sig = JSON.stringify({
-      title: args.title || "",
-      subtitle: args.subtitle || "",
+      subtitle: args.subtitle || args.title || "",
       multiple: !!args.multiple,
       allow_pdf: args.allow_pdf !== false && args.allow_pdf !== 0 && args.allow_pdf !== "false",
       preserve_alpha: !!args.preserve_alpha,
       disabled: !!args.disabled
     });
-    // مهم: لا تمسح الملفات ولا تُعد إرسال الارتفاع عند render الدوري
     if (sig === lastArgsSig && bootstrapped) {
       return;
     }
     lastArgsSig = sig;
-    cfg.title = String(args.title || "إرفاق ملفات");
-    cfg.subtitle = String(args.subtitle || "اختر من المعرض أو صوّر مباشرة — متوافق مع أندرويد والآيفون");
+    cfg.subtitle = String(args.subtitle || args.title || "المعرض أو الكاميرا — متوافق مع أندرويد والآيفون");
     cfg.multiple = !!args.multiple;
     cfg.allow_pdf = args.allow_pdf !== false && args.allow_pdf !== 0 && args.allow_pdf !== "false";
     cfg.preserve_alpha = !!args.preserve_alpha;
     cfg.disabled = !!args.disabled;
 
-    titleEl.textContent = cfg.title;
+    // عنوان الحقل يظهر مسبقاً من Streamlit — نكتفي بسطر إرشاد مدمج
     subEl.textContent = cfg.subtitle;
-    btnPdf.hidden = !cfg.allow_pdf;
-    btnGallery.disabled = cfg.disabled;
-    btnCamera.disabled = cfg.disabled;
-    btnPdf.disabled = cfg.disabled || !cfg.allow_pdf;
-    inpGallery.multiple = cfg.multiple;
-    inpPdf.multiple = cfg.multiple;
+    lblPdf.hidden = !cfg.allow_pdf;
+    lblGallery.classList.toggle("disabled", cfg.disabled);
+    lblCamera.classList.toggle("disabled", cfg.disabled);
+    lblPdf.classList.toggle("disabled", cfg.disabled || !cfg.allow_pdf);
+    inpGallery.multiple = !!cfg.multiple;
+    inpPdf.multiple = !!cfg.multiple;
+    inpGallery.disabled = !!cfg.disabled;
+    inpCamera.disabled = !!cfg.disabled;
+    inpPdf.disabled = !!cfg.disabled || !cfg.allow_pdf;
     bootstrapped = true;
-    setTimeout(setHeight, 20);
   }
 
   window.addEventListener("message", function (ev) {
     var data = ev.data || {};
     if (!data || data.type !== "streamlit:render") return;
+    renderSeen = true;
     applyArgs(data.args || {});
+    syncHeight();
+    setTimeout(syncHeight, 80);
   });
 
-  // تحديث الارتفاع فقط عند تغيّر العرض الأفقي (لا اعتماد على ارتفاع الصفحة)
   window.addEventListener("resize", function () {
     var w = window.innerWidth || 0;
     if (w === lastWidth) return;
     lastWidth = w;
-    setTimeout(setHeight, 20);
+    if (renderSeen) setTimeout(syncHeight, 20);
   });
 
   setReady();
-  setTimeout(setHeight, 20);
-  setTimeout(setHeight, 120);
 })();
   </script>
 </body>

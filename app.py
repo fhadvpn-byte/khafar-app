@@ -1133,14 +1133,10 @@ div[data-testid="stHorizontalBlock"] div.stButton > button {
     color-scheme: normal !important;
     background: transparent !important;
 }
-/* منع فراغ عملاق أسفل المكوّنات المخصصة (mobile_uploader / sig_pad) */
-.stApp [data-testid="stCustomComponentV1"],
-.stApp [data-testid="stCustomComponentV1"] > iframe,
+/* لا تفرض height/max-height على mobile_uploader — الارتفاع من setFrameHeight فقط */
 .stApp iframe[title*="khafar_mobile_uploader"],
-.stApp iframe[title*="khafar_sig_pad"] {
+.stApp iframe[title*="mobile_uploader"] {
     min-height: 0 !important;
-    max-height: none !important;
-    height: auto !important;
     overflow: hidden !important;
 }
 
