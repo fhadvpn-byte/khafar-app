@@ -174,30 +174,59 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&family=JetBrains+Mono:wght@600&display=swap');
 
 :root {
-    --bg-main: #0f1417;
-    --bg-card: #161e22;
-    --bg-emerald-dark: #092c20;
-    --bg-emerald-mid: #0f3d2e;
-    --emerald-accent: #15805c;
-    --emerald-bright: #34d399;
-    --gold-main: #d4a853;
-    --gold-soft: #f3cc7a;
-    --med-main: #38bdf8;
-    --med-soft: #bae6fd;
-    --text-light: #f1f5f9;
-    --text-muted: #94a3b8;
+    --bg-main: #071A14;
+    --bg-card: #0E2920;
+    --bg-emerald-dark: #0A211A;
+    --bg-emerald-mid: #0D4A35;
+    --emerald-accent: #146C4E;
+    --emerald-bright: #1A8A62;
+    --gold-main: #D4AF37;
+    --gold-soft: #E5C158;
+    --med-main: #146C4E;
+    --med-soft: #E5C158;
+    --text-light: #FFFFFF;
+    --text-muted: #D1D5DB;
 }
 
+/* حماية الطباعة العامة — لا تتسرب ألوان الواجهة الداكنة */
+@media print {
+    html, body, .stApp {
+        background: #ffffff !important;
+        overflow: visible !important;
+        height: auto !important;
+    }
+    @page { size: A4 portrait; margin: 6mm 8mm !important; }
+    html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], .main, .block-container {
+        direction: rtl !important;
+        transform: none !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: visible !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+    }
+    .stButton, [data-testid="stHorizontalBlock"], [data-testid="stVerticalBlockBorderWrapper"],
+    .stTabs, header, footer, [data-testid="stHeader"], [data-testid="stToolbar"],
+    [data-testid="stSidebar"], [data-testid="stDecoration"],
+    .khafar-top-header, .compact-status-bar, .khafar-nav-capsule {
+        display: none !important;
+    }
+}
+
+@media screen {
 html, body, .stApp {
     font-family: 'Cairo', sans-serif !important;
     direction: rtl;
     text-align: right;
     color-scheme: dark !important;
 }
-/* فرض الثيم الداكن ومنع قلب ألوان المتصفح في الوضع الفاتح — دون المساس بـ iframe ورقة A4 */
 .stApp {
-    color: #ffffff !important;
-    background-color: #0b1512 !important;
+    color: #FFFFFF !important;
+    background-color: #071A14 !important;
+    background-image: linear-gradient(180deg, #0A211A 0%, #071A14 42%, #071A14 100%) !important;
 }
 .stApp [data-testid="stMarkdownContainer"] p,
 .stApp [data-testid="stMarkdownContainer"] span,
@@ -205,7 +234,6 @@ html, body, .stApp {
     color: inherit;
 }
 
-/* إخفاء شريط Streamlit العلوي وشارات Cloud (التاج / GitHub) دون المساس بـ #root */
 header[data-testid="stHeader"],
 [data-testid="stToolbar"],
 [data-testid="stDecoration"],
@@ -233,18 +261,16 @@ img[src*="avatars.githubusercontent.com"] {
     height: 0 !important;
     min-height: 0 !important;
     width: 0 !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
 }
-iframe[height="0"] {
+.stApp iframe[height="0"] {
     height: 0px !important;
     margin: -1rem 0 0 0 !important;
     display: block !important;
     border: none !important;
     overflow: hidden !important;
 }
-textarea[placeholder*="DUTY_SIG_BRIDGE"],
-div[data-testid="stTextArea"]:has(textarea[placeholder*="DUTY_SIG_BRIDGE"]) {
+.stApp textarea[placeholder*="DUTY_SIG_BRIDGE"],
+.stApp div[data-testid="stTextArea"]:has(textarea[placeholder*="DUTY_SIG_BRIDGE"]) {
     height: 0 !important;
     min-height: 0 !important;
     max-height: 0 !important;
@@ -255,9 +281,9 @@ div[data-testid="stTextArea"]:has(textarea[placeholder*="DUTY_SIG_BRIDGE"]) {
     overflow: hidden !important;
     pointer-events: none !important;
 }
-[data-testid="collapsedControl"] { display: none !important; }
-section[data-testid="stSidebar"] { display: none !important; }
-.block-container {
+.stApp [data-testid="collapsedControl"] { display: none !important; }
+.stApp section[data-testid="stSidebar"] { display: none !important; }
+.stApp .block-container {
     padding-top: 0.35rem !important;
     padding-bottom: 1.4rem !important;
     padding-left: 12px !important;
@@ -267,15 +293,15 @@ section[data-testid="stSidebar"] { display: none !important; }
     overflow-x: hidden !important;
 }
 @media only screen and (max-width: 820px) {
-    .block-container,
-    .block-container h1,
-    .block-container h2,
-    .block-container h3,
-    .block-container label,
-    .block-container p,
-    [data-testid="stMarkdownContainer"],
-    [data-testid="stWidgetLabel"],
-    [data-testid="stWidgetLabel"] p {
+    .stApp .block-container,
+    .stApp .block-container h1,
+    .stApp .block-container h2,
+    .stApp .block-container h3,
+    .stApp .block-container label,
+    .stApp .block-container p,
+    .stApp [data-testid="stMarkdownContainer"],
+    .stApp [data-testid="stWidgetLabel"],
+    .stApp [data-testid="stWidgetLabel"] p {
         max-width: 100% !important;
         box-sizing: border-box !important;
         overflow-wrap: anywhere !important;
@@ -283,76 +309,88 @@ section[data-testid="stSidebar"] { display: none !important; }
         margin-left: 0 !important;
         margin-right: 0 !important;
     }
-    .main, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+    .stApp .main, .stApp [data-testid="stAppViewContainer"], .stApp [data-testid="stMain"] {
         overflow-x: hidden !important;
         max-width: 100% !important;
         box-sizing: border-box !important;
     }
 }
 
-.stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"] {
-    background-color: #0b1512 !important;
-    color: #ffffff !important;
+.stApp, .stApp [data-testid="stAppViewContainer"], .stApp [data-testid="stAppViewBlockContainer"] {
+    background-color: #071A14 !important;
+    color: #FFFFFF !important;
 }
 
-.khafar-top-header {
-    background: linear-gradient(135deg, #0d4432 0%, #08291e 100%);
-    border: 1px solid #1e6b50;
+.stApp .khafar-top-header {
+    background: linear-gradient(135deg, #146C4E 0%, #0D4A35 55%, #0A211A 100%);
+    border: 1.5px solid #D4AF37;
     border-radius: 14px 14px 0 0;
-    padding: 10px 12px 8px 12px;
+    padding: 12px 14px 10px 14px;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
 }
-.header-brand-row {
+.stApp .header-brand-row {
     display: flex;
-    justify-content: flex-start;
+    justify-content: space-between;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    flex-wrap: wrap;
 }
-.header-brand-inline {
+.stApp .header-brand-inline {
     display: flex;
     align-items: center;
-    gap: 10px;
-    width: 100%;
+    gap: 12px;
+    flex: 1 1 280px;
+    min-width: 0;
 }
-.official-5lines,
-.official-5lines-compact {
+.stApp .official-5lines,
+.stApp .official-5lines-compact {
     line-height: 1.35;
     font-weight: 800;
-    color: #ffffff;
-    font-size: 12px;
+    color: #FFFFFF;
+    font-size: 11.5px;
     text-align: right;
     flex: 1;
+    min-width: 0;
 }
-.official-5lines-compact .dept-line {
-    color: #f3cc7a;
+.stApp .official-5lines-compact .dept-line {
+    color: #E5C158;
     font-size: 12.5px;
-    margin-top: 1px;
+    margin-top: 2px;
 }
-.header-ui-title {
+.stApp .header-ui-title {
     display: flex;
     align-items: center;
-    flex: 1;
+    flex: 0 1 auto;
     min-height: 54px;
     margin: 0;
-    padding: 0;
-    font-weight: 800;
-    font-size: 1.35rem;
-    line-height: 1.2;
-    color: #f0c75e;
+    padding: 0 4px;
+    font-weight: 900;
+    font-size: 1.28rem;
+    line-height: 1.25;
+    color: #E5C158;
     text-align: right;
+    white-space: nowrap;
+}
+.stApp .header-status-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    flex: 1 1 220px;
 }
 @media (max-width: 768px) {
-    .header-ui-title {
-        font-size: 1.1rem;
-    }
+    .stApp .header-ui-title { font-size: 1.05rem; white-space: normal; }
+    .stApp .header-brand-row { flex-direction: column; align-items: stretch; }
+    .stApp .header-status-inline { justify-content: flex-start; }
 }
-.logo-frame {
+.stApp .logo-frame {
     width: 54px;
     height: 54px;
     min-width: 54px;
     border-radius: 12px;
     background: #ffffff;
-    border: 2px solid var(--gold-main);
+    border: 2px solid #D4AF37;
     padding: 2px;
     display: flex;
     align-items: center;
@@ -360,7 +398,7 @@ section[data-testid="stSidebar"] { display: none !important; }
     overflow: hidden;
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
 }
-.logo-frame img {
+.stApp .logo-frame img {
     width: 100%;
     height: 100%;
     max-width: none;
@@ -370,11 +408,11 @@ section[data-testid="stSidebar"] { display: none !important; }
     display: block;
 }
 
-.compact-status-bar {
-    background: #0b1015;
-    border-left: 1px solid #1e293b;
-    border-right: 1px solid #1e293b;
-    border-bottom: 2px solid #9a7432;
+.stApp .compact-status-bar {
+    background: #0A211A;
+    border-left: 1px solid rgba(212, 175, 55, 0.25);
+    border-right: 1px solid rgba(212, 175, 55, 0.25);
+    border-bottom: 2px solid #D4AF37;
     border-radius: 0 0 12px 12px;
     padding: 7px 10px;
     display: flex;
@@ -383,40 +421,40 @@ section[data-testid="stSidebar"] { display: none !important; }
     gap: 6px 8px;
     margin-bottom: 10px;
 }
-.compact-status-bar .status-chip {
+.stApp .compact-status-bar .status-chip {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    background: #12201c;
-    border: 1px solid #1f5c46;
-    color: #a7f3d0;
+    background: #0E2920;
+    border: 1px solid rgba(212, 175, 55, 0.25);
+    color: #FFFFFF;
     padding: 2px 8px;
     border-radius: 999px;
     font-size: 11px;
     font-weight: 700;
     line-height: 1.35;
 }
-.compact-status-bar .status-chip.gold {
-    background: #1a1810;
-    border-color: rgba(212, 168, 83, 0.45);
-    color: var(--gold-soft);
+.stApp .compact-status-bar .status-chip.gold {
+    background: #13382B;
+    border-color: rgba(212, 175, 55, 0.45);
+    color: #E5C158;
 }
-.compact-status-bar .status-chip.gps {
+.stApp .compact-status-bar .status-chip.gps {
     font-family: 'JetBrains Mono', monospace !important;
     direction: ltr;
     unicode-bidi: isolate;
-    color: #4ade80;
-    background: #102422;
+    color: #FFFFFF;
+    background: #0E2920;
 }
-.compact-status-bar .status-chip.time {
-    background: #161d24;
-    border-color: #2d3846;
-    color: #cbd5e1;
+.stApp .compact-status-bar .status-chip.time {
+    background: #0E2920;
+    border-color: rgba(212, 175, 55, 0.25);
+    color: #FFFFFF;
 }
-.gps-locate-btn {
-    border: 1px solid rgba(212, 168, 83, 0.7);
-    background: #1a1810;
-    color: #f3cc7a;
+.stApp .gps-locate-btn {
+    border: 1px solid rgba(212, 175, 55, 0.7);
+    background: #0E2920;
+    color: #E5C158;
     border-radius: 999px;
     font-family: 'Cairo', sans-serif;
     font-weight: 800;
@@ -425,63 +463,48 @@ section[data-testid="stSidebar"] { display: none !important; }
     padding: 3px 10px;
     cursor: pointer;
 }
-.gps-locate-btn:disabled { opacity: 0.7; cursor: wait; }
-.gps-map-link {
-    color: #7dd3fc;
+.stApp .gps-locate-btn:disabled { opacity: 0.7; cursor: wait; }
+.stApp .gps-map-link {
+    color: #E5C158;
     font-size: 11px;
     font-weight: 800;
     text-decoration: none;
     padding: 2px 4px;
 }
-.gps-mono-box {
+.stApp .gps-mono-box {
     font-family: 'JetBrains Mono', monospace !important;
     direction: ltr;
     display: inline-block;
-    background: #102422;
-    border: 1px solid #1f5c46;
-    color: #4ade80;
+    background: #0E2920;
+    border: 1px solid rgba(212, 175, 55, 0.25);
+    color: #FFFFFF;
     padding: 2px 10px;
     border-radius: 6px;
     font-size: 12.5px;
 }
-.time-auto-box {
-    background: #161d24;
-    border: 1px solid #2d3846;
-    color: #cbd5e1;
+.stApp .time-auto-box {
+    background: #0E2920;
+    border: 1px solid rgba(212, 175, 55, 0.25);
+    color: #FFFFFF;
     padding: 2px 10px;
     border-radius: 6px;
     font-size: 12px;
 }
 
-.hero-shift-card {
-    background: linear-gradient(135deg, #0f3d2c 0%, #112421 65%, #151d21 100%);
-    border: 1px solid #21634b;
+.stApp .hero-shift-card {
+    background: linear-gradient(135deg, #146C4E 0%, #0E2920 65%, #0A211A 100%);
+    border: 1px solid rgba(212, 175, 55, 0.25);
     border-radius: 16px;
     padding: 20px 24px;
     margin-bottom: 18px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
-.hero-eyebrow {
-    color: var(--gold-main);
-    font-size: 13.5px;
-    font-weight: 800;
-    margin-bottom: 4px;
-}
-.hero-title {
-    color: #ffffff;
-    font-size: 22px;
-    font-weight: 900;
-    margin: 0 0 8px 0;
-}
-.hero-desc {
-    color: #cbd5e1;
-    font-size: 13.5px;
-    line-height: 1.75;
-    margin-bottom: 14px;
-}
-.shift-summary-inner {
-    background: rgba(11, 20, 22, 0.65);
-    border: 1px solid rgba(45, 106, 84, 0.45);
+.stApp .hero-eyebrow { color: #D4AF37; font-size: 13.5px; font-weight: 800; margin-bottom: 4px; }
+.stApp .hero-title { color: #FFFFFF; font-size: 22px; font-weight: 900; margin: 0 0 8px 0; }
+.stApp .hero-desc { color: #D1D5DB; font-size: 13.5px; line-height: 1.75; margin-bottom: 14px; }
+.stApp .shift-summary-inner {
+    background: rgba(7, 26, 20, 0.65);
+    border: 1px solid rgba(212, 175, 55, 0.25);
     border-radius: 12px;
     padding: 12px 18px;
     display: flex;
@@ -491,84 +514,104 @@ section[data-testid="stSidebar"] { display: none !important; }
     gap: 10px;
 }
 
-.sec-heading-green {
-    border-right: 4px solid #10b981;
+.stApp .sec-heading-green {
+    border-right: 4px solid #D4AF37;
     padding-right: 12px;
     margin: 20px 0 12px 0;
     display: flex;
     align-items: center;
     gap: 12px;
 }
-.sec-heading-gold {
-    border-right: 4px solid var(--gold-main);
+.stApp .sec-heading-gold {
+    border-right: 4px solid #D4AF37;
     padding-right: 12px;
     margin: 24px 0 12px 0;
     display: flex;
     align-items: center;
     gap: 12px;
 }
-.sec-heading-med {
-    border-right: 4px solid var(--med-main);
+.stApp .sec-heading-med {
+    border-right: 4px solid #D4AF37;
     padding-right: 12px;
     margin: 24px 0 12px 0;
     display: flex;
     align-items: center;
     gap: 12px;
 }
-.badge-green {
-    background: rgba(16, 185, 129, 0.14);
-    border: 1px solid rgba(16, 185, 129, 0.4);
-    color: #6ee7b7;
-    font-size: 12px;
-    font-weight: 700;
-    padding: 2px 11px;
-    border-radius: 20px;
-}
-.badge-gold {
-    background: rgba(212, 168, 83, 0.14);
-    border: 1px solid rgba(212, 168, 83, 0.4);
-    color: var(--gold-soft);
-    font-size: 12px;
-    font-weight: 700;
-    padding: 2px 11px;
-    border-radius: 20px;
-}
-.badge-med {
-    background: rgba(56, 189, 248, 0.14);
-    border: 1px solid rgba(56, 189, 248, 0.45);
-    color: var(--med-soft);
-    font-size: 12px;
-    font-weight: 700;
-    padding: 2px 11px;
-    border-radius: 20px;
-}
-.badge-tak {
-    background: rgba(167, 139, 250, 0.14);
-    border: 1px solid rgba(167, 139, 250, 0.5);
-    color: #c4b5fd;
+.stApp .badge-green, .stApp .badge-gold, .stApp .badge-med, .stApp .badge-tak {
+    background: rgba(20, 108, 78, 0.22);
+    border: 1px solid rgba(212, 175, 55, 0.45);
+    color: #E5C158;
     font-size: 12px;
     font-weight: 700;
     padding: 2px 11px;
     border-radius: 20px;
 }
 
-.form-item-card {
-    background: linear-gradient(180deg, #162024 0%, #12191c 100%);
-    border: 1px solid #24353b;
+.stApp .form-item-card {
+    background: #0E2920;
+    border: 1px solid rgba(212, 175, 55, 0.25);
     border-radius: 12px;
     padding: 8px 12px;
     margin-bottom: 4px;
     transition: all 0.2s ease;
 }
-.form-item-card:hover {
-    border-color: #2b8a68;
+.stApp .form-item-card:hover {
+    border-color: #E5C158;
+    background: #13382B;
 }
-.form-open-hint {
-    font-size: 11px;
-    color: #94a3b8;
-    margin: 0 0 2px 0;
+.stApp .form-open-hint { font-size: 11px; color: #D1D5DB; margin: 0 0 2px 0; }
+
+/* شريط التنقل الرئيسي — Segmented Capsule */
+.stApp .khafar-nav-capsule {
+    background: #0A211A;
+    border: 1px solid rgba(212, 175, 55, 0.28);
+    border-radius: 999px;
+    padding: 6px 8px;
+    margin: 4px 0 14px 0;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
 }
-/* أزرار النماذج والتنقل أكثر إحكاماً على الجوال */
+.stApp .khafar-nav-capsule + div[data-testid="stHorizontalBlock"] div.stButton > button,
+.stApp div[data-testid="stHorizontalBlock"]:has(button[kind="primary"]) > div:nth-child(-n+3) div.stButton > button {
+    min-height: 44px !important;
+    border-radius: 999px !important;
+    font-weight: 800 !important;
+    font-size: 14px !important;
+}
+.stApp .khafar-form-grid div.stButton > button,
+.stApp div[data-testid="stTabs"] div.stButton > button {
+    background: #0E2920 !important;
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+    border: 1px solid rgba(212, 175, 55, 0.25) !important;
+    border-right: 4px solid #D4AF37 !important;
+    border-radius: 12px !important;
+    font-weight: 800 !important;
+    font-size: 15.5px !important;
+    min-height: 54px !important;
+    text-align: right !important;
+    justify-content: flex-start !important;
+    padding: 0.65rem 0.85rem !important;
+    white-space: normal !important;
+    line-height: 1.4 !important;
+    box-shadow: none !important;
+}
+.stApp .khafar-form-grid div.stButton > button:hover,
+.stApp div[data-testid="stTabs"] div.stButton > button:hover {
+    background: #13382B !important;
+    border-color: #E5C158 !important;
+    border-right: 4px solid #E5C158 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.22) !important;
+}
+.stApp .khafar-form-grid div.stButton > button[kind="primary"],
+.stApp div[data-testid="stTabs"] div.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #146C4E 0%, #0D4A35 100%) !important;
+    border: 1.5px solid #D4AF37 !important;
+    border-right: 4px solid #D4AF37 !important;
+    color: #FFFFFF !important;
+}
+
 div[data-testid="stHorizontalBlock"] div.stButton > button {
     padding: 0.48rem 0.55rem !important;
     font-size: 13px !important;
@@ -576,143 +619,100 @@ div[data-testid="stHorizontalBlock"] div.stButton > button {
     white-space: normal !important;
     line-height: 1.35 !important;
 }
-div[data-baseweb="tab-list"],
-[data-testid="stTabs"] [role="tablist"] {
+
+/* تبويبات الأقسام الأربعة — هوية موحدة بدون سماوي/بنفسجي */
+.stApp div[data-baseweb="tab-list"],
+.stApp [data-testid="stTabs"] [role="tablist"] {
     display: grid !important;
     grid-template-columns: repeat(4, 1fr) !important;
     gap: 12px !important;
     width: 100% !important;
-    background: rgba(8, 24, 21, 0.75) !important;
+    background: #0A211A !important;
     padding: 10px !important;
     border-radius: 16px !important;
-    border: 1.5px solid rgba(16, 185, 129, 0.35) !important;
+    border: 1.5px solid rgba(212, 175, 55, 0.28) !important;
     margin: 14px 0 18px 0 !important;
 }
-div[data-baseweb="tab-highlight"],
-[data-testid="stTabs"] .react-aria-SelectionIndicator {
+.stApp div[data-baseweb="tab-highlight"],
+.stApp [data-testid="stTabs"] .react-aria-SelectionIndicator {
     display: none !important;
 }
-div[data-testid="stTabs"] button[data-baseweb="tab"],
-[data-testid="stTabs"] [data-testid="stTab"] {
+.stApp div[data-testid="stTabs"] button[data-baseweb="tab"],
+.stApp [data-testid="stTabs"] [data-testid="stTab"] {
     display: flex !important;
     align-items: center !important;
     min-height: 74px !important;
     width: 100% !important;
     border-radius: 12px !important;
     padding: 12px 10px !important;
-    background: linear-gradient(145deg, rgba(20, 48, 42, 0.92), rgba(13, 33, 29, 0.95)) !important;
-    border: 1.5px solid rgba(255, 255, 255, 0.22) !important;
-    color: #f1f5f9 !important;
-    -webkit-text-fill-color: #f1f5f9 !important;
+    background: #0E2920 !important;
+    border: 1px solid rgba(212, 175, 55, 0.25) !important;
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
     justify-content: center !important;
     text-align: center !important;
     white-space: normal !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
     transition: all 0.2s ease-in-out !important;
+    font-weight: 700 !important;
 }
-div[data-testid="stTabs"] button[data-baseweb="tab"] p,
-div[data-testid="stTabs"] button[data-baseweb="tab"] span,
-[data-testid="stTabs"] [data-testid="stTab"] p {
-    font-size: 17px !important;
+.stApp div[data-testid="stTabs"] button[data-baseweb="tab"] p,
+.stApp div[data-testid="stTabs"] button[data-baseweb="tab"] span,
+.stApp [data-testid="stTabs"] [data-testid="stTab"] p {
+    font-size: 16px !important;
     font-weight: 800 !important;
     line-height: 1.35 !important;
-    color: #f1f5f9 !important;
-    -webkit-text-fill-color: #f1f5f9 !important;
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
     text-align: center !important;
     white-space: normal !important;
     margin: 0 !important;
 }
-div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(1),
-[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(1) {
-    border: 1.5px solid #10b981 !important;
+.stApp div[data-baseweb="tab-list"] button[data-baseweb="tab"],
+.stApp [data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"] {
+    border: 1px solid rgba(212, 175, 55, 0.25) !important;
 }
-div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(1)[aria-selected="true"],
-[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(1)[aria-selected="true"] {
-    background: linear-gradient(145deg, #059669, #10b981) !important;
-    border: 2px solid #fde68a !important;
-    color: #ffffff !important;
-    box-shadow: 0 0 0 1px rgba(253, 230, 138, 0.45), 0 8px 22px rgba(16, 185, 129, 0.45) !important;
+.stApp div[data-baseweb="tab-list"] button[data-baseweb="tab"][aria-selected="true"],
+.stApp [data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"][aria-selected="true"] {
+    background: linear-gradient(135deg, #146C4E 0%, #0D4A35 100%) !important;
+    border: 1.5px solid #D4AF37 !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.35), 0 8px 18px rgba(13, 74, 53, 0.4) !important;
 }
-div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(2),
-[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(2) {
-    border: 1.5px solid rgba(56, 189, 248, 0.5) !important;
+.stApp div[data-baseweb="tab-list"] button[data-baseweb="tab"]:hover,
+.stApp [data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:hover {
+    background: #13382B !important;
+    border-color: #E5C158 !important;
 }
-div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(2)[aria-selected="true"],
-[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(2)[aria-selected="true"] {
-    background: linear-gradient(145deg, #0284c7, #0ea5e9) !important;
-    border: 2px solid #fde68a !important;
-    color: #ffffff !important;
-    box-shadow: 0 0 0 1px rgba(253, 230, 138, 0.45), 0 8px 22px rgba(14, 165, 233, 0.4) !important;
-}
-div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(3),
-[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(3) {
-    border: 1.5px solid rgba(244, 63, 94, 0.6) !important;
-}
-div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(3)[aria-selected="true"],
-[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(3)[aria-selected="true"] {
-    background: linear-gradient(145deg, #be123c, #e11d48) !important;
-    border: 2px solid #fde68a !important;
-    color: #ffffff !important;
-    box-shadow: 0 0 0 1px rgba(253, 230, 138, 0.5), 0 8px 22px rgba(225, 29, 72, 0.45) !important;
-}
-div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(4),
-[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(4) {
-    border: 1.5px solid rgba(167, 139, 250, 0.65) !important;
-}
-div[data-baseweb="tab-list"] button[data-baseweb="tab"]:nth-child(4)[aria-selected="true"],
-[data-testid="stTabs"] [role="tablist"] > [data-testid="stTab"]:nth-child(4)[aria-selected="true"] {
-    background: linear-gradient(145deg, #6d28d9, #8b5cf6) !important;
-    border: 2px solid #fde68a !important;
-    color: #ffffff !important;
-    box-shadow: 0 0 0 1px rgba(253, 230, 138, 0.5), 0 8px 22px rgba(139, 92, 246, 0.45) !important;
-}
-div[data-baseweb="tab-list"] button[data-baseweb="tab"][aria-selected="true"] p,
-[data-testid="stTabs"] [data-testid="stTab"][aria-selected="true"] p {
-    color: #ffffff !important;
-    -webkit-text-fill-color: #ffffff !important;
-}
-div[data-testid="stTabs"] div.stButton > button,
-div[data-testid="stTabs"] div.stButton > button[kind="primary"] {
-    background: #112924 !important;
-    color: #ffffff !important;
-    -webkit-text-fill-color: #ffffff !important;
-    border: 1.5px solid rgba(255, 255, 255, 0.28) !important;
-    border-right: 6px solid #d4a853 !important;
-    border-radius: 12px !important;
-    font-weight: 800 !important;
-    font-size: 15px !important;
-    min-height: 52px !important;
-    box-shadow: none !important;
-    text-align: right !important;
-}
-div[data-testid="stTabs"] div.stButton > button:hover,
-div[data-testid="stTabs"] div.stButton > button[kind="primary"]:hover {
-    background: #17382f !important;
-    border-color: #fde68a !important;
-    border-right: 6px solid #fde68a !important;
-    color: #ffffff !important;
-    box-shadow: 0 0 16px rgba(253, 230, 138, 0.22) !important;
+.stApp div[data-baseweb="tab-list"] button[data-baseweb="tab"][aria-selected="true"] p,
+.stApp [data-testid="stTabs"] [data-testid="stTab"][aria-selected="true"] p {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
 }
 @media only screen and (max-width: 640px) {
-    div[data-testid="stTabs"] button[data-baseweb="tab"],
-    [data-testid="stTabs"] [data-testid="stTab"] {
+    .stApp div[data-testid="stTabs"] button[data-baseweb="tab"],
+    .stApp [data-testid="stTabs"] [data-testid="stTab"] {
         min-height: 68px !important;
         padding: 8px 6px !important;
     }
-    div[data-testid="stTabs"] button[data-baseweb="tab"] p,
-    [data-testid="stTabs"] [data-testid="stTab"] p {
+    .stApp div[data-testid="stTabs"] button[data-baseweb="tab"] p,
+    .stApp [data-testid="stTabs"] [data-testid="stTab"] p {
         font-size: 13.5px !important;
+    }
+    .stApp div[data-baseweb="tab-list"],
+    .stApp [data-testid="stTabs"] [role="tablist"] {
+        grid-template-columns: 1fr 1fr !important;
     }
 }
 
-.legal-dark-box {
-    background: #111c19;
-    border: 1px solid #23634c;
-    border-right: 5px solid var(--gold-main);
+.stApp .legal-dark-box {
+    background: #0E2920;
+    border: 1px solid rgba(212, 175, 55, 0.25);
+    border-right: 5px solid #D4AF37;
     border-radius: 12px;
     padding: 14px 16px !important;
     margin: 14px 0;
-    color: #e2e8f0;
+    color: #FFFFFF;
     font-size: 14.5px;
     line-height: 1.9 !important;
     direction: rtl !important;
@@ -726,15 +726,15 @@ div[data-testid="stTabs"] div.stButton > button[kind="primary"]:hover {
     word-break: normal !important;
     white-space: normal !important;
 }
-.legal-dark-box .legal-title {
+.stApp .legal-dark-box .legal-title {
     direction: rtl !important;
     text-align: right !important;
-    color: #d4a853 !important;
+    color: #D4AF37 !important;
     font-weight: 800 !important;
     margin-bottom: 8px !important;
     white-space: normal !important;
 }
-.legal-dark-box .legal-body {
+.stApp .legal-dark-box .legal-body {
     direction: rtl !important;
     unicode-bidi: embed !important;
     text-align: justify !important;
@@ -747,207 +747,173 @@ div[data-testid="stTabs"] div.stButton > button[kind="primary"]:hover {
     overflow-wrap: anywhere !important;
     word-break: normal !important;
     white-space: normal !important;
-    color: #e2e8f0 !important;
+    color: #FFFFFF !important;
 }
-.lock-emerald-banner {
-    background: rgba(16, 185, 129, 0.14);
-    border: 1px solid #10b981;
-    color: #a7f3d0;
+.stApp .lock-emerald-banner {
+    background: rgba(20, 108, 78, 0.22);
+    border: 1px solid #D4AF37;
+    color: #FFFFFF;
     padding: 12px 16px;
     border-radius: 12px;
     font-weight: 700;
     margin-bottom: 14px;
 }
-.auth-panel {
-    background: #141d20;
-    border: 1px solid #25383c;
+.stApp .auth-panel {
+    background: #0E2920;
+    border: 1px solid rgba(212, 175, 55, 0.25);
     border-radius: 14px;
     padding: 16px;
     height: 100%;
 }
 
-/* حقول الإدخال والقوائم — خلفية داكنة ونص أبيض ناصع (مقاومة للوضع الفاتح) */
-div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
-div[data-testid="stTextArea"] div[data-baseweb="textarea"] > div,
-div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
-div[data-baseweb="input"] > div,
-div[data-baseweb="textarea"] > div,
-div[data-baseweb="select"] > div {
-    background-color: #152620 !important;
-    background: #152620 !important;
-    border: 1px solid rgba(255, 255, 255, 0.22) !important;
+.stApp div[data-testid="stTextInput"] div[data-baseweb="input"] > div,
+.stApp div[data-testid="stTextArea"] div[data-baseweb="textarea"] > div,
+.stApp div[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+.stApp div[data-baseweb="input"] > div,
+.stApp div[data-baseweb="textarea"] > div,
+.stApp div[data-baseweb="select"] > div {
+    background-color: #0E2920 !important;
+    background: #0E2920 !important;
+    border: 1px solid rgba(212, 175, 55, 0.25) !important;
     border-radius: 10px !important;
-    color: #ffffff !important;
+    color: #FFFFFF !important;
 }
-div[data-baseweb="input"] input,
-div[data-baseweb="textarea"] textarea,
-div[data-baseweb="select"] span,
-div[data-baseweb="select"] div,
-div[data-testid="stTextInput"] input,
-div[data-testid="stTextArea"] textarea,
-div[data-testid="stSelectbox"] div {
-    color: #ffffff !important;
-    -webkit-text-fill-color: #ffffff !important;
-    caret-color: #ffffff !important;
+.stApp div[data-baseweb="input"] input,
+.stApp div[data-baseweb="textarea"] textarea,
+.stApp div[data-baseweb="select"] span,
+.stApp div[data-baseweb="select"] div,
+.stApp div[data-testid="stTextInput"] input,
+.stApp div[data-testid="stTextArea"] textarea,
+.stApp div[data-testid="stSelectbox"] div {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+    caret-color: #FFFFFF !important;
     font-family: 'Cairo', sans-serif !important;
     font-size: 15.5px !important;
     font-weight: 700 !important;
     opacity: 1 !important;
 }
-div[data-baseweb="input"] input::placeholder,
-div[data-baseweb="textarea"] textarea::placeholder {
-    color: #94a3b8 !important;
-    -webkit-text-fill-color: #94a3b8 !important;
+.stApp div[data-baseweb="input"] input::placeholder,
+.stApp div[data-baseweb="textarea"] textarea::placeholder {
+    color: #D1D5DB !important;
+    -webkit-text-fill-color: #D1D5DB !important;
     opacity: 1 !important;
 }
-/* عناوين الحقول والنصوص الفرعية */
-[data-testid="stWidgetLabel"] p,
-[data-testid="stWidgetLabel"] span,
-[data-testid="stWidgetLabel"] label,
-.stCaption, [data-testid="stCaptionContainer"],
-[data-testid="stCaptionContainer"] p,
-small, .stMarkdown small {
-    color: #e2e8f0 !important;
-    -webkit-text-fill-color: #e2e8f0 !important;
+.stApp [data-testid="stWidgetLabel"] p,
+.stApp [data-testid="stWidgetLabel"] span,
+.stApp [data-testid="stWidgetLabel"] label,
+.stApp .stCaption, .stApp [data-testid="stCaptionContainer"],
+.stApp [data-testid="stCaptionContainer"] p,
+.stApp small, .stApp .stMarkdown small {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
     font-weight: 700 !important;
     opacity: 1 !important;
 }
-label[data-testid="stWidgetLabel"] p,
-[data-testid="stWidgetLabel"] p {
+.stApp label[data-testid="stWidgetLabel"] p,
+.stApp [data-testid="stWidgetLabel"] p {
     font-size: 15.5px !important;
     font-weight: 700 !important;
     line-height: 1.45 !important;
 }
 
-div.stButton > button {
-    background: #172628 !important;
-    color: #ffffff !important;
-    -webkit-text-fill-color: #ffffff !important;
-    border: 1px solid #2c4a47 !important;
+.stApp div.stButton > button {
+    background: #0E2920 !important;
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+    border: 1px solid rgba(212, 175, 55, 0.25) !important;
     border-radius: 10px !important;
     font-weight: 700 !important;
     padding: 0.5rem 1rem !important;
     transition: 0.2s all !important;
     opacity: 1 !important;
 }
-div.stButton > button:hover {
-    background: #134e3a !important;
-    border-color: #34d399 !important;
-    color: #ffffff !important;
+.stApp div.stButton > button:hover {
+    background: #13382B !important;
+    border-color: #E5C158 !important;
+    color: #FFFFFF !important;
+    transform: translateY(-1px);
 }
-div.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #136f50 0%, #0c4a35 100%) !important;
-    color: #ffffff !important;
-    border: 1px solid #2bb585 !important;
-    box-shadow: 0 4px 14px rgba(19, 111, 80, 0.35) !important;
+.stApp div.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #146C4E 0%, #0D4A35 100%) !important;
+    color: #FFFFFF !important;
+    border: 1.5px solid #D4AF37 !important;
+    box-shadow: 0 4px 14px rgba(20, 108, 78, 0.35) !important;
 }
-div.stButton > button[kind="primary"]:hover {
-    background: linear-gradient(135deg, #178761 0%, #105e43 100%) !important;
-    border-color: var(--gold-main) !important;
+.stApp div.stButton > button[kind="primary"]:hover {
+    background: linear-gradient(135deg, #1A8A62 0%, #146C4E 100%) !important;
+    border-color: #E5C158 !important;
 }
-div.stDownloadButton > button {
+.stApp div.stDownloadButton > button {
     background: linear-gradient(135deg, #9a7432 0%, #785820 100%) !important;
-    color: #ffffff !important;
-    border: 1px solid var(--gold-soft) !important;
+    color: #FFFFFF !important;
+    border: 1px solid #E5C158 !important;
     border-radius: 10px !important;
     font-weight: 800 !important;
 }
 
-/* خيارات st.radio — نص أبيض واضح وخلفية داكنة مع إبراز الخيار المحدد */
-div[data-testid="stRadio"],
-div[data-testid="stRadio"] label,
-div[data-testid="stRadio"] label p,
-div[data-testid="stRadio"] label span,
-div[data-testid="stRadio"] p,
-div[data-testid="stRadio"] span,
-div[role="radiogroup"],
-div[role="radiogroup"] *,
-div[role="radiogroup"] label,
-div[role="radiogroup"] label p,
-div[role="radiogroup"] label span,
-div[role="radiogroup"] p,
-div[role="radiogroup"] span,
-div[role="radiogroup"] div {
-    color: #ffffff !important;
-    -webkit-text-fill-color: #ffffff !important;
+.stApp div[data-testid="stRadio"],
+.stApp div[data-testid="stRadio"] label,
+.stApp div[data-testid="stRadio"] label p,
+.stApp div[data-testid="stRadio"] label span,
+.stApp div[data-testid="stRadio"] p,
+.stApp div[data-testid="stRadio"] span,
+.stApp div[role="radiogroup"],
+.stApp div[role="radiogroup"] *,
+.stApp div[role="radiogroup"] label,
+.stApp div[role="radiogroup"] label p,
+.stApp div[role="radiogroup"] label span,
+.stApp div[role="radiogroup"] p,
+.stApp div[role="radiogroup"] span,
+.stApp div[role="radiogroup"] div {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
     font-weight: 700 !important;
     opacity: 1 !important;
 }
-div[role="radiogroup"] {
-    background: #101a17 !important;
+.stApp div[role="radiogroup"] {
+    background: #0A211A !important;
     padding: 8px !important;
     border-radius: 12px !important;
-    border: 1px solid #25353b !important;
+    border: 1px solid rgba(212, 175, 55, 0.25) !important;
     display: flex !important;
     flex-direction: column !important;
     gap: 8px !important;
 }
-div[role="radiogroup"] > label,
-div[data-testid="stRadio"] label {
-    background: #172a24 !important;
-    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+.stApp div[role="radiogroup"] > label,
+.stApp div[data-testid="stRadio"] label {
+    background: #0E2920 !important;
+    border: 1px solid rgba(212, 175, 55, 0.25) !important;
     border-radius: 8px !important;
     padding: 8px 12px !important;
     margin: 0 !important;
     width: 100% !important;
     box-sizing: border-box !important;
 }
-div[role="radiogroup"] > label:has(input:checked),
-div[data-testid="stRadio"] label:has(input:checked) {
-    border: 2px solid #10b981 !important;
-    background: #1a3a30 !important;
-    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.35) !important;
+.stApp div[role="radiogroup"] > label:has(input:checked),
+.stApp div[data-testid="stRadio"] label:has(input:checked) {
+    border: 1.5px solid #D4AF37 !important;
+    background: linear-gradient(135deg, #146C4E 0%, #0D4A35 100%) !important;
+    box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.35) !important;
 }
-/* حماية ورقة التقرير الرسمي A4 داخل iframe من قواعد النص الأبيض في الواجهة */
-iframe[title="components.a4"],
-iframe[data-testid="stIFrame"],
-[data-testid="stCustomComponentV1"],
-[data-testid="element-container"] iframe,
-.stElementContainer iframe {
+
+/* حماية iframe الطباعة/التواقيع من قواعد الواجهة */
+.stApp iframe[title="components.a4"],
+.stApp iframe[data-testid="stIFrame"],
+.stApp [data-testid="stCustomComponentV1"],
+.stApp [data-testid="element-container"] iframe,
+.stApp .stElementContainer iframe {
     color-scheme: normal !important;
     background: transparent !important;
 }
-/* لا تُطبَّق قواعد اللون الأبيض على محتوى معاينة A4 (مستند iframe منفصل أصلاً) */
 
-/* RTL_JUSTIFY_FIX */
-[data-testid="stAppViewContainer"], [data-testid="stMarkdownContainer"], .stMarkdown { direction: rtl !important; text-align: right !important; }
-.official-5lines, .official-5lines div,
-.official-5lines-compact, .official-5lines-compact div { text-align: right !important; }
-.auth-panel:empty { display: none !important; }
-.legal-dark-box {
-    direction: rtl !important; text-align: justify !important; text-justify: inter-word !important;
-    text-align-last: right !important; unicode-bidi: embed !important; color: #e2e8f0 !important;
-    width: 100% !important; max-width: 100% !important; box-sizing: border-box !important;
-    padding: 14px 16px !important; line-height: 1.9 !important;
-    overflow-wrap: anywhere !important; word-break: normal !important; white-space: normal !important;
-}
-.legal-dark-box .legal-title { direction: rtl !important; text-align: right !important; color: #d4a853 !important; font-weight: 800 !important; margin-bottom: 8px !important; }
-.legal-dark-box .legal-body {
-    direction: rtl !important; unicode-bidi: embed !important;
-    text-align: justify !important; text-justify: inter-word !important; text-align-last: right !important;
-    line-height: 1.9 !important; width: 100% !important; max-width: 100% !important;
-    box-sizing: border-box !important; overflow-wrap: anywhere !important;
-    word-break: normal !important; white-space: normal !important; color: #e2e8f0 !important;
-}
-@media print {
-    @page { size: A4 portrait; margin: 6mm 8mm !important; }
-    html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], .main, .block-container {
-        direction: rtl !important;
-        transform: none !important;
-        height: auto !important;
-        min-height: 0 !important;
-        max-height: none !important;
-        overflow: visible !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        background: #ffffff !important;
-    }
-    .stButton, [data-testid="stHorizontalBlock"], [data-testid="stVerticalBlockBorderWrapper"],
-    .stTabs, header, footer, [data-testid="stHeader"], [data-testid="stToolbar"],
-    [data-testid="stSidebar"], [data-testid="stDecoration"] {
-        display: none !important;
-    }
-}
+.stApp [data-testid="stAppViewContainer"],
+.stApp [data-testid="stMarkdownContainer"],
+.stApp .stMarkdown { direction: rtl !important; text-align: right !important; }
+.stApp .official-5lines, .stApp .official-5lines div,
+.stApp .official-5lines-compact, .stApp .official-5lines-compact div { text-align: right !important; }
+.stApp .auth-panel:empty { display: none !important; }
+} /* end @media screen */
 </style>
 """, unsafe_allow_html=True)
 
@@ -8834,24 +8800,47 @@ def open_form_from_catalog(fid: str):
     safe_rerun()
 
 
-def render_compact_form_buttons(category: str, primary: bool = False):
-    """بطاقات نماذج مدمجة: أيقونة + اسم + وصف مختصر + سهم — تفتح بضغطة واحدة."""
-    keys = [k for k, v in TRAFFIC_FORMS.items() if v["category"] == category]
-    for fid in keys:
-        f_item = TRAFFIC_FORMS[fid]
-        hint = form_short_hint(f_item.get("subtitle", ""), 3)
-        label = f"{f_item['icon']}  {f_item['title']}"
-        if hint:
-            label = f"{label}  ·  {hint}  ←"
-        else:
-            label = f"{label}  ←"
-        if st.button(
-            label,
-            key=f"open_{fid}",
-            type="primary" if primary else "secondary",
-            use_container_width=True,
-        ):
-            open_form_from_catalog(fid)
+def _form_matches_query(form_def: dict, query: str) -> bool:
+    q = (query or "").strip().casefold()
+    if not q:
+        return True
+    blob = " ".join(
+        str(form_def.get(k) or "")
+        for k in ("title", "subtitle", "official_title", "category", "icon")
+    ).casefold()
+    return all(token in blob for token in q.split())
+
+
+def render_compact_form_buttons(category: str | None = None, primary: bool = False, search_q: str = ""):
+    """شبكة بطاقات من عمودين (عمود واحد على الجوال تلقائياً عبر CSS Streamlit)."""
+    keys = [
+        k for k, v in TRAFFIC_FORMS.items()
+        if (category is None or v.get("category") == category) and _form_matches_query(v, search_q)
+    ]
+    if not keys:
+        st.info("لا توجد نماذج مطابقة لعبارة البحث.")
+        return
+    st.markdown('<div class="khafar-form-grid">', unsafe_allow_html=True)
+    for i in range(0, len(keys), 2):
+        cols = st.columns(2)
+        for j, col in enumerate(cols):
+            if i + j >= len(keys):
+                break
+            fid = keys[i + j]
+            f_item = TRAFFIC_FORMS[fid]
+            hint = form_short_hint(f_item.get("subtitle", ""), 3)
+            label = f"{f_item['icon']}  {f_item['title']}"
+            if hint:
+                label = f"{label}  ·  {hint}"
+            with col:
+                if st.button(
+                    label,
+                    key=f"open_{fid}",
+                    type="primary" if primary else "secondary",
+                    use_container_width=True,
+                ):
+                    open_form_from_catalog(fid)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # =====================================================================
@@ -8871,16 +8860,24 @@ gps_maps_html = (
     f"<a class='gps-map-link' href='{html.escape(gps_maps, quote=True)}' target='_blank' rel='noopener noreferrer'>خرائط</a>"
     if gps_maps else ""
 )
-st.markdown(f"""
-<div class="khafar-top-header">
-    <div class="header-brand-row">
-        <div class="header-brand-inline">
-            {header_logo_widget}
-            <div class="header-ui-title">قسم مرور العارضة</div>
-        </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+st.markdown(
+    f'<div class="khafar-top-header"><div class="header-brand-row">'
+    f'<div class="header-brand-inline">{header_logo_widget}'
+    f'<div class="official-5lines-compact">'
+    f'<div>المملكة العربية السعودية</div>'
+    f'<div>وزارة الداخلية</div>'
+    f'<div>الأمن العام — المرور</div>'
+    f'<div class="dept-line">مرور جازان — قسم مرور العارضة</div>'
+    f'</div>'
+    f'<div class="header-ui-title">منظومة ميدان الخفر</div>'
+    f'</div>'
+    f'<div class="header-status-inline">'
+    f'<span class="status-chip">🟢 متصل وجاهز</span>'
+    f'<span class="status-chip gold">👮 {html.escape(unit_display or "مستلم الخفر المناوب")}</span>'
+    f'<span class="status-chip time">{now_ksa.strftime("%Y/%m/%d %H:%M")}</span>'
+    f'</div></div></div>',
+    unsafe_allow_html=True,
+)
 st.html(
     f"""
 <div class="compact-status-bar">
@@ -8985,6 +8982,7 @@ if st.session_state.pop("gps_toast", None):
 if st.session_state.pop("gps_toast_err", None):
     st.toast("تعذر قراءة إحداثي الموقع.", icon="⚠️")
 
+st.markdown('<div class="khafar-nav-capsule"></div>', unsafe_allow_html=True)
 nav_cols = st.columns(3)
 nav_items = [
     ("النماذج الميدانية", "📋 النماذج"),
@@ -9011,15 +9009,24 @@ for idx, (tab_key, tab_label) in enumerate(nav_items):
 if st.session_state.nav_tab == "النماذج الميدانية":
 
     if st.session_state.opened_form_id is None:
-        tab_decl, tab_min, tab_med, tab_tak = st.tabs(list(CATEGORY_TAB_MAP.keys()))
-        with tab_decl:
-            render_compact_form_buttons("إقرار", primary=False)
-        with tab_min:
-            render_compact_form_buttons("محضر", primary=False)
-        with tab_med:
-            render_compact_form_buttons("إحالة طبية", primary=False)
-        with tab_tak:
-            render_compact_form_buttons("تكميل", primary=False)
+        forms_quick_q = st.text_input(
+            "🔍 بحث سريع في النماذج...",
+            key="forms_quick_search",
+            placeholder="مثال: كفالة، حجز، سموم، مصاب، تنازل",
+        )
+        if (forms_quick_q or "").strip():
+            st.caption("نتائج البحث عبر جميع الأقسام")
+            render_compact_form_buttons(None, primary=False, search_q=forms_quick_q)
+        else:
+            tab_decl, tab_min, tab_med, tab_tak = st.tabs(list(CATEGORY_TAB_MAP.keys()))
+            with tab_decl:
+                render_compact_form_buttons("إقرار", primary=False)
+            with tab_min:
+                render_compact_form_buttons("محضر", primary=False)
+            with tab_med:
+                render_compact_form_buttons("إحالة طبية", primary=False)
+            with tab_tak:
+                render_compact_form_buttons("تكميل", primary=False)
 
     else:
         fid = st.session_state.opened_form_id
