@@ -6,13 +6,22 @@
   <title>رفع ملفات الجوال</title>
   <style>
     :root { --bg:#0E2920; --gold:#D4AF37; --gold-soft:#E5C158; --text:#FFFFFF; --muted:#D1D5DB; --card:#13382B; }
-    html, body { margin:0; padding:0; background:transparent; font-family:Cairo,Tahoma,sans-serif; color:var(--text); }
-    .wrap {
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: hidden !important;
+      background: transparent !important;
+      font-family: Cairo, Tahoma, sans-serif;
+      color: var(--text);
+    }
+    #uploaderCard {
       background: var(--bg);
       border: 1.5px solid rgba(212,175,55,0.45);
       border-radius: 14px;
       padding: 12px;
-      margin: 4px 2px 8px;
+      margin: 2px;
       box-sizing: border-box;
     }
     .title { font-weight:900; font-size:14px; color:var(--gold-soft); margin:0 0 4px; text-align:right; }
@@ -113,7 +122,7 @@
   </style>
 </head>
 <body>
-  <div class="wrap" id="wrap">
+  <div id="uploaderCard">
     <div class="title" id="title">إرفاق ملفات</div>
     <div class="sub" id="subtitle">اختر من المعرض أو صوّر مباشرة — متوافق مع أندرويد والآيفون</div>
     <div class="drop" id="dropZone">أسقط الملفات هنا (للكمبيوتر) أو استخدم الأزرار أدناه للجوال</div>
@@ -145,7 +154,10 @@
   };
   var bootstrapped = false;
   var lastArgsSig = "";
+  var lastHeight = 0;
+  var lastWidth = window.innerWidth || 0;
 
+  var cardEl = document.getElementById("uploaderCard");
   var titleEl = document.getElementById("title");
   var subEl = document.getElementById("subtitle");
   var dropZone = document.getElementById("dropZone");
@@ -164,8 +176,12 @@
   }
   function setReady() { send("streamlit:componentReady", { apiVersion: 1 }); }
   function setHeight() {
-    var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 220);
-    send("streamlit:setFrameHeight", { height: h + 8 });
+    if (!cardEl) return;
+    var h = Math.ceil((cardEl.offsetHeight || 0) + 4);
+    h = Math.min(Math.max(h, 115), 520);
+    if (lastHeight && Math.abs(h - lastHeight) <= 3) return;
+    lastHeight = h;
+    send("streamlit:setFrameHeight", { height: h });
   }
   function setValue(value) {
     send("streamlit:setComponentValue", { value: value, dataType: "json" });
@@ -405,7 +421,6 @@
     inp.multiple = !!multiple;
     inp.addEventListener("change", function () {
       var list = inp.files;
-      // اقرأ فوراً ثم صفّر القيمة لإعادة الاختيار
       ingestFileList(list);
       try { inp.value = ""; } catch (e) {}
     });
@@ -460,9 +475,8 @@
       preserve_alpha: !!args.preserve_alpha,
       disabled: !!args.disabled
     });
-    // مهم: لا تمسح الملفات عند render الدوري بعد العودة من المعرض
+    // مهم: لا تمسح الملفات ولا تُعد إرسال الارتفاع عند render الدوري
     if (sig === lastArgsSig && bootstrapped) {
-      setHeight();
       return;
     }
     lastArgsSig = sig;
@@ -482,7 +496,7 @@
     inpGallery.multiple = cfg.multiple;
     inpPdf.multiple = cfg.multiple;
     bootstrapped = true;
-    setHeight();
+    setTimeout(setHeight, 20);
   }
 
   window.addEventListener("message", function (ev) {
@@ -491,10 +505,17 @@
     applyArgs(data.args || {});
   });
 
+  // تحديث الارتفاع فقط عند تغيّر العرض الأفقي (لا اعتماد على ارتفاع الصفحة)
+  window.addEventListener("resize", function () {
+    var w = window.innerWidth || 0;
+    if (w === lastWidth) return;
+    lastWidth = w;
+    setTimeout(setHeight, 20);
+  });
+
   setReady();
-  setHeight();
-  setTimeout(setHeight, 80);
-  setTimeout(setHeight, 400);
+  setTimeout(setHeight, 20);
+  setTimeout(setHeight, 120);
 })();
   </script>
 </body>

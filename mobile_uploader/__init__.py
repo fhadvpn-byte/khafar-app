@@ -149,10 +149,7 @@ def khafar_file_uploader(
     if help and not subtitle:
         subtitle = help
     if subtitle is None:
-        subtitle = (
-            "🖼️ المعرض يفتح تطبيق الصور الأصلي في أندرويد/آيفون — "
-            "بدون فلتر امتدادات يعطّل content://"
-        )
+        subtitle = "المعرض أو الكاميرا — متوافق مع أندرويد والآيفون"
 
     result = _mobile_uploader(
         title=label or "إرفاق ملفات",

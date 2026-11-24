@@ -6,19 +6,22 @@
   <title>لوحة التوقيع</title>
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
-      background: #0d1316;
+      margin: 0 !important;
+      padding: 0 !important;
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: hidden !important;
+      background: transparent !important;
       font-family: Cairo, Tahoma, sans-serif;
       color: #e2e8f0;
-      overflow: hidden;
     }
-    .wrap {
+    #padCard {
       background: #101820;
       border: 1px solid var(--accent, #1e6b50);
       border-radius: 12px;
       padding: 10px;
-      margin: 6px;
+      margin: 2px;
+      box-sizing: border-box;
     }
     .title {
       font-weight: 800;
@@ -85,7 +88,7 @@
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <div id="padCard">
     <div class="title" id="padTitle">ارسم التوقيع هنا (حبر أزرق رسمي #0044cc)</div>
     <div class="sub" id="padSub"></div>
     <canvas id="pad" width="900" height="220" tabindex="-1"></canvas>
@@ -105,6 +108,7 @@
   var statusEl = document.getElementById("padStatus");
   var titleEl = document.getElementById("padTitle");
   var subEl = document.getElementById("padSub");
+  var cardEl = document.getElementById("padCard");
   var drawing = false;
   var lastX = 0, lastY = 0, midX = 0, midY = 0;
   var lastTouchTs = 0;
@@ -113,6 +117,8 @@
   var padId = "officer";
   var restoring = false;
   var lastSavedArg = "";
+  var lastHeight = 0;
+  var lastWidth = window.innerWidth || 0;
 
   /* أبعاد الـ canvas ثابتة من HTML — يُمنع إعادة تعيين width/height هنا. */
   function send(type, data) {
@@ -121,7 +127,11 @@
   }
   function setReady() { send("streamlit:componentReady", { apiVersion: 1 }); }
   function setHeight() {
-    var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, 340);
+    if (!cardEl) return;
+    var h = Math.ceil((cardEl.offsetHeight || 0) + 4);
+    h = Math.min(Math.max(h, 280), 420);
+    if (lastHeight && Math.abs(h - lastHeight) <= 3) return;
+    lastHeight = h;
     send("streamlit:setFrameHeight", { height: h });
   }
   function setValue(value) {
@@ -368,19 +378,25 @@
     }
     var local = readLocal();
     if (local) restoreFromUrl(local);
+    setTimeout(setHeight, 20);
   }
 
   window.addEventListener("message", function (ev) {
     var data = ev.data || {};
     if (!data || data.type !== "streamlit:render") return;
     applyArgs(data.args || {});
-    setHeight();
+  });
+
+  window.addEventListener("resize", function () {
+    var w = window.innerWidth || 0;
+    if (w === lastWidth) return;
+    lastWidth = w;
+    setTimeout(setHeight, 20);
   });
 
   setReady();
-  setHeight();
-  setTimeout(setHeight, 80);
-  setTimeout(setHeight, 400);
+  setTimeout(setHeight, 20);
+  setTimeout(setHeight, 120);
 })();
   </script>
 </body>

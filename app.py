@@ -96,10 +96,7 @@ def format_entity(role_label: str, optional_name: str) -> str:
 ATTACH_MAX_PX = 1600
 ATTACH_JPEG_QUALITY = 85
 SIG_UPLOAD_MAX_PX = 1600
-UPLOAD_HELP_CAPTION = (
-    "يدعم التصوير المباشر ومعرض الجوال وكافة الصيغ: JPG, JPEG, PNG, HEIC, WEBP, PDF "
-    "(بدون فلتر امتدادات حتى لا يُحجب منتقي أندرويد)."
-)
+UPLOAD_HELP_CAPTION = "المعرض أو الكاميرا أو ملف PDF — جاهز للجوال والكمبيوتر."
 
 
 class _NormalizedUpload:
@@ -1135,6 +1132,16 @@ div[data-testid="stHorizontalBlock"] div.stButton > button {
 .stApp .stElementContainer iframe {
     color-scheme: normal !important;
     background: transparent !important;
+}
+/* منع فراغ عملاق أسفل المكوّنات المخصصة (mobile_uploader / sig_pad) */
+.stApp [data-testid="stCustomComponentV1"],
+.stApp [data-testid="stCustomComponentV1"] > iframe,
+.stApp iframe[title*="khafar_mobile_uploader"],
+.stApp iframe[title*="khafar_sig_pad"] {
+    min-height: 0 !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: hidden !important;
 }
 
 .stApp [data-testid="stAppViewContainer"],
@@ -9551,7 +9558,6 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 disabled=st.session_state.citizen_locked,
                 help=UPLOAD_HELP_CAPTION,
             )
-            st.caption(UPLOAD_HELP_CAPTION)
             if uploaded_files and not st.session_state.citizen_locked:
                 existing = list(st.session_state.get("attachments") or [])
                 known = {attachment_fingerprint(a) for a in existing}
@@ -9651,7 +9657,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 if is_letter_form:
                     recipient_title = form_def.get("recipient_role_title") or "المختص المستلم بحجز مرور أبو عريش"
                     role_options = [recipient_title]
-                    st.markdown("#### 1️⃣ توقيع حي بالإصبع — المختص المستلم بحجز مرور أبو عريش")
+                    st.markdown("#### أولاً: توقيع حي بالإصبع — المختص المستلم بحجز مرور أبو عريش")
                     st.caption("خانة التوقيع الحي مخصصة للمختص المستلم في حجز مرور محافظة أبو عريش.")
                     recv_name_key, recv_role_key = _receiver_widget_keys(fid)
                     if recv_name_key not in st.session_state:
@@ -9676,7 +9682,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         "بصمة منفذ الشحن (USB Type-C) للمختص المستلم",
                     ]
                 elif is_med_form:
-                    st.markdown("#### 1️⃣ توثيق خانة الاستلام (المستشفى / الثلاجة / المختبر)")
+                    st.markdown("#### أولاً: توثيق خانة الاستلام (المستشفى / الثلاجة / المختبر)")
                     st.caption("افصل بيانات المناوب المستلم عن اسم المصاب/الحالة الظاهر في حقول النموذج أعلاه.")
                     recv_name_key, recv_role_key = _receiver_widget_keys(fid)
                     # ترحيل القيم من المفاتيح القديمة المرتبطة بـ doc_no المتغيّر
@@ -9709,7 +9715,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         "بصمة منفذ الشحن (USB Type-C) للمرافق / المستلم",
                     ]
                 else:
-                    st.markdown("#### 1️⃣ بصمة / توقيع الطرف المعني (يقفل التعديل)")
+                    st.markdown("#### أولاً: بصمة / توقيع الطرف المعني (يقفل التعديل)")
                     auth_opts = [
                         "توقيع حي بالإصبع على الشاشة",
                         "بصمة منفذ الشحن (USB Type-C)",
@@ -9799,10 +9805,10 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 is_toxicology_form = fid == "med_toxicology" or "تحليل سموم" in str(form_def.get("title") or "")
                 import khafar_med_age; khafar_med_age.register_catalog(locals(), globals())
                 if is_toxicology_form:
-                    st.markdown("#### 2️⃣ مصادقة إدارة مرور منطقة جازان وتوثيق مستلم الخفر المناوب")
+                    st.markdown("#### ✍️ ثانياً: مصادقة إدارة مرور منطقة جازان وتوثيق مستلم الخفر المناوب")
                     st.caption(f"التوثيق النصي لمستلم الخفر المناوب: {unit_display}")
                 else:
-                    st.markdown("#### 2️⃣ توثيق مستلم الخفر المناوب ومصادقة وحدة الحوادث")
+                    st.markdown("#### ✍️ ثانياً: توثيق مستلم الخفر المناوب ومصادقة وحدة الحوادث")
                     st.caption(f"الإعدادات الافتراضية: {unit_display}  •  {duty_display}")
 
                 _auth_sk = _stable_form_session_key()
@@ -10335,7 +10341,6 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
             preserve_alpha=True,
             help=UPLOAD_HELP_CAPTION + " يُحوَّل الحبر تلقائياً إلى الأزرق الرسمي #0044cc.",
         )
-        st.caption(UPLOAD_HELP_CAPTION)
         up_col, del_col = st.columns(2)
         with up_col:
             if st.button("💾 حفظ صورة التوقيع المرفوعة", type="primary", use_container_width=True):
@@ -10447,7 +10452,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 st.success("تم تحديث بيانات المدير وخيار الظهور التلقائي.")
                 safe_rerun()
 
-            st.markdown("##### 1️⃣ ارسم ثم احفظ التوقيع من داخل اللوحة")
+            st.markdown("##### أولاً: ارسم ثم احفظ التوقيع من داخل اللوحة")
             mgr_saved_now = str(mgr_now.get("manager_sig_b64") or "").strip()
             mgr_pad_val = sig_pad(
                 key="manager_settings_sig_pad",
@@ -10489,7 +10494,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                     else:
                         st.warning("ارسم التوقيع أولاً ثم اضغط حفظ داخل اللوحة.")
 
-            st.markdown("##### 2️⃣ أو ارفع ملفاً لاعتماده فوراً لجميع الأفراد")
+            st.markdown("##### ثانياً: أو ارفع ملفاً لاعتماده فوراً لجميع الأفراد")
             mgr_upload = khafar_file_uploader(
                 "📤 أو ارفع/ثبّت صورة التوقيع المحفوظة هنا لاعتمادها فوراً لجميع الأفراد",
                 key="manager_sig_direct_upload_mu",
@@ -10498,7 +10503,6 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 preserve_alpha=True,
                 help=UPLOAD_HELP_CAPTION + " يُفضّل صورة توقيع واضحة من المعرض أو الكاميرا.",
             )
-            st.caption(UPLOAD_HELP_CAPTION)
             if mgr_upload is not None:
                 try:
                     normalized, norm_err = normalize_mobile_upload(mgr_upload, purpose="signature")
