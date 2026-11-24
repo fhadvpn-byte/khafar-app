@@ -9033,6 +9033,203 @@ def open_form_from_catalog(fid: str):
     safe_rerun()
 
 
+_ARCHIVE_RECALL_SKIP_KEYS = {
+    "incident_no",
+    "doc_no",
+    "auto_doc_no",
+    "verify_hash",
+    "created_at",
+    "manual_ref_no",
+    "reference_no",
+    "ref_no",
+    "archived_html",
+    "legal_text",
+    "signatures_json",
+    "citizen_stamp_b64",
+    "officer_stamp_b64",
+    "duty_stamp_b64",
+    "attachment_b64",
+    "show_attachments_in_print",
+}
+
+
+def _resolve_form_id_from_archive_rec(rec: dict) -> str:
+    """استخراج form_id من سجل الأرشيف مع دعم العنوان/الكفالة."""
+    fid = str((rec or {}).get("form_id") or "").strip()
+    if fid and fid in TRAFFIC_FORMS:
+        return fid
+    title_blob = " ".join(
+        str((rec or {}).get(k) or "")
+        for k in ("form_title", "title", "official_title", "form_name")
+    )
+    if "كفالة" in title_blob and "حادث" in title_blob:
+        bail_id = "decl_accident_bail"
+        if bail_id in TRAFFIC_FORMS:
+            return bail_id
+    title_cf = title_blob.casefold()
+    for cand_id, fdef in TRAFFIC_FORMS.items():
+        for key in ("title", "official_title"):
+            t = str(fdef.get(key) or "").strip()
+            if t and (t == title_blob or t.casefold() in title_cf or title_cf in t.casefold()):
+                return cand_id
+    return fid
+
+
+def _extract_archive_field_map(rec: dict) -> dict:
+    """دمج fields / fields_json / payload / data من سجل الأرشيف."""
+    out: dict = {}
+    raw_fields = (rec or {}).get("fields")
+    if isinstance(raw_fields, dict):
+        out.update(raw_fields)
+    elif isinstance(raw_fields, str) and raw_fields.strip():
+        try:
+            parsed = json.loads(raw_fields)
+            if isinstance(parsed, dict):
+                out.update(parsed)
+        except Exception:
+            pass
+    if not out:
+        try:
+            parsed = json.loads((rec or {}).get("fields_json") or "{}")
+            if isinstance(parsed, dict):
+                out.update(parsed)
+        except Exception:
+            pass
+    for alt_key in ("payload", "data"):
+        alt = (rec or {}).get(alt_key)
+        if isinstance(alt, dict):
+            for k, v in alt.items():
+                if k not in out:
+                    out[k] = v
+        elif isinstance(alt, str) and alt.strip():
+            try:
+                parsed = json.loads(alt)
+                if isinstance(parsed, dict):
+                    for k, v in parsed.items():
+                        if k not in out:
+                            out[k] = v
+            except Exception:
+                pass
+    return out
+
+
+def consume_pending_archive_recall() -> None:
+    """
+    تطبيق استدعاء الأرشيف قبل رسم شريط التنقل والحقول
+    لتفادي StreamlitAPIException وللانتقال الفوري إلى شاشة النموذج.
+    """
+    if "_pending_archive_recall" not in st.session_state:
+        return
+    rec = st.session_state.pop("_pending_archive_recall", None)
+    if not isinstance(rec, dict):
+        return
+
+    fid = _resolve_form_id_from_archive_rec(rec)
+    if not fid or fid not in TRAFFIC_FORMS:
+        st.session_state["_recall_flash_err"] = True
+        st.session_state.nav_tab = "النماذج الميدانية"
+        return
+
+    form_def = TRAFFIC_FORMS[fid]
+
+    # 1) تبويب النماذج + مسح البحث السريع
+    st.session_state.nav_tab = "النماذج الميدانية"
+    st.session_state["forms_quick_search"] = ""
+
+    # 2) القسم الفرعي المطابق
+    cat = str(form_def.get("category") or "")
+    for label, cval in CATEGORY_TAB_MAP.items():
+        if cval == cat:
+            st.session_state.forms_category_tab = label
+            st.session_state.active_category_tab = label
+            break
+
+    # 3) فتح النموذج + رقم مرجعي جديد + إلغاء القفل
+    st.session_state.opened_form_id = fid
+    reset_doc_state()
+
+    # 4) نسخ الحقول إلى مفاتيح الإدخال الفعلية
+    fields_map = _extract_archive_field_map(rec)
+    prefix = f"inp_{fid}_"
+    for state_key in list(st.session_state.keys()):
+        sk = str(state_key)
+        if sk.startswith(prefix) or sk.startswith(f"manual_ref_inp_{fid}"):
+            del st.session_state[state_key]
+
+    field_meta = {
+        str(fld.get("key") or ""): fld
+        for fld in (form_def.get("fields") or [])
+        if fld.get("key")
+    }
+
+    def _assign_input(field_key: str, value) -> None:
+        if value is None:
+            return
+        if isinstance(value, str) and not value.strip():
+            return
+        meta = field_meta.get(field_key)
+        if meta and str(meta.get("type") or "") == "select":
+            opts = list(meta.get("options") or [])
+            if opts and value not in opts:
+                return
+        st.session_state[f"{prefix}{field_key}"] = value
+
+    for key, value in fields_map.items():
+        k = str(key or "")
+        if not k or k.startswith("__"):
+            continue
+        if k in _ARCHIVE_RECALL_SKIP_KEYS:
+            continue
+        # دعم مفاتيح العمر الطبية: med_xxx_person_age أو person_age
+        field_key = k
+        if k.startswith(f"{fid}_") and k[len(fid) + 1 :] in field_meta:
+            field_key = k[len(fid) + 1 :]
+        _assign_input(field_key, value)
+        if field_key != k and k not in _ARCHIVE_RECALL_SKIP_KEYS:
+            _assign_input(k, value)
+
+    # مفاتيح عمر إضافية تستخدمها khafar_med_age
+    age_candidates = []
+    for ak in (f"{fid}_person_age", "med_person_age", "person_age", "age"):
+        if fields_map.get(ak) not in (None, ""):
+            age_candidates.append(fields_map.get(ak))
+    for fk, fv in fields_map.items():
+        fks = str(fk)
+        if fks.endswith(("_person_age", "_age")) and fv not in (None, ""):
+            age_candidates.append(fv)
+    if age_candidates:
+        age_val = age_candidates[0]
+        for ak in (f"{fid}_person_age", "med_person_age", "person_age", "age"):
+            st.session_state[f"{prefix}{ak}"] = age_val
+
+    # مرفقات الوثيقة (إن وُجدت) بدون التواقيع القديمة
+    att_raw = rec.get("attachment_b64") or fields_map.get("attachment_b64") or ""
+    if att_raw:
+        st.session_state.attachment_b64 = att_raw
+        st.session_state.attachments = parse_attachments(att_raw)
+    if "show_attachments_in_print" in rec:
+        st.session_state.show_attachments_in_print = bool(rec.get("show_attachments_in_print"))
+
+    recv_name = str(rec.get("receiver_name") or fields_map.get("receiver_name") or "").strip()
+    recv_role = str(rec.get("receiver_role") or fields_map.get("receiver_role") or "").strip()
+    if recv_name:
+        st.session_state.receiver_name = recv_name
+    if recv_role:
+        st.session_state.receiver_role = recv_role
+
+    # تأكيد إلغاء القفل ومسح البصمات العالقة
+    st.session_state.citizen_locked = False
+    st.session_state.citizen_stamp_b64 = ""
+    st.session_state.citizen_auth_mode = ""
+    st.session_state.party_stamps = {}
+    st.session_state.live_sig_pads = {}
+    st.session_state.officer_approved = False
+    st.session_state.officer_stamp_b64 = ""
+    st.session_state.duty_stamp_b64 = ""
+
+    st.session_state["_recall_flash_ok"] = True
+
+
 def _form_matches_query(form_def: dict, query: str) -> bool:
     q = (query or "").strip().casefold()
     if not q:
@@ -9075,6 +9272,9 @@ def render_compact_form_buttons(category: str | None = None, primary: bool = Fal
                     open_form_from_catalog(fid)
     st.markdown("</div>", unsafe_allow_html=True)
 
+
+# استدعاء الأرشيف قبل رسم شريط التنقل/الحقول (يمنع تعديل widgets بعد إنشائها)
+consume_pending_archive_recall()
 
 # =====================================================================
 # 7. الترويسة المدمجة + شريط الحالة الأفقي
@@ -9259,6 +9459,14 @@ if st.session_state.nav_tab == "النماذج الميدانية":
         fid = st.session_state.opened_form_id
         form_def = TRAFFIC_FORMS[fid]
         if form_def.get("category") == "تكميل":
+            if st.session_state.pop("_recall_flash_ok", None):
+                st.success(
+                    "✅ تم استدعاء بيانات الوثيقة من الأرشيف — يمكنك الآن تعديل الحقول واعتمادها كسجل جديد"
+                )
+                components.html(
+                    "<script>try{window.parent.scrollTo(0,0);}catch(e){try{window.scrollTo(0,0);}catch(e2){}}</script>",
+                    height=0,
+                )
             top_bar1, top_bar2 = st.columns([1.2, 2.8])
             with top_bar1:
                 if st.button("↩️ العودة للنماذج", use_container_width=True, key="tak_back"):
@@ -9272,6 +9480,16 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 )
             render_takmeel_form(fid, logo_b64_global, shift)
         else:
+            if st.session_state.pop("_recall_flash_ok", None):
+                st.success(
+                    "✅ تم استدعاء بيانات الوثيقة من الأرشيف — يمكنك الآن تعديل الحقول واعتمادها كسجل جديد"
+                )
+                components.html(
+                    "<script>try{window.parent.scrollTo(0,0);}catch(e){try{window.scrollTo(0,0);}catch(e2){}}</script>",
+                    height=0,
+                )
+            if st.session_state.pop("_recall_flash_err", None):
+                st.warning("تعذّر تحديد نموذج السجل المستدعى من الأرشيف.")
             pending_prefill = st.session_state.pop("pending_form_prefill", None)
             if pending_prefill and pending_prefill.get("form_id") == fid:
                 prefix = f"inp_{fid}_"
@@ -10175,12 +10393,9 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
                     arch_html = embed_signatures_in_html(arch_html, arch_sigs_only)
                 with c_edit:
                     if st.button("✏️ استدعاء وتعديل كسجل جديد", key=f"edit_{r['id']}", use_container_width=True):
-                        values = {k: v for k, v in (arch_fields or {}).items() if not str(k).startswith("__")}
-                        st.session_state.pending_form_prefill = {
-                            "form_id": r["form_id"],
-                            "values": values,
-                        }
-                        open_form_from_catalog(r["form_id"])
+                        # تخزين انتقالي فقط — التطبيق يتم في بداية الدورة التالية قبل رسم التنقل
+                        st.session_state["_pending_archive_recall"] = dict(r)
+                        safe_rerun()
                 with c_dl:
                     st.download_button(
                         "⬇️ تنزيل A4",
