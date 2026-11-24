@@ -296,7 +296,6 @@ section[data-testid="stSidebar"] { display: none !important; }
 }
 
 .khafar-top-header {
-    position: relative;
     background: linear-gradient(135deg, #0d4432 0%, #08291e 100%);
     border: 1px solid #1e6b50;
     border-radius: 14px 14px 0 0;
@@ -336,54 +335,21 @@ section[data-testid="stSidebar"] { display: none !important; }
     border-radius: 12px;
     background: #ffffff;
     border: 2px solid var(--gold-main);
-    padding: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
-}
-.logo-frame img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-}
-.khafar-ui-corner-logo {
-    position: absolute;
-    left: 16px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 62px;
-    height: 62px;
-    min-width: 62px;
-    border-radius: 12px;
-    background: #ffffff;
-    border: 2px solid #d4af37;
     padding: 2px;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
-    z-index: 2;
-    pointer-events: none;
 }
-.khafar-ui-corner-logo img {
+.logo-frame img {
     width: 100%;
     height: 100%;
-    object-fit: contain;
-    transform: scale(1.18);
+    max-width: none;
+    max-height: none;
+    object-fit: cover;
+    transform: scale(1.15);
     display: block;
-}
-@media (max-width: 768px) {
-    .khafar-top-header {
-        padding-left: 62px;
-    }
-    .khafar-ui-corner-logo {
-        left: 10px;
-        width: 46px;
-        height: 46px;
-        min-width: 46px;
-    }
 }
 
 .compact-status-bar {
@@ -961,9 +927,6 @@ iframe[data-testid="stIFrame"],
     .stButton, [data-testid="stHorizontalBlock"], [data-testid="stVerticalBlockBorderWrapper"],
     .stTabs, header, footer, [data-testid="stHeader"], [data-testid="stToolbar"],
     [data-testid="stSidebar"], [data-testid="stDecoration"] {
-        display: none !important;
-    }
-    .khafar-ui-corner-logo {
         display: none !important;
     }
 }
@@ -8441,18 +8404,16 @@ def reset_doc_state():
 all_archived = search_records_db("", DEVICE_HASH, all_devices=True)
 archive_count = len(all_archived)
 
+# شعار واجهة الترويسة فقط — مستقل عن logo_b64_global (شعار المرور للتقارير/A4)
+ui_header_logo_b64 = get_khafar_app_logo_b64()
 header_logo_widget = (
-    f"<div class='logo-frame'><img src='data:image/png;base64,{logo_b64_global}' alt='شعار المرور' /></div>"
-    if logo_b64_global
-    else "<div class='logo-frame' style='font-size:22px;'>🛡️</div>"
-)
-_khafar_app_logo_b64 = get_khafar_app_logo_b64()
-khafar_app_corner_logo_html = (
-    "<div class='khafar-ui-corner-logo' aria-hidden='true'>"
-    f"<img src='data:image/jpeg;base64,{_khafar_app_logo_b64}' alt='هوية التطبيق' />"
-    "</div>"
-    if _khafar_app_logo_b64
-    else ""
+    f"<div class='logo-frame'><img src='data:image/jpeg;base64,{ui_header_logo_b64}' alt='هوية التطبيق' /></div>"
+    if ui_header_logo_b64
+    else (
+        f"<div class='logo-frame'><img src='data:image/png;base64,{logo_b64_global}' alt='شعار المرور' /></div>"
+        if logo_b64_global
+        else "<div class='logo-frame' style='font-size:22px;'>🛡️</div>"
+    )
 )
 
 scanner_short = (st.session_state.scanner_model or "محاكاة").replace("وضع المحاكاة متصل (معزول العتاد)", "محاكاة")
@@ -8520,7 +8481,6 @@ st.markdown(f"""
             </div>
         </div>
     </div>
-    {khafar_app_corner_logo_html}
 </div>
 """, unsafe_allow_html=True)
 st.html(
