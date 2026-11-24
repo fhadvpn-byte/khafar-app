@@ -1,4 +1,5 @@
 streamlit>=1.32.0
 pillow>=10.0.0
+pillow-heif>=0.16.0
 qrcode>=7.4.2
 weasyprint>=62.0

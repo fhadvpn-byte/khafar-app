@@ -20,6 +20,12 @@ import importlib, khafar_bail; khafar_bail = importlib.reload(khafar_bail) if ge
 import importlib, khafar_med_age; khafar_med_age = importlib.reload(khafar_med_age) if getattr(khafar_med_age, "_KHAFAR_MED_AGE_VER", "") != "v3" else khafar_med_age; khafar_med_age.reset_run_state()
 
 try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+except ImportError:
+    pass
+
+try:
     import qrcode
     HAS_QRCODE = True
 except ImportError:
@@ -86,9 +92,125 @@ def format_entity(role_label: str, optional_name: str) -> str:
     return f"{r} / {n}" if (r and n) else (r or n)
 
 
-ATTACH_MAX_PX = 1200
+ATTACH_MAX_PX = 1600
 ATTACH_JPEG_QUALITY = 85
-ATTACH_TYPES = ["png", "jpg", "jpeg", "webp", "pdf"]
+SIG_UPLOAD_MAX_PX = 1600
+UPLOAD_HELP_CAPTION = (
+    "يدعم التصوير المباشر ومعرض الجوال وكافة الصيغ: JPG, JPEG, PNG, HEIC, WEBP, PDF "
+    "(بدون فلتر امتدادات حتى لا يُحجب منتقي أندرويد)."
+)
+
+
+class _NormalizedUpload:
+    """واجهة متوافقة مع UploadedFile بعد تطبيع بايتات الجوال."""
+
+    def __init__(self, data: bytes, name: str, mime: str):
+        self._buf = io.BytesIO(data or b"")
+        self.name = name or "مرفق.bin"
+        self.type = mime or "application/octet-stream"
+        self.size = len(data or b"")
+
+    def getvalue(self) -> bytes:
+        return self._buf.getvalue()
+
+    def read(self, *args, **kwargs):
+        return self._buf.read(*args, **kwargs)
+
+    def seek(self, *args, **kwargs):
+        return self._buf.seek(*args, **kwargs)
+
+    def tell(self):
+        return self._buf.tell()
+
+
+def _read_upload_bytes(uploaded_file) -> bytes:
+    if uploaded_file is None:
+        return b""
+    try:
+        if hasattr(uploaded_file, "getvalue"):
+            raw = uploaded_file.getvalue()
+        else:
+            raw = uploaded_file.read()
+    except Exception:
+        raw = b""
+    try:
+        if hasattr(uploaded_file, "seek"):
+            uploaded_file.seek(0)
+    except Exception:
+        pass
+    return raw or b""
+
+
+def _safe_stem(name: str, fallback: str = "مرفق") -> str:
+    stem = Path(str(name or "").strip() or fallback).stem.strip() or fallback
+    # أسماء content:// الرقمية أو الفارغة
+    if not stem or stem in {".", ".."} or stem.lower() in {"image", "blob", "upload"}:
+        return fallback
+    return stem[:80]
+
+
+def _image_to_rgb_white(img: Image.Image) -> Image.Image:
+    if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in (img.info or {})):
+        rgba = img.convert("RGBA")
+        bg = Image.new("RGB", rgba.size, (255, 255, 255))
+        bg.paste(rgba, mask=rgba.split()[-1])
+        return bg
+    if img.mode != "RGB":
+        return img.convert("RGB")
+    return img
+
+
+def normalize_mobile_upload(uploaded_file, *, purpose: str = "attachment"):
+    """
+    تطبيع مرفقات الجوال اعتماداً على البايتات الفعلية (لا الامتداد فقط).
+    purpose: attachment | signature
+    يعيد (ملف_مطبَّع | None, رسالة_خطأ_عربية | None).
+    """
+    if uploaded_file is None:
+        return None, "لم يتم اختيار ملف."
+    orig_name = (getattr(uploaded_file, "name", None) or "مرفق").strip() or "مرفق"
+    raw = _read_upload_bytes(uploaded_file)
+    if not raw:
+        return None, "الملف فارغ أو تعذّرت قراءته من معرض الجوال."
+
+    # PDF عبر البصمة السحرية — حتى لو الاسم بلا امتداد
+    if raw[:5] == b"%PDF-" or raw[:4] == b"%PDF":
+        if purpose == "signature":
+            return None, "⚠️ رفع التوقيع يقبل الصور فقط (وليس PDF)."
+        stem = _safe_stem(orig_name, "مرفق")
+        return _NormalizedUpload(raw, f"{stem}.pdf", "application/pdf"), None
+
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img = ImageOps.exif_transpose(img)
+    except Exception:
+        return None, "⚠️ نوع الملف غير مدعوم، يرجى إرفاق صورة أو ملف PDF."
+
+    stem = _safe_stem(orig_name, "صورة" if purpose == "attachment" else "توقيع")
+    try:
+        if purpose == "signature":
+            # الحفاظ على الشفافية قدر الإمكان لمعالجة الحبر الأزرق لاحقاً
+            if img.mode not in ("RGB", "RGBA"):
+                img = img.convert("RGBA") if "A" in (img.getbands() or ()) else img.convert("RGB")
+            if max(img.size) > SIG_UPLOAD_MAX_PX:
+                img.thumbnail((SIG_UPLOAD_MAX_PX, SIG_UPLOAD_MAX_PX), Image.Resampling.LANCZOS)
+            buf = io.BytesIO()
+            if img.mode == "RGBA":
+                img.save(buf, format="PNG", optimize=True)
+                return _NormalizedUpload(buf.getvalue(), f"{stem}.png", "image/png"), None
+            rgb = _image_to_rgb_white(img)
+            rgb.save(buf, format="PNG", optimize=True)
+            return _NormalizedUpload(buf.getvalue(), f"{stem}.png", "image/png"), None
+
+        # مرفقات النماذج/المركبات: JPEG مضغوط واضح بعد EXIF
+        rgb = _image_to_rgb_white(img)
+        if max(rgb.size) > ATTACH_MAX_PX:
+            rgb.thumbnail((ATTACH_MAX_PX, ATTACH_MAX_PX), Image.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        rgb.save(buf, format="JPEG", quality=ATTACH_JPEG_QUALITY, optimize=True)
+        return _NormalizedUpload(buf.getvalue(), f"{stem}.jpg", "image/jpeg"), None
+    except Exception:
+        return None, "⚠️ نوع الملف غير مدعوم، يرجى إرفاق صورة أو ملف PDF."
 
 
 def parse_attachments(raw) -> list:
@@ -116,50 +238,38 @@ def serialize_attachments(items: list) -> str:
     return json.dumps(items or [], ensure_ascii=False)
 
 
-def process_uploaded_attachment(uploaded_file) -> dict | None:
-    """معالجة مرفق جوال: تصحيح اتجاه EXIF وتصغير الصور، وحفظ PDF كما هو."""
+def process_uploaded_attachment(uploaded_file, *, purpose: str = "attachment") -> dict | None:
+    """معالجة مرفق جوال بعد التطبيع: PDF كما هو أو صورة JPEG مضغوطة."""
     if uploaded_file is None:
         return None
-    fname = (getattr(uploaded_file, "name", None) or "مرفق").strip()
-    lower = fname.lower()
-    try:
-        if lower.endswith(".pdf") or (getattr(uploaded_file, "type", "") or "").lower() == "application/pdf":
-            raw = uploaded_file.getvalue() if hasattr(uploaded_file, "getvalue") else uploaded_file.read()
-            if not raw:
-                return None
-            return {
-                "name": fname if lower.endswith(".pdf") else f"{Path(fname).stem}.pdf",
-                "mime": "application/pdf",
-                "b64": base64.b64encode(raw).decode("utf-8"),
-                "kind": "pdf",
-                "orig_name": fname,
-            }
-
-        img = Image.open(uploaded_file)
-        img = ImageOps.exif_transpose(img)
-        if img.mode not in ("RGB", "RGBA"):
-            img = img.convert("RGBA") if "A" in (img.getbands() or ()) else img.convert("RGB")
-        img.thumbnail((ATTACH_MAX_PX, ATTACH_MAX_PX), Image.Resampling.LANCZOS)
-
-        buf = io.BytesIO()
-        if img.mode == "RGBA":
-            img.save(buf, format="PNG", optimize=True)
-            mime, ext = "image/png", "png"
-        else:
-            if img.mode != "RGB":
-                img = img.convert("RGB")
-            img.save(buf, format="JPEG", quality=ATTACH_JPEG_QUALITY, optimize=True)
-            mime, ext = "image/jpeg", "jpg"
-        out_name = f"{Path(fname).stem}.{ext}"
-        return {
-            "name": out_name,
-            "mime": mime,
-            "b64": base64.b64encode(buf.getvalue()).decode("utf-8"),
-            "kind": "image",
-            "orig_name": fname,
-        }
-    except Exception:
+    normalized, err = normalize_mobile_upload(uploaded_file, purpose=purpose)
+    if err or normalized is None:
         return None
+    raw = normalized.getvalue()
+    if not raw:
+        return None
+    mime = (normalized.type or "").lower()
+    fname = normalized.name
+    kind = "pdf" if mime == "application/pdf" or fname.lower().endswith(".pdf") else "image"
+    return {
+        "name": fname,
+        "mime": mime or ("application/pdf" if kind == "pdf" else "image/jpeg"),
+        "b64": base64.b64encode(raw).decode("utf-8"),
+        "kind": kind,
+        "orig_name": getattr(uploaded_file, "name", None) or fname,
+    }
+
+
+def process_uploaded_attachment_with_status(uploaded_file, *, purpose: str = "attachment") -> tuple[dict | None, str | None]:
+    """مثل process_uploaded_attachment مع رسالة خطأ عربية واضحة."""
+    if uploaded_file is None:
+        return None, "لم يتم اختيار ملف."
+    item = process_uploaded_attachment(uploaded_file, purpose=purpose)
+    if not item:
+        # أعد رسالة أوضح من التطبيع
+        _, err = normalize_mobile_upload(uploaded_file, purpose=purpose)
+        return None, err or "⚠️ نوع الملف غير مدعوم، يرجى إرفاق صورة أو ملف PDF."
+    return item, None
 
 
 def attachment_fingerprint(item: dict) -> str:
@@ -9322,20 +9432,20 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             # خارج أي st.form حتى تظهر المعاينة فوراً على الجوال دون انتظار زر إرسال
             uploaded_files = st.file_uploader(
                 att_label,
-                type=ATTACH_TYPES,
                 accept_multiple_files=True,
                 disabled=st.session_state.citizen_locked,
                 key=f"att_{st.session_state.doc_no}_{st.session_state.att_upload_nonce}",
-                help="الصيغ المدعومة: PNG / JPG / JPEG / WEBP / PDF — تُصحَّح اتجاه كاميرا الجوال تلقائياً وتُصغَّر للرفع السريع.",
+                help=UPLOAD_HELP_CAPTION,
             )
+            st.caption(UPLOAD_HELP_CAPTION)
             if uploaded_files and not st.session_state.citizen_locked:
                 existing = list(st.session_state.get("attachments") or [])
                 known = {attachment_fingerprint(a) for a in existing}
                 added = 0
                 for uf in uploaded_files:
-                    item = process_uploaded_attachment(uf)
+                    item, err = process_uploaded_attachment_with_status(uf, purpose="attachment")
                     if not item:
-                        st.warning(f"تعذّر معالجة المرفق: {getattr(uf, 'name', 'ملف')}")
+                        st.warning(err or "⚠️ نوع الملف غير مدعوم، يرجى إرفاق صورة أو ملف PDF.")
                         continue
                     fp = attachment_fingerprint(item)
                     if fp in known:
@@ -9347,6 +9457,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     st.session_state.attachments = existing
                     sync_attachments_to_session()
                     st.session_state.att_upload_nonce = int(st.session_state.att_upload_nonce) + 1
+                    st.success("✅ تم إرفاق المرفق بنجاح وجاهز للظهور في التقرير المطبوع")
                     st.toast(f"تم حفظ {added} مرفق في الجلسة", icon="📎")
                     st.rerun()
 
@@ -10103,21 +10214,26 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                     st.warning("تعذّر قراءة التوقيع المرسوم — أعد الرسم ثم احفظ من زر اللوحة.")
 
         sig_upload = st.file_uploader(
-            "أو ارفع صورة توقيع شفافة (PNG/JPG) كخيار مساند",
-            type=["png", "jpg", "jpeg", "webp"],
+            "أو ارفع صورة توقيع شفافة (من المعرض أو الكاميرا) كخيار مساند",
             key="duty_sig_upload",
-            help="يُفضّل خلفية شفافة أو بيضاء. سيُحوَّل الحبر تلقائياً إلى الأزرق الرسمي #0044cc.",
+            help=UPLOAD_HELP_CAPTION + " يُحوَّل الحبر تلقائياً إلى الأزرق الرسمي #0044cc.",
         )
+        st.caption(UPLOAD_HELP_CAPTION)
         up_col, del_col = st.columns(2)
         with up_col:
             if st.button("💾 حفظ صورة التوقيع المرفوعة", type="primary", use_container_width=True):
                 payload = ""
                 if sig_upload is not None:
-                    processed = process_uploaded_attachment(sig_upload)
-                    payload = compress_signature_b64((processed or {}).get("b64") or "")
-                if not payload:
+                    processed, err = process_uploaded_attachment_with_status(sig_upload, purpose="signature")
+                    if not processed:
+                        st.warning(err or "⚠️ نوع الملف غير مدعوم، يرجى إرفاق صورة أو ملف PDF.")
+                    else:
+                        payload = compress_signature_b64((processed or {}).get("b64") or "")
+                if not payload and sig_upload is None:
                     st.warning("ارفع صورة التوقيع أولاً، أو استخدم زر الحفظ داخل اللوحة بعد الرسم.")
-                else:
+                elif not payload and sig_upload is not None:
+                    st.warning("تعذّر اعتماد صورة التوقيع المرفوعة — جرّب صورة أوضح أو صيغة أخرى.")
+                elif payload:
                     _, hash_now = ensure_device_identity()
                     if not _cookie_uid_ready:
                         st.caption("⏳ تتم مزامنة تعريف الجهاز مع المتصفح — الحفظ بالمعرّف الاحتياطي متاح الآن.")
@@ -10125,6 +10241,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                     cur = get_device_shift(hash_now)
                     cur[DUTY_SIG_KEY] = payload
                     save_device_shift(hash_now, cur)
+                    st.success("✅ تم إرفاق المرفق بنجاح وجاهز للظهور في التقرير المطبوع")
                     st.success("تم حفظ توقيع مستلم الخفر المناوب على هذا الجهاز وتفعيله تلقائياً.")
                     safe_rerun()
         with del_col:
@@ -10258,28 +10375,33 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
             st.markdown("##### 2️⃣ أو ارفع ملفاً لاعتماده فوراً لجميع الأفراد")
             mgr_upload = st.file_uploader(
                 "📤 أو ارفع/ثبّت صورة التوقيع المحفوظة هنا لاعتمادها فوراً لجميع الأفراد",
-                type=["png", "jpg", "jpeg", "webp"],
                 key="manager_sig_direct_upload",
-                help="ارفع manager_signature.png الذي نزل من اللوحة، أو أي صورة توقيع واضحة.",
+                help=UPLOAD_HELP_CAPTION + " يُفضّل صورة توقيع واضحة من المعرض أو الكاميرا.",
             )
+            st.caption(UPLOAD_HELP_CAPTION)
             if mgr_upload is not None:
                 try:
-                    raw = mgr_upload.getvalue()
-                    upload_token = hashlib.sha256(
-                        f"{mgr_upload.name}|{len(raw)}|".encode("utf-8") + raw[:2048]
-                    ).hexdigest()
-                    if st.session_state.get("_mgr_upload_token") != upload_token:
-                        saved = ingest_manager_signature_bytes(
-                            raw,
-                            mgr_name,
-                            mgr_title or DEFAULT_MANAGER_TITLE,
-                            auto_insert=bool(mgr_auto),
-                        )
-                        st.session_state["_mgr_upload_token"] = upload_token
-                        st.success(
-                            f"✅ تم اعتماد توقيع المدير على السيرفر: {saved.get('display_name') or DEFAULT_MANAGER_TITLE}"
-                        )
-                        safe_rerun()
+                    normalized, norm_err = normalize_mobile_upload(mgr_upload, purpose="signature")
+                    if not normalized:
+                        st.warning(norm_err or "⚠️ نوع الملف غير مدعوم، يرجى إرفاق صورة أو ملف PDF.")
+                    else:
+                        raw = normalized.getvalue()
+                        upload_token = hashlib.sha256(
+                            f"{normalized.name}|{len(raw)}|".encode("utf-8") + raw[:2048]
+                        ).hexdigest()
+                        if st.session_state.get("_mgr_upload_token") != upload_token:
+                            saved = ingest_manager_signature_bytes(
+                                raw,
+                                mgr_name,
+                                mgr_title or DEFAULT_MANAGER_TITLE,
+                                auto_insert=bool(mgr_auto),
+                            )
+                            st.session_state["_mgr_upload_token"] = upload_token
+                            st.success("✅ تم إرفاق المرفق بنجاح وجاهز للظهور في التقرير المطبوع")
+                            st.success(
+                                f"✅ تم اعتماد توقيع المدير على السيرفر: {saved.get('display_name') or DEFAULT_MANAGER_TITLE}"
+                            )
+                            safe_rerun()
                 except Exception as exc:
                     st.error(f"تعذّر اعتماد ملف التوقيع: {exc}")
 
