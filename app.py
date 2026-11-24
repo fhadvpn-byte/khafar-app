@@ -44,6 +44,7 @@ st.set_page_config(
 )
 from sig_pad_component import sig_pad
 from mobile_uploader import khafar_file_uploader
+import khafar_stats
 
 
 def safe_rerun():
@@ -719,7 +720,7 @@ img[src*="avatars.githubusercontent.com"] {
 }
 .stApp .form-open-hint { font-size: 11px; color: #D1D5DB; margin: 0 0 2px 0; }
 
-/* شريط التنقل الرئيسي — Segmented Capsule */
+/* شريط التنقل الرئيسي — Segmented Capsule (4 تبويبات) */
 .stApp .khafar-nav-capsule {
     background: #0A211A;
     border: 1px solid rgba(212, 175, 55, 0.28);
@@ -743,7 +744,7 @@ img[src*="avatars.githubusercontent.com"] {
     flex: 1 1 0 !important;
     min-width: 0 !important;
     width: auto !important;
-    max-width: 33.333% !important;
+    max-width: 25% !important;
 }
 .stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stHorizontalBlock"] div.stButton > button {
     min-height: 42px !important;
@@ -753,27 +754,105 @@ img[src*="avatars.githubusercontent.com"] {
     padding: 0.4rem 0.35rem !important;
     white-space: nowrap !important;
 }
+@media (min-width: 769px) {
+    .stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stHorizontalBlock"],
+    .stApp .khafar-nav-row [data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+    }
+    .stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stHorizontalBlock"] > div {
+        max-width: 25% !important;
+    }
+}
 @media (max-width: 768px) {
     .stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stHorizontalBlock"],
     .stApp .khafar-nav-row [data-testid="stHorizontalBlock"] {
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        display: flex !important;
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+        width: 100% !important;
     }
-    .stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stHorizontalBlock"] > div {
-        flex: 1 1 0 !important;
+    .stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stHorizontalBlock"] > div,
+    .stApp .khafar-nav-row [data-testid="stHorizontalBlock"] > div {
+        flex: none !important;
         min-width: 0 !important;
-        max-width: 33.333% !important;
+        max-width: 100% !important;
+        width: 100% !important;
     }
     .stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stHorizontalBlock"] div.stButton > button,
     .stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stHorizontalBlock"] div.stButton > button p {
         font-size: 12.5px !important;
-        min-height: 40px !important;
+        min-height: 44px !important;
         line-height: 1.25 !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
     }
+}
+/* لوحة الإحصائيات — شاشة فقط */
+.stApp .khafar-stats-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 8px 0 14px 0;
+}
+.stApp .khafar-stats-kpi {
+    background: linear-gradient(160deg, #0E2920 0%, #071A14 100%);
+    border: 1.5px solid rgba(212, 175, 55, 0.45);
+    border-radius: 14px;
+    padding: 12px 12px 10px;
+    color: #ffffff;
+    min-height: 104px;
+}
+.stApp .khafar-stats-kpi .k-label { font-size: 12.5px; font-weight: 800; color: #E5C158; margin-bottom: 6px; }
+.stApp .khafar-stats-kpi .k-val { font-size: 28px; font-weight: 900; color: #ffffff; line-height: 1.1; }
+.stApp .khafar-stats-kpi .k-sub { font-size: 12px; font-weight: 700; color: #D1D5DB; margin-top: 6px; }
+.stApp .khafar-stats-card {
+    background: #0E2920;
+    border: 1px solid rgba(212, 175, 55, 0.35);
+    border-radius: 14px;
+    padding: 12px;
+    margin: 0 0 12px 0;
+    color: #ffffff;
+}
+.stApp .khafar-stats-title { font-size: 14px; font-weight: 900; color: #E5C158; margin: 0 0 10px 0; }
+.stApp .khafar-stats-subtitle { font-size: 13px; font-weight: 800; color: #ffffff; margin: 12px 0 8px 0; }
+.stApp .khafar-stats-bar-row { margin: 0 0 10px 0; }
+.stApp .khafar-stats-bar-lab {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12.5px; font-weight: 700; color: #F3F4F6; margin-bottom: 4px; gap: 8px;
+}
+.stApp .khafar-stats-bar-track {
+    height: 10px; border-radius: 999px; background: rgba(10, 33, 26, 0.9);
+    border: 1px solid rgba(212, 175, 55, 0.25); overflow: hidden;
+}
+.stApp .khafar-stats-bar-fill {
+    height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, #146C4E 0%, #D4AF37 100%);
+}
+.stApp .khafar-stats-bar-fill.alt {
+    background: linear-gradient(90deg, #0D4A35 0%, #E5C158 100%);
+}
+.stApp .khafar-stats-top { list-style: none; margin: 0; padding: 0; }
+.stApp .khafar-stats-top li {
+    display: flex; justify-content: space-between; gap: 10px;
+    padding: 7px 0; border-bottom: 1px solid rgba(212, 175, 55, 0.18);
+    font-size: 12.5px; font-weight: 700; color: #F9FAFB;
+}
+.stApp .khafar-stats-top li b { color: #D4AF37; }
+.stApp .khafar-stats-peak {
+    display: inline-block; margin-right: 6px; padding: 1px 7px;
+    border-radius: 999px; background: #D4AF37; color: #071A14;
+    font-size: 10px; font-weight: 900;
+}
+@media (max-width: 768px) {
+    .stApp .khafar-stats-kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+    }
+    .stApp .khafar-stats-kpi { min-height: 96px; padding: 10px; }
+    .stApp .khafar-stats-kpi .k-val { font-size: 24px; }
 }
 .stApp .khafar-form-grid div.stButton > button,
 .stApp div[data-testid="stTabs"] div.stButton > button {
@@ -4045,6 +4124,10 @@ def save_record_to_db(rec: dict, device_hash: str) -> bool:
         )
     conn.commit()
     conn.close()
+    try:
+        khafar_stats.log_document_certified(rec)
+    except Exception:
+        pass
     return True
 
 
@@ -8843,6 +8926,11 @@ import khafar_bail; khafar_bail.bind_functions(globals())
 # =====================================================================
 init_db()
 init_takmeel_db()
+try:
+    khafar_stats.configure(DB_PATH)
+    khafar_stats.log_session_visit()
+except Exception:
+    pass
 _device_uid, DEVICE_HASH = ensure_device_identity()
 _cookie_uid_ready = bool(read_device_uid())
 _wipe_shift = bool(st.session_state.get("wipe_device_shift"))
@@ -8877,10 +8965,11 @@ unit_display = format_entity(shift["officer_rank"], shift["officer_name"])
 duty_display = format_entity(shift["duty_rank"], shift["duty_name"])
 saved_officer_sig = str(shift.get(DUTY_SIG_KEY) or st.session_state.get(DUTY_SIG_KEY) or "").strip()
 
-VALID_NAV_TABS = ["النماذج الميدانية", "الأرشيف المحلي", "الإعدادات والبصمة"]
+VALID_NAV_TABS = ["النماذج الميدانية", "الأرشيف المحلي", "الإحصائيات", "الإعدادات والبصمة"]
 NAV_ALIASES = {
     "مناوبة الخفر": "الإعدادات والبصمة",
     "بصمة الشحن OTG": "الإعدادات والبصمة",
+    "📊 الإحصائيات": "الإحصائيات",
 }
 _DECL_FORM_COUNT = sum(1 for _f in TRAFFIC_FORMS.values() if _f.get("category") == "إقرار")
 _DECL_TAB_LABEL = f"✍️ الإقرارات الميدانية ({_DECL_FORM_COUNT})"
@@ -9409,10 +9498,11 @@ if st.session_state.pop("gps_toast_err", None):
     st.toast("تعذر قراءة إحداثي الموقع.", icon="⚠️")
 
 st.markdown('<div class="khafar-nav-capsule khafar-nav-row"></div>', unsafe_allow_html=True)
-nav_cols = st.columns(3)
+nav_cols = st.columns(4)
 nav_items = [
     ("النماذج الميدانية", "📋 النماذج"),
     ("الأرشيف المحلي", f"📁 الأرشيف ({archive_count})"),
+    ("الإحصائيات", "📊 الإحصائيات"),
     ("الإعدادات والبصمة", "⚙️ الإعدادات"),
 ]
 for idx, (tab_key, tab_label) in enumerate(nav_items):
@@ -10416,7 +10506,20 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
 
 
 # =====================================================================
-# القسم الثالث: الإعدادات والبصمة (مناوبة الخفر + OTG مدمجان)
+# القسم الثالث: الإحصائيات ومؤشرات الأداء الميداني
+# =====================================================================
+elif st.session_state.nav_tab == "الإحصائيات":
+    try:
+        khafar_stats.configure(DB_PATH)
+        khafar_stats.render_stats_dashboard(
+            archive_records=all_archived,
+            current_officer_name=unit_display,
+        )
+    except Exception as _stats_exc:
+        st.error(f"تعذّر فتح لوحة الإحصائيات: {_stats_exc}")
+
+# =====================================================================
+# القسم الرابع: الإعدادات والبصمة (مناوبة الخفر + OTG مدمجان)
 # =====================================================================
 elif st.session_state.nav_tab == "الإعدادات والبصمة":
     st.markdown("""
