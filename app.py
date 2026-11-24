@@ -437,20 +437,46 @@ img[src*="avatars.githubusercontent.com"] {
     border-radius: 14px 14px 0 0;
     padding: 12px 14px 10px 14px;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none;
 }
 .stApp .header-brand-row {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
+    gap: 10px;
+    flex-wrap: nowrap;
 }
 .stApp .header-brand-inline {
     display: flex;
     align-items: center;
-    gap: 12px;
-    flex: 1 1 280px;
+    gap: 10px;
+    flex: 1 1 auto;
     min-width: 0;
+}
+.stApp .header-text-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: right;
+}
+.stApp .official-line-1,
+.stApp .official-line-2 {
+    line-height: 1.35;
+    font-weight: 800;
+    color: #FFFFFF;
+    font-size: 12px;
+    text-align: right;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: keep-all;
+}
+.stApp .official-line-2 {
+    color: #E5C158;
+    font-size: 12.5px;
 }
 .stApp .official-5lines,
 .stApp .official-5lines-compact {
@@ -468,32 +494,20 @@ img[src*="avatars.githubusercontent.com"] {
     margin-top: 2px;
 }
 .stApp .header-ui-title {
-    display: flex;
-    align-items: center;
+    display: block;
     flex: 0 1 auto;
-    min-height: 54px;
-    margin: 0;
-    padding: 0 4px;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 2px 0 0 0;
+    padding: 0;
     font-weight: 900;
-    font-size: 1.28rem;
+    font-size: 1.2rem;
     line-height: 1.25;
     color: #E5C158;
     text-align: right;
-    white-space: nowrap;
+    white-space: normal;
 }
-.stApp .header-status-inline {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 6px;
-    flex: 1 1 220px;
-}
-@media (max-width: 768px) {
-    .stApp .header-ui-title { font-size: 1.05rem; white-space: normal; }
-    .stApp .header-brand-row { flex-direction: column; align-items: stretch; }
-    .stApp .header-status-inline { justify-content: flex-start; }
-}
+.stApp .header-status-inline { display: none !important; }
 .stApp .logo-frame {
     width: 54px;
     height: 54px;
@@ -507,6 +521,41 @@ img[src*="avatars.githubusercontent.com"] {
     justify-content: center;
     overflow: hidden;
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
+    flex-shrink: 0;
+}
+@media (max-width: 768px) {
+    .stApp .khafar-top-header {
+        padding: 10px 12px !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: 135px;
+    }
+    .stApp .header-brand-row {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        gap: 6px !important;
+    }
+    .stApp .header-brand-inline { gap: 8px !important; }
+    .stApp .logo-frame {
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+    }
+    .stApp .official-line-1 { font-size: 11px !important; }
+    .stApp .official-line-2 { font-size: 11.5px !important; }
+    .stApp .header-ui-title {
+        font-size: 1.02rem !important;
+        margin-top: 3px !important;
+    }
+    .stApp .compact-status-bar {
+        padding: 6px 8px !important;
+        gap: 5px !important;
+    }
+    .stApp .compact-status-bar .status-chip {
+        font-size: 10.5px !important;
+        padding: 2px 7px !important;
+    }
 }
 .stApp .logo-frame img {
     width: 100%;
@@ -678,15 +727,55 @@ img[src*="avatars.githubusercontent.com"] {
     border: 1px solid rgba(212, 175, 55, 0.28);
     border-radius: 999px;
     padding: 6px 8px;
-    margin: 4px 0 14px 0;
+    margin: 4px 0 10px 0;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
 }
-.stApp .khafar-nav-capsule + div[data-testid="stHorizontalBlock"] div.stButton > button,
-.stApp div[data-testid="stHorizontalBlock"]:has(button[kind="primary"]) > div:nth-child(-n+3) div.stButton > button {
-    min-height: 44px !important;
+.stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stHorizontalBlock"],
+.stApp .khafar-nav-row [data-testid="stHorizontalBlock"] {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+    width: 100% !important;
+}
+.stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stHorizontalBlock"] > div,
+.stApp .khafar-nav-row [data-testid="stHorizontalBlock"] > div,
+.stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="column"],
+.stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stColumn"] {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
+    max-width: 33.333% !important;
+}
+.stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stHorizontalBlock"] div.stButton > button {
+    min-height: 42px !important;
     border-radius: 999px !important;
     font-weight: 800 !important;
-    font-size: 14px !important;
+    font-size: 13.5px !important;
+    padding: 0.4rem 0.35rem !important;
+    white-space: nowrap !important;
+}
+@media (max-width: 768px) {
+    .stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stHorizontalBlock"],
+    .stApp .khafar-nav-row [data-testid="stHorizontalBlock"] {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        display: flex !important;
+    }
+    .stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stHorizontalBlock"] > div {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        max-width: 33.333% !important;
+    }
+    .stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stHorizontalBlock"] div.stButton > button,
+    .stApp div[data-testid="stVerticalBlock"] > div:has(.khafar-nav-capsule) + div [data-testid="stHorizontalBlock"] div.stButton > button p {
+        font-size: 12.5px !important;
+        min-height: 40px !important;
+        line-height: 1.25 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
 }
 .stApp .khafar-form-grid div.stButton > button,
 .stApp div[data-testid="stTabs"] div.stButton > button {
@@ -699,12 +788,28 @@ img[src*="avatars.githubusercontent.com"] {
     font-weight: 800 !important;
     font-size: 15.5px !important;
     min-height: 54px !important;
+    height: auto !important;
     text-align: right !important;
     justify-content: flex-start !important;
-    padding: 0.65rem 0.85rem !important;
+    align-items: flex-start !important;
+    padding: 10px 14px !important;
     white-space: normal !important;
     line-height: 1.4 !important;
     box-shadow: none !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+}
+.stApp .khafar-form-grid div.stButton > button p,
+.stApp .khafar-form-grid div.stButton > button span,
+.stApp div[data-testid="stTabs"] div.stButton > button p,
+.stApp div[data-testid="stTabs"] div.stButton > button span {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+    text-align: right !important;
+    line-height: 1.4 !important;
+    font-size: inherit !important;
+    margin: 0 !important;
 }
 .stApp .khafar-form-grid div.stButton > button:hover,
 .stApp div[data-testid="stTabs"] div.stButton > button:hover {
@@ -799,19 +904,29 @@ div[data-testid="stHorizontalBlock"] div.stButton > button {
     color: #FFFFFF !important;
     -webkit-text-fill-color: #FFFFFF !important;
 }
-@media only screen and (max-width: 640px) {
+@media (max-width: 768px) {
     .stApp div[data-testid="stTabs"] button[data-baseweb="tab"],
     .stApp [data-testid="stTabs"] [data-testid="stTab"] {
-        min-height: 68px !important;
+        min-height: 64px !important;
         padding: 8px 6px !important;
     }
     .stApp div[data-testid="stTabs"] button[data-baseweb="tab"] p,
     .stApp [data-testid="stTabs"] [data-testid="stTab"] p {
-        font-size: 13.5px !important;
+        font-size: 13px !important;
     }
     .stApp div[data-baseweb="tab-list"],
     .stApp [data-testid="stTabs"] [role="tablist"] {
-        grid-template-columns: 1fr 1fr !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+    }
+    .stApp .khafar-form-grid div.stButton > button,
+    .stApp div[data-testid="stTabs"] div.stButton > button {
+        font-size: 14.5px !important;
+        padding: 10px 14px !important;
+        min-height: 52px !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
     }
 }
 
@@ -908,6 +1023,10 @@ div[data-testid="stHorizontalBlock"] div.stButton > button {
     color: #D1D5DB !important;
     -webkit-text-fill-color: #D1D5DB !important;
     opacity: 1 !important;
+    font-size: 13.5px !important;
+}
+.stApp div[data-testid="stTextInput"] input {
+    font-size: 13.5px !important;
 }
 .stApp [data-testid="stWidgetLabel"] p,
 .stApp [data-testid="stWidgetLabel"] span,
@@ -8973,25 +9092,18 @@ gps_maps_html = (
 st.markdown(
     f'<div class="khafar-top-header"><div class="header-brand-row">'
     f'<div class="header-brand-inline">{header_logo_widget}'
-    f'<div class="official-5lines-compact">'
-    f'<div>المملكة العربية السعودية</div>'
-    f'<div>وزارة الداخلية</div>'
-    f'<div>الأمن العام — المرور</div>'
-    f'<div class="dept-line">مرور جازان — قسم مرور العارضة</div>'
-    f'</div>'
+    f'<div class="header-text-stack">'
+    f'<div class="official-line-1">المملكة العربية السعودية — وزارة الداخلية</div>'
+    f'<div class="official-line-2">الأمن العام • مرور منطقة جازان — قسم مرور العارضة</div>'
     f'<div class="header-ui-title">منظومة ميدان الخفر</div>'
-    f'</div>'
-    f'<div class="header-status-inline">'
-    f'<span class="status-chip">🟢 متصل وجاهز</span>'
-    f'<span class="status-chip gold">👮 {html.escape(unit_display or "مستلم الخفر المناوب")}</span>'
-    f'<span class="status-chip time">{now_ksa.strftime("%Y/%m/%d %H:%M")}</span>'
-    f'</div></div></div>',
+    f'</div></div></div></div>',
     unsafe_allow_html=True,
 )
 st.html(
     f"""
 <div class="compact-status-bar">
-    <span class="status-chip">🟢 محلي جاهز</span>
+    <span class="status-chip">🟢 متصل وجاهز</span>
+    <span class="status-chip gold">👮 {html.escape(unit_display or "مستلم الخفر المناوب")}</span>
     <span class="status-chip gold">🧬 {html.escape(scanner_short)}</span>
     <span class="status-chip gps" id="khafar-gps-chip">{html.escape(gps_chip_text)}</span>
     {gps_maps_html}
@@ -9092,12 +9204,12 @@ if st.session_state.pop("gps_toast", None):
 if st.session_state.pop("gps_toast_err", None):
     st.toast("تعذر قراءة إحداثي الموقع.", icon="⚠️")
 
-st.markdown('<div class="khafar-nav-capsule"></div>', unsafe_allow_html=True)
+st.markdown('<div class="khafar-nav-capsule khafar-nav-row"></div>', unsafe_allow_html=True)
 nav_cols = st.columns(3)
 nav_items = [
     ("النماذج الميدانية", "📋 النماذج"),
     ("الأرشيف المحلي", f"📁 الأرشيف ({archive_count})"),
-    ("الإعدادات والبصمة", "⚙️ الإعدادات والبصمة"),
+    ("الإعدادات والبصمة", "⚙️ الإعدادات"),
 ]
 for idx, (tab_key, tab_label) in enumerate(nav_items):
     with nav_cols[idx]:
@@ -9120,9 +9232,10 @@ if st.session_state.nav_tab == "النماذج الميدانية":
 
     if st.session_state.opened_form_id is None:
         forms_quick_q = st.text_input(
-            "🔍 بحث سريع في النماذج...",
+            "بحث سريع في النماذج",
             key="forms_quick_search",
-            placeholder="مثال: كفالة، حجز، سموم، مصاب، تنازل",
+            placeholder="🔍 بحث سريع في النماذج (مثال: كفالة، حجز، سموم، مصاب)...",
+            label_visibility="collapsed",
         )
         if (forms_quick_q or "").strip():
             st.caption("نتائج البحث عبر جميع الأقسام")
