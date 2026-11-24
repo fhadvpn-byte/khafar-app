@@ -43,6 +43,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 from sig_pad_component import sig_pad
+from mobile_uploader import khafar_file_uploader
 
 
 def safe_rerun():
@@ -9540,14 +9541,14 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 if form_def["require_image"]
                 else "📎 إرفاق صورة الهوية / التقرير الأولي أو مرفق داعم (اختياري)"
             )
-            if "att_upload_nonce" not in st.session_state:
-                st.session_state.att_upload_nonce = 0
-            # خارج أي st.form حتى تظهر المعاينة فوراً على الجوال دون انتظار زر إرسال
-            uploaded_files = st.file_uploader(
+            # رافع جوال ثنائي الاتجاه — accept=image/* نقي يفتح المعرض الأصلي
+            uploaded_files = khafar_file_uploader(
                 att_label,
+                key=f"att_mu_{st.session_state.doc_no}",
                 accept_multiple_files=True,
+                allow_pdf=True,
+                preserve_alpha=False,
                 disabled=st.session_state.citizen_locked,
-                key=f"att_{st.session_state.doc_no}_{st.session_state.att_upload_nonce}",
                 help=UPLOAD_HELP_CAPTION,
             )
             st.caption(UPLOAD_HELP_CAPTION)
@@ -9569,9 +9570,9 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 if added:
                     st.session_state.attachments = existing
                     sync_attachments_to_session()
-                    st.session_state.att_upload_nonce = int(st.session_state.att_upload_nonce) + 1
                     st.success("✅ تم إرفاق المرفق بنجاح وجاهز للظهور في التقرير المطبوع")
                     st.toast(f"تم حفظ {added} مرفق في الجلسة", icon="📎")
+                    # لا نغيّر مفتاح المكوّن — البصمة تمنع التكرار بعد rerun
                     st.rerun()
 
             st.checkbox(
@@ -10326,9 +10327,12 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 else:
                     st.warning("تعذّر قراءة التوقيع المرسوم — أعد الرسم ثم احفظ من زر اللوحة.")
 
-        sig_upload = st.file_uploader(
+        sig_upload = khafar_file_uploader(
             "أو ارفع صورة توقيع شفافة (من المعرض أو الكاميرا) كخيار مساند",
-            key="duty_sig_upload",
+            key="duty_sig_upload_mu",
+            accept_multiple_files=False,
+            allow_pdf=False,
+            preserve_alpha=True,
             help=UPLOAD_HELP_CAPTION + " يُحوَّل الحبر تلقائياً إلى الأزرق الرسمي #0044cc.",
         )
         st.caption(UPLOAD_HELP_CAPTION)
@@ -10486,9 +10490,12 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                         st.warning("ارسم التوقيع أولاً ثم اضغط حفظ داخل اللوحة.")
 
             st.markdown("##### 2️⃣ أو ارفع ملفاً لاعتماده فوراً لجميع الأفراد")
-            mgr_upload = st.file_uploader(
+            mgr_upload = khafar_file_uploader(
                 "📤 أو ارفع/ثبّت صورة التوقيع المحفوظة هنا لاعتمادها فوراً لجميع الأفراد",
-                key="manager_sig_direct_upload",
+                key="manager_sig_direct_upload_mu",
+                accept_multiple_files=False,
+                allow_pdf=False,
+                preserve_alpha=True,
                 help=UPLOAD_HELP_CAPTION + " يُفضّل صورة توقيع واضحة من المعرض أو الكاميرا.",
             )
             st.caption(UPLOAD_HELP_CAPTION)
