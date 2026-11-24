@@ -296,6 +296,7 @@ section[data-testid="stSidebar"] { display: none !important; }
 }
 
 .khafar-top-header {
+    position: relative;
     background: linear-gradient(135deg, #0d4432 0%, #08291e 100%);
     border: 1px solid #1e6b50;
     border-radius: 14px 14px 0 0;
@@ -311,16 +312,8 @@ section[data-testid="stSidebar"] { display: none !important; }
 .header-brand-inline {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 10px;
     width: 100%;
-}
-.header-brand-start {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex: 1;
-    min-width: 0;
 }
 .official-5lines,
 .official-5lines-compact {
@@ -355,23 +348,41 @@ section[data-testid="stSidebar"] { display: none !important; }
     object-fit: contain;
 }
 .khafar-ui-corner-logo {
-    width: 56px;
-    height: 56px;
-    min-width: 56px;
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 62px;
+    height: 62px;
+    min-width: 62px;
     border-radius: 12px;
     background: #ffffff;
     border: 2px solid #d4af37;
-    padding: 3px;
-    object-fit: contain;
-    display: block;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
-    flex-shrink: 0;
+    z-index: 2;
+    pointer-events: none;
+}
+.khafar-ui-corner-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transform: scale(1.18);
+    display: block;
 }
 @media (max-width: 768px) {
+    .khafar-top-header {
+        padding-left: 62px;
+    }
     .khafar-ui-corner-logo {
-        width: 44px;
-        height: 44px;
-        min-width: 44px;
+        left: 10px;
+        width: 46px;
+        height: 46px;
+        min-width: 46px;
     }
 }
 
@@ -8437,8 +8448,9 @@ header_logo_widget = (
 )
 _khafar_app_logo_b64 = get_khafar_app_logo_b64()
 khafar_app_corner_logo_html = (
-    f"<img class='khafar-ui-corner-logo' src='data:image/jpeg;base64,{_khafar_app_logo_b64}' "
-    f"alt='هوية التطبيق' width='56' height='56' />"
+    "<div class='khafar-ui-corner-logo' aria-hidden='true'>"
+    f"<img src='data:image/jpeg;base64,{_khafar_app_logo_b64}' alt='هوية التطبيق' />"
+    "</div>"
     if _khafar_app_logo_b64
     else ""
 )
@@ -8500,17 +8512,15 @@ st.markdown(f"""
 <div class="khafar-top-header">
     <div class="header-brand-row">
         <div class="header-brand-inline">
-            <div class="header-brand-start">
-                {header_logo_widget}
-                <div class="official-5lines-compact">
-                    <div>المملكة العربية السعودية · وزارة الداخلية</div>
-                    <div>الأمن العام - الإدارة العامة للمرور</div>
-                    <div class="dept-line">إدارة مرور جازان · قسم مرور العارضة</div>
-                </div>
+            {header_logo_widget}
+            <div class="official-5lines-compact">
+                <div>المملكة العربية السعودية · وزارة الداخلية</div>
+                <div>الأمن العام - الإدارة العامة للمرور</div>
+                <div class="dept-line">إدارة مرور جازان · قسم مرور العارضة</div>
             </div>
-            {khafar_app_corner_logo_html}
         </div>
     </div>
+    {khafar_app_corner_logo_html}
 </div>
 """, unsafe_allow_html=True)
 st.html(
