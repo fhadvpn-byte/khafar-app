@@ -55,7 +55,11 @@ var cw=c.clientWidth||0,f=11;while(cw>16&&c.scrollWidth>cw&&f>7.5){f-=0.5;c.styl
 }try{fit(document);}catch(e){}setTimeout(function(){try{fit(document);}catch(e){}},200);addEventListener('beforeprint',function(){try{fit(document);}catch(e){}});})();</script>"""
 def inject_box(h):
  if not isinstance(h,str)or"kh-box-fix"in h or("<table"not in h and"</html>"not in h):return h
- return re.sub(r"(</body>)",lambda _:TAG+"</body>",h,count=1,flags=re.I)if re.search(r"</body>",h,re.I)else h+TAG
+ # حقن قبل آخر </body> فقط — تجنّب مطابقة </body> داخل سلاسل JS (buildCleanPrintHtml)
+ matches=list(re.finditer(r"</body>",h,flags=re.I))
+ if not matches:return h+TAG
+ m=matches[-1]
+ return h[:m.start()]+TAG+h[m.start():]
 if not hasattr(comp,"_kh_oh"):
  comp._kh_oh=comp.html
  comp.html=lambda h,*a,**k:comp._kh_oh(inject_box(h),*a,**k)
