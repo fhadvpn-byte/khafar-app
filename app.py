@@ -26,10 +26,13 @@ except ImportError:
     HAS_QRCODE = False
 
 KSA_TZ = timezone(timedelta(hours=3))
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+_KHAFAR_APP_LOGO_PATH = os.path.join(_APP_DIR, "khafar_app_logo.jpg")
+_PAGE_ICON = _KHAFAR_APP_LOGO_PATH if os.path.exists(_KHAFAR_APP_LOGO_PATH) else "🛡️"
 
 st.set_page_config(
     page_title="قسم مرور العارضة | الإقرارات والمحاضر",
-    page_icon="🛡️",
+    page_icon=_PAGE_ICON,
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -41,6 +44,16 @@ def safe_rerun():
         st.rerun()
     else:
         st.experimental_rerun()
+
+
+def get_khafar_app_logo_b64() -> str:
+    """هوية التطبيق فقط (khafar_app_logo.jpg) — لا تُستخدم في تقارير/طباعة المرور."""
+    if not os.path.exists(_KHAFAR_APP_LOGO_PATH):
+        return ""
+    try:
+        return base64.b64encode(Path(_KHAFAR_APP_LOGO_PATH).read_bytes()).decode("utf-8")
+    except Exception:
+        return ""
 
 
 def get_traffic_logo_b64() -> str:
@@ -298,8 +311,16 @@ section[data-testid="stSidebar"] { display: none !important; }
 .header-brand-inline {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 10px;
     width: 100%;
+}
+.header-brand-start {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
 }
 .official-5lines,
 .official-5lines-compact {
@@ -332,6 +353,26 @@ section[data-testid="stSidebar"] { display: none !important; }
     max-width: 100%;
     max-height: 100%;
     object-fit: contain;
+}
+.khafar-ui-corner-logo {
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+    border-radius: 12px;
+    background: #ffffff;
+    border: 2px solid #d4af37;
+    padding: 3px;
+    object-fit: contain;
+    display: block;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
+    flex-shrink: 0;
+}
+@media (max-width: 768px) {
+    .khafar-ui-corner-logo {
+        width: 44px;
+        height: 44px;
+        min-width: 44px;
+    }
 }
 
 .compact-status-bar {
@@ -909,6 +950,9 @@ iframe[data-testid="stIFrame"],
     .stButton, [data-testid="stHorizontalBlock"], [data-testid="stVerticalBlockBorderWrapper"],
     .stTabs, header, footer, [data-testid="stHeader"], [data-testid="stToolbar"],
     [data-testid="stSidebar"], [data-testid="stDecoration"] {
+        display: none !important;
+    }
+    .khafar-ui-corner-logo {
         display: none !important;
     }
 }
@@ -8391,6 +8435,13 @@ header_logo_widget = (
     if logo_b64_global
     else "<div class='logo-frame' style='font-size:22px;'>🛡️</div>"
 )
+_khafar_app_logo_b64 = get_khafar_app_logo_b64()
+khafar_app_corner_logo_html = (
+    f"<img class='khafar-ui-corner-logo' src='data:image/jpeg;base64,{_khafar_app_logo_b64}' "
+    f"alt='هوية التطبيق' width='56' height='56' />"
+    if _khafar_app_logo_b64
+    else ""
+)
 
 scanner_short = (st.session_state.scanner_model or "محاكاة").replace("وضع المحاكاة متصل (معزول العتاد)", "محاكاة")
 if len(scanner_short) > 28:
@@ -8449,12 +8500,15 @@ st.markdown(f"""
 <div class="khafar-top-header">
     <div class="header-brand-row">
         <div class="header-brand-inline">
-            {header_logo_widget}
-            <div class="official-5lines-compact">
-                <div>المملكة العربية السعودية · وزارة الداخلية</div>
-                <div>الأمن العام - الإدارة العامة للمرور</div>
-                <div class="dept-line">إدارة مرور جازان · قسم مرور العارضة</div>
+            <div class="header-brand-start">
+                {header_logo_widget}
+                <div class="official-5lines-compact">
+                    <div>المملكة العربية السعودية · وزارة الداخلية</div>
+                    <div>الأمن العام - الإدارة العامة للمرور</div>
+                    <div class="dept-line">إدارة مرور جازان · قسم مرور العارضة</div>
+                </div>
             </div>
+            {khafar_app_corner_logo_html}
         </div>
     </div>
 </div>
