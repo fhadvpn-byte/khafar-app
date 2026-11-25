@@ -3380,34 +3380,41 @@ def render_document_sig_pads(
 
     st.markdown("#### ✍️ تواقيع الأطراف (تُحفظ في الأرشيف مع ورقة A4)")
     st.caption("ارسم بالإصبع أو القلم ثم ارفع يدك — يُعتمد التوقيع ويُحفظ تلقائياً. زر «🧹 مسح التوقيع» يفرّغ الخانة.")
+    inject_party_sig_storage_cleanup()
     live = dict(st.session_state.get("live_sig_pads") or {})
     party = dict(st.session_state.get("party_stamps") or {})
-    stable = _stable_form_session_key()
+    nonce = ensure_doc_sig_nonce()
     for spec in pads_needed:
         pad = str(spec.get("pad") or "").strip()
         if not pad:
             continue
-        saved = (
-            str(live.get(pad) or "").strip()
-            or str(party.get(pad) or "").strip()
-            or (
-                str(st.session_state.get("citizen_stamp_b64") or "").strip()
-                if pad in ("citizen", "p1")
-                else ""
+        is_party = pad not in ("officer", "duty", "manager")
+        if is_party:
+            saved = (
+                str(live.get(pad) or "").strip()
+                or str(party.get(pad) or "").strip()
+                or (
+                    str(st.session_state.get("citizen_stamp_b64") or "").strip()
+                    if pad in ("citizen", "p1")
+                    else ""
+                )
             )
-            or (str(st.session_state.get("officer_stamp_b64") or "").strip() if pad == "officer" else "")
-            or (str(st.session_state.get("duty_stamp_b64") or "").strip() if pad == "duty" else "")
-        )
+        else:
+            saved = (
+                str(live.get(pad) or "").strip()
+                or (str(st.session_state.get("officer_stamp_b64") or "").strip() if pad == "officer" else "")
+                or (str(st.session_state.get("duty_stamp_b64") or "").strip() if pad == "duty" else "")
+            )
         val = sig_pad(
-            key=f"doc_sig_pad_{form_id}_{pad}_{stable}",
+            key=f"doc_sig_pad_{form_id}_{pad}_{nonce}",
             title=str(spec.get("pad_title") or f"توقيع {pad}"),
             subtitle=str(spec.get("sub") or ""),
             saved=saved,
-            ls_key=f"khafar_doc_sig_{form_id}_{pad}_{stable}",
+            ls_key=f"khafar_doc_sig::{nonce}::{form_id}::{pad}",
             pad_id=pad,
             accent="#0044cc",
         )
-        ev = consume_sig_pad_result(val, kind=f"doc_{form_id}_{pad}")
+        ev = consume_sig_pad_result(val, kind=f"doc_{form_id}_{pad}_{nonce}")
         _apply_sig_pad_event_to_session(pad, ev)
     return collect_signatures_map()
 
@@ -4681,6 +4688,95 @@ def _stable_form_session_key() -> str:
     return str(st.session_state.get("auto_doc_no") or st.session_state.get("doc_no") or "doc")
 
 
+_PARTY_PAD_IDS = frozenset({
+    "citizen", "p1", "p2", "p3", "p4", "p5",
+    "guarantor", "bailed", "receiver", "agent", "observer",
+})
+
+
+def ensure_doc_sig_nonce() -> str:
+    """معرّف جلسة التوقيع للوثيقة الحالية — ثابت طوال العمل على نفس السجل."""
+    nonce = str(st.session_state.get("_doc_sig_nonce") or "").strip()
+    if nonce:
+        return nonce
+    return rotate_doc_sig_nonce(clear_party_sigs=False)
+
+
+def rotate_doc_sig_nonce(*, clear_party_sigs: bool = True) -> str:
+    """
+    يولّد `_doc_sig_nonce` جديداً لعزل تواقيع المواطنين بين المعاملات.
+    لا يمس توقيع مستلم الخفر / المدير المحفوظ في SQLite.
+    """
+    nonce = uuid.uuid4().hex[:12]
+    st.session_state["_doc_sig_nonce"] = nonce
+    if clear_party_sigs:
+        st.session_state.citizen_stamp_b64 = ""
+        st.session_state.party_stamps = {}
+        live = dict(st.session_state.get("live_sig_pads") or {})
+        for pad_key in list(live.keys()):
+            if str(pad_key) not in ("officer", "duty", "manager"):
+                live.pop(pad_key, None)
+        st.session_state.live_sig_pads = live
+        for state_key in list(st.session_state.keys()):
+            sk = str(state_key)
+            if sk.startswith("doc_sig_pad_"):
+                del st.session_state[state_key]
+            elif sk.startswith("_sigpad_ts_doc_"):
+                del st.session_state[state_key]
+    st.session_state["_doc_sig_storage_purge"] = True
+    return nonce
+
+
+def inject_party_sig_storage_cleanup(nonce: str | None = None) -> None:
+    """ينظّف بقايا تواقيع الأطراف من localStorage/sessionStorage دون المساس بتوقيع الخفر/المدير."""
+    nonce = str(nonce or ensure_doc_sig_nonce() or "").strip()
+    if not st.session_state.pop("_doc_sig_storage_purge", False) and st.session_state.get("_doc_sig_purge_nonce") == nonce:
+        return
+    st.session_state["_doc_sig_purge_nonce"] = nonce
+    components.html(
+        f"""<!DOCTYPE html><html><body><script>
+(function () {{
+  var NONCE = {json.dumps(nonce)};
+  var KEEP = {{
+    khafar_duty_sig: 1,
+    khafar_manager_sig: 1,
+    pad_officer: 1,
+    pad_duty: 1,
+    pad_manager: 1
+  }};
+  function shouldKill(k) {{
+    if (!k || KEEP[k]) return false;
+    if (k.indexOf("khafar_pad_") === 0) return true;
+    if (k.indexOf("khafar_doc_sig::") === 0) {{
+      return k.indexOf("khafar_doc_sig::" + NONCE + "::") !== 0;
+    }}
+    if (k.indexOf("khafar_doc_sig_") === 0) return true;
+    if (/^pad_(citizen|p\\d+|guarantor|bailed|receiver|agent|observer)/.test(k)) return true;
+    return false;
+  }}
+  function wipe(store) {{
+    if (!store) return;
+    try {{
+      var kill = [];
+      for (var i = 0; i < store.length; i++) {{
+        var k = store.key(i);
+        if (shouldKill(k)) kill.push(k);
+      }}
+      for (var j = 0; j < kill.length; j++) {{
+        try {{ store.removeItem(kill[j]); }} catch (e) {{}}
+      }}
+    }} catch (e2) {{}}
+  }}
+  wipe(window.localStorage);
+  wipe(window.sessionStorage);
+  try {{ wipe(window.parent.localStorage); }} catch (e3) {{}}
+  try {{ wipe(window.parent.sessionStorage); }} catch (e4) {{}}
+}})();
+</script></body></html>""",
+        height=0,
+    )
+
+
 def _receiver_widget_keys(form_id: str) -> tuple[str, str]:
     stable = _stable_form_session_key()
     return f"receiver_name_{form_id}_{stable}", f"receiver_role_{form_id}_{stable}"
@@ -4695,10 +4791,12 @@ def _resolve_stamp_b64(*candidates) -> str:
 
 
 def _live_pad_card(pad_id: str, title: str, subtitle: str) -> str:
+    waiting = "✍️ بانتظار التوقيع..."
     return f"""
     <div class="live-pad-card" data-pad="{pad_id}">
         <div class="live-pad-title">{title}</div>
         <div class="live-pad-sub">{subtitle}</div>
+        <div class="live-pad-status" id="padStatus_{pad_id}" data-status="waiting">{waiting}</div>
         <canvas id="pad_{pad_id}" class="live-pad-canvas" width="900" height="220"
             style="touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; cursor:crosshair;"></canvas>
         <div class="live-pad-actions no-print">
@@ -5780,7 +5878,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         background: #0b1218; border: 1px solid #243041; border-radius: 10px; padding: 10px;
     }}
     .live-pad-title {{ color: #e2e8f0; font-weight: 800; font-size: 12.5px; margin-bottom: 2px; }}
-    .live-pad-sub {{ color: #94a3b8; font-size: 11px; margin-bottom: 8px; }}
+    .live-pad-sub {{ color: #94a3b8; font-size: 11px; margin-bottom: 4px; }}
+    .live-pad-status {{
+        text-align: center; font-size: 12px; font-weight: 800; line-height: 1.35;
+        min-height: 18px; margin: 0 0 8px; color: #93c5fd;
+    }}
+    .live-pad-status[data-status="signing"] {{ color: #f3cc7a; }}
+    .live-pad-status[data-status="saved"] {{ color: #34d399; }}
+    .live-pad-status[data-status="waiting"] {{ color: #93c5fd; }}
     .live-pad-canvas {{
         width: 100%; height: 220px; border: 1.5px dashed #0d47a1; border-radius: 8px;
         background: #f8fafc; display: block;
@@ -6482,35 +6587,75 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     const PEN_COLOR = '#0044cc';
     const LIVE_PADS = {json.dumps(live_pad_ids, ensure_ascii=False)};
     const PRELOADED_SIGS = {json.dumps(preloaded_live_sigs, ensure_ascii=False)};
-    const DOC_SIG_KEY = {json.dumps(
-        f"{rec.get('form_id') or 'form'}_{rec.get('auto_doc_no') or rec.get('doc_no') or 'doc'}",
-        ensure_ascii=False,
-    )};
+    const DOC_SIG_NONCE = {json.dumps(ensure_doc_sig_nonce(), ensure_ascii=False)};
+    const OFFICIAL_PADS = {{ officer: 1, duty: 1, manager: 1 }};
     window.__memPads = window.__memPads || {{}};
 
     function padStorageKey(padId) {{
-        return 'khafar_pad_' + DOC_SIG_KEY + '_' + padId;
+        return 'khafar_doc_sig::' + DOC_SIG_NONCE + '::' + padId;
     }}
+    function isOfficialPad(padId) {{
+        return !!OFFICIAL_PADS[String(padId || '')];
+    }}
+    function setPadStatus(padId, kind) {{
+        var el = document.getElementById('padStatus_' + padId);
+        if (!el) return;
+        el.setAttribute('data-status', kind || 'waiting');
+        if (kind === 'signing') el.textContent = '✍️ جاري التوقيع...';
+        else if (kind === 'saved') el.textContent = '✅ تم اعتماد وحفظ التوقيع تلقائياً';
+        else el.textContent = '✍️ بانتظار التوقيع...';
+    }}
+    function purgeStalePartySigStorage() {{
+        var KEEP = {{
+            khafar_duty_sig: 1,
+            khafar_manager_sig: 1,
+            pad_officer: 1,
+            pad_duty: 1,
+            pad_manager: 1
+        }};
+        function shouldKill(k) {{
+            if (!k || KEEP[k]) return false;
+            if (k.indexOf('khafar_pad_') === 0) return true;
+            if (k.indexOf('khafar_doc_sig::') === 0) {{
+                return k.indexOf('khafar_doc_sig::' + DOC_SIG_NONCE + '::') !== 0;
+            }}
+            if (k.indexOf('khafar_doc_sig_') === 0) return true;
+            if (/^pad_(citizen|p\\d+|guarantor|bailed|receiver|agent|observer)/.test(k)) return true;
+            return false;
+        }}
+        function wipe(store) {{
+            if (!store) return;
+            try {{
+                var kill = [];
+                for (var i = 0; i < store.length; i++) {{
+                    var k = store.key(i);
+                    if (shouldKill(k)) kill.push(k);
+                }}
+                for (var j = 0; j < kill.length; j++) {{
+                    try {{ store.removeItem(kill[j]); }} catch (e) {{}}
+                }}
+            }} catch (e2) {{}}
+        }}
+        wipe(window.localStorage);
+        wipe(window.sessionStorage);
+    }}
+    purgeStalePartySigStorage();
+
     function padStoreGet(key) {{
-        try {{
-            var v = localStorage.getItem(key);
-            if (v) return v;
-        }} catch (e) {{}}
         try {{
             var s = sessionStorage.getItem(key);
             if (s) return s;
-        }} catch (e2) {{}}
+        }} catch (e) {{}}
         return window.__memPads[key] || '';
     }}
     function padStoreSet(key, val) {{
         window.__memPads[key] = val || '';
-        try {{ localStorage.setItem(key, val || ''); }} catch (e) {{}}
-        try {{ sessionStorage.setItem(key, val || ''); }} catch (e2) {{}}
+        try {{ sessionStorage.setItem(key, val || ''); }} catch (e) {{}}
     }}
     function padStoreDel(key) {{
         try {{ delete window.__memPads[key]; }} catch (e) {{}}
-        try {{ localStorage.removeItem(key); }} catch (e2) {{}}
-        try {{ sessionStorage.removeItem(key); }} catch (e3) {{}}
+        try {{ sessionStorage.removeItem(key); }} catch (e2) {{}}
+        try {{ localStorage.removeItem(key); }} catch (e3) {{}}
     }}
 
     // مزامنة محلية فقط داخل نفس إطار HTML — بدون postMessage / بدون Streamlit rerun / بدون كيبورد
@@ -6526,14 +6671,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         blank.width = canvas.width; blank.height = canvas.height;
         const empty = canvas.toDataURL() === blank.toDataURL();
         if (empty) {{
-            // لا تمسح توقيعاً محفوظاً مسبقاً في الخانة (أرشيف / sig_pad)
-            try {{
-                const curSrc = (slot.getAttribute('src') || '').trim();
-                if (curSrc.indexOf('data:image') === 0) return;
-            }} catch (eKeep) {{}}
+            // للأطراف: أفرغ الخانة دائماً. للرسمي: أبقِ ختماً مسبقاً من الإعدادات إن وُجد.
+            if (isOfficialPad(padId)) {{
+                try {{
+                    const curSrc = (slot.getAttribute('src') || '').trim();
+                    if (curSrc.indexOf('data:image') === 0) return;
+                }} catch (eKeep) {{}}
+            }}
             slot.removeAttribute('src');
             slot.style.display = 'none';
             padStoreDel(padStorageKey(padId));
+            setPadStatus(padId, 'waiting');
             return;
         }}
         // خلفية بيضاء صافية + حبر أزرق داكن واضح عند التصدير للطباعة
@@ -6552,6 +6700,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
           const b64 = (dataUrl.split(',')[1] || '');
           if (b64) padStoreSet(padStorageKey(padId), b64);
         }} catch (e) {{}}
+        setPadStatus(padId, 'saved');
     }}
 
     function wireLivePad(padId) {{
@@ -6597,6 +6746,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             if (e.cancelable) e.preventDefault();
             e.stopPropagation();
             drawing = true;
+            setPadStatus(padId, 'signing');
             const p = getPt(e);
             ctx.beginPath();
             ctx.moveTo(p.x, p.y);
@@ -6644,6 +6794,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.restore();
+        padStoreDel(padStorageKey(padId));
+        setPadStatus(padId, 'waiting');
         syncPadToSlot(padId);
     }}
 
@@ -6672,9 +6824,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         img.src = 'data:image/png;base64,' + b64;
     }}
     (LIVE_PADS || []).forEach(function(padId) {{
-        var b64 = padStoreGet(padStorageKey(padId));
+        var b64 = '';
+        // الأطراف: فقط sessionStorage المرتبط بالـ nonce الحالي
+        if (!isOfficialPad(padId)) {{
+            b64 = padStoreGet(padStorageKey(padId));
+        }}
         if (!b64 && PRELOADED_SIGS && PRELOADED_SIGS[padId]) b64 = PRELOADED_SIGS[padId];
         if (b64) restoreLivePad(padId, b64);
+        else setPadStatus(padId, 'waiting');
     }});
 
     const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
@@ -7767,8 +7924,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       s.style.setProperty('display', 'none', 'important');
     }}
     try {{
-      if (typeof padStorageKey === 'function') localStorage.removeItem(padStorageKey(padId));
+      if (typeof padStoreDel === 'function' && typeof padStorageKey === 'function') {{
+        padStoreDel(padStorageKey(padId));
+      }} else if (typeof padStorageKey === 'function') {{
+        sessionStorage.removeItem(padStorageKey(padId));
+        localStorage.removeItem(padStorageKey(padId));
+      }}
     }} catch (e) {{}}
+    try {{ if (typeof setPadStatus === 'function') setPadStatus(padId, 'waiting'); }} catch (e2) {{}}
   }};
 
   window.syncPadToSlot = function(padId) {{
@@ -7780,13 +7943,20 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     if (!hasInk) {{
       var saved = '';
       try {{
-        if (typeof padStorageKey === 'function') saved = localStorage.getItem(padStorageKey(padId)) || '';
+        if (typeof padStoreGet === 'function' && typeof padStorageKey === 'function') {{
+          saved = padStoreGet(padStorageKey(padId)) || '';
+        }}
       }} catch (e) {{}}
-      if (!saved) return;
+      // لا تستعد تواقيع الأطراف من التخزين القديم؛ الرسمي فقط عبر PRELOADED
+      if (!saved || (typeof isOfficialPad === 'function' && !isOfficialPad(padId))) {{
+        try {{ if (typeof setPadStatus === 'function') setPadStatus(padId, 'waiting'); }} catch (eW) {{}}
+        return;
+      }}
       if (saved.indexOf('data:image') !== 0) saved = 'data:image/png;base64,' + saved;
       slot.setAttribute('src', saved);
       slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; max-height:48px !important; width:auto !important; max-width:95% !important; margin:3px auto 0 auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
       colorizeDataImgToBlue(slot);
+      try {{ if (typeof setPadStatus === 'function') setPadStatus(padId, 'saved'); }} catch (eS) {{}}
       return;
     }}
 
@@ -7803,8 +7973,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     colorizeDataImgToBlue(slot);
     try {{
       var b64 = (dataUrl.split(',')[1] || '');
-      if (b64 && typeof padStorageKey === 'function') localStorage.setItem(padStorageKey(padId), b64);
+      if (b64 && typeof padStoreSet === 'function' && typeof padStorageKey === 'function') {{
+        padStoreSet(padStorageKey(padId), b64);
+      }}
     }} catch (e) {{}}
+    try {{ if (typeof setPadStatus === 'function') setPadStatus(padId, 'saved'); }} catch (eS2) {{}}
   }};
 
   window.syncAllLivePads = function() {{
@@ -7858,7 +8031,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       setTimeout(function() {{ window.syncPadToSlot(padId); }}, 30);
     }} else {{
       try {{
-        var savedB64 = (typeof padStorageKey === 'function') ? (localStorage.getItem(padStorageKey(padId)) || '') : '';
+        var savedB64 = '';
+        if (typeof padStoreGet === 'function' && typeof padStorageKey === 'function') {{
+          // الأطراف فقط من sessionStorage المرتبط بالـ nonce؛ الرسمي عبر PRELOADED
+          if (typeof isOfficialPad !== 'function' || !isOfficialPad(padId)) {{
+            savedB64 = padStoreGet(padStorageKey(padId)) || '';
+          }}
+        }}
+        if (!savedB64 && PRELOADED_SIGS && PRELOADED_SIGS[padId]) {{
+          savedB64 = PRELOADED_SIGS[padId];
+        }}
         if (savedB64) {{
           var img = new Image();
           img.onload = function() {{
@@ -7869,6 +8051,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             window.syncPadToSlot(padId);
           }};
           img.src = savedB64.indexOf('data:image') === 0 ? savedB64 : ('data:image/png;base64,' + savedB64);
+        }} else {{
+          try {{ if (typeof setPadStatus === 'function') setPadStatus(padId, 'waiting'); }} catch (eW2) {{}}
         }}
       }} catch (e) {{}}
     }}
@@ -9034,6 +9218,8 @@ if "party_stamps" not in st.session_state:
     st.session_state.party_stamps = {}
 if "live_sig_pads" not in st.session_state:
     st.session_state.live_sig_pads = {}
+if not str(st.session_state.get("_doc_sig_nonce") or "").strip():
+    st.session_state["_doc_sig_nonce"] = uuid.uuid4().hex[:12]
 # استهلاك جسر التوقيع الحي مبكراً قبل بناء السجل/أزرار الحفظ والتنزيل
 _consume_live_sig_bridge()
 if "officer_approved" not in st.session_state:
@@ -9097,6 +9283,8 @@ def reset_doc_state():
     st.session_state.att_upload_nonce = int(st.session_state.get("att_upload_nonce") or 0) + 1
     if "live_sig_bridge" in st.session_state:
         st.session_state.live_sig_bridge = ""
+    # معرّف جلسة توقيع جديد — يعزل تواقيع المواطنين عن السجل السابق
+    rotate_doc_sig_nonce(clear_party_sigs=True)
     # مسح مفاتيح إدخال الرقم المرجعي اليدوي المرتبطة بالنماذج
     for state_key in list(st.session_state.keys()):
         if str(state_key).startswith("manual_ref_inp_"):
@@ -9529,6 +9717,7 @@ for idx, (tab_key, tab_label) in enumerate(nav_items):
             st.session_state.nav_tab = tab_key
             if tab_key != "النماذج الميدانية":
                 st.session_state.opened_form_id = None
+                rotate_doc_sig_nonce(clear_party_sigs=True)
             safe_rerun()
 
 # =====================================================================
@@ -9573,6 +9762,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             with top_bar1:
                 if st.button("↩️ العودة للنماذج", use_container_width=True, key="tak_back"):
                     st.session_state.opened_form_id = None
+                    rotate_doc_sig_nonce(clear_party_sigs=True)
                     safe_rerun()
             with top_bar2:
                 st.markdown(
@@ -9582,6 +9772,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 )
             render_takmeel_form(fid, logo_b64_global, shift)
         else:
+            ensure_doc_sig_nonce()
+            inject_party_sig_storage_cleanup()
             if st.session_state.pop("_recall_flash_ok", None):
                 st.success(
                     "✅ تم استدعاء بيانات الوثيقة من الأرشيف — يمكنك الآن تعديل الحقول واعتمادها كسجل جديد"
@@ -9614,9 +9806,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             with top_bar1:
                 if st.button("↩️ العودة للنماذج", use_container_width=True):
                     st.session_state.opened_form_id = None
+                    rotate_doc_sig_nonce(clear_party_sigs=True)
                     safe_rerun()
             with top_bar2:
                 if st.button("⚡ تعبئة بيانات تجريبية فورية", type="primary", use_container_width=True, disabled=st.session_state.citizen_locked):
+                    rotate_doc_sig_nonce(clear_party_sigs=True)
                     apply_demo_fill_to_open_form(fid, form_def)
                     if form_uses_reference_number(form_def):
                         primary_ref = form_primary_ref_field_key(form_def)

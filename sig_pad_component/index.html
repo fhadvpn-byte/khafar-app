@@ -143,6 +143,7 @@
     statusEl.className = "badge " + (kind || "ready");
     if (kind === "signing") statusEl.textContent = "✍️ جاري التوقيع...";
     else if (kind === "saved") statusEl.textContent = "✅ تم اعتماد وحفظ التوقيع تلقائياً";
+    else if (isDocScopedKey(lsKey) && !isOfficialPadId(padId)) statusEl.textContent = "✍️ بانتظار التوقيع...";
     else statusEl.textContent = "جاهزة للتوقيع الجديد";
   }
 
@@ -231,18 +232,40 @@
     saveTimer = setTimeout(commitAutoSave, DEBOUNCE_MS);
   }
 
+  function isDocScopedKey(key) {
+    return String(key || "").indexOf("khafar_doc_sig::") === 0;
+  }
+  function isOfficialPadId(id) {
+    return id === "officer" || id === "duty" || id === "manager";
+  }
   function persistLocal(dataUrl) {
     var raw = "";
     if (dataUrl && dataUrl.indexOf(",") !== -1) raw = dataUrl.split(",")[1] || "";
+    if (isDocScopedKey(lsKey)) {
+      /* تواقيع الأطراف داخل النماذج: sessionStorage فقط ومرتبطة بـ nonce الوثيقة */
+      try { if (lsKey) sessionStorage.setItem(lsKey, raw || dataUrl || ""); } catch (e) {}
+      return;
+    }
     try { if (lsKey) localStorage.setItem(lsKey, raw || dataUrl || ""); } catch (e) {}
     try { if (padId) localStorage.setItem("pad_" + padId, dataUrl || ""); } catch (e) {}
   }
   function clearLocal() {
+    if (isDocScopedKey(lsKey)) {
+      try { if (lsKey) sessionStorage.removeItem(lsKey); } catch (e) {}
+      try { if (lsKey) localStorage.removeItem(lsKey); } catch (e2) {}
+      return;
+    }
     try { if (lsKey) localStorage.removeItem(lsKey); } catch (e) {}
     try { if (padId) localStorage.removeItem("pad_" + padId); } catch (e) {}
   }
   function readLocal() {
     var v = "";
+    if (isDocScopedKey(lsKey)) {
+      try { v = sessionStorage.getItem(lsKey) || ""; } catch (e) {}
+      if (!v) return "";
+      if (v.indexOf("data:image") === 0) return v;
+      return "data:image/png;base64," + v;
+    }
     try { v = localStorage.getItem("pad_" + padId) || ""; } catch (e) {}
     if (!v) {
       try { v = localStorage.getItem(lsKey) || ""; } catch (e2) {}
@@ -250,6 +273,30 @@
     if (!v) return "";
     if (v.indexOf("data:image") === 0) return v;
     return "data:image/png;base64," + v;
+  }
+  function purgeStaleDocSigKeys() {
+    if (!isDocScopedKey(lsKey)) return;
+    var prefix = "khafar_doc_sig::";
+    var keepPrefix = lsKey.split("::").slice(0, 2).join("::") + "::";
+    function wipe(store) {
+      if (!store) return;
+      try {
+        var kill = [];
+        for (var i = 0; i < store.length; i++) {
+          var k = store.key(i);
+          if (!k) continue;
+          if (k.indexOf(prefix) === 0 && k.indexOf(keepPrefix) !== 0) kill.push(k);
+          if (k.indexOf("khafar_doc_sig_") === 0) kill.push(k);
+          if (k.indexOf("khafar_pad_") === 0) kill.push(k);
+          if (!isOfficialPadId(padId) && /^pad_(citizen|p\d+|guarantor|bailed|receiver|agent|observer)$/.test(k)) kill.push(k);
+        }
+        for (var j = 0; j < kill.length; j++) {
+          try { store.removeItem(kill[j]); } catch (e) {}
+        }
+      } catch (e2) {}
+    }
+    wipe(window.sessionStorage);
+    wipe(window.localStorage);
   }
 
   function exportPng() {
@@ -380,6 +427,7 @@
     if (args.accent) {
       document.documentElement.style.setProperty("--accent", String(args.accent));
     }
+    purgeStaleDocSigKeys();
     if (drawing || saveTimer) return;
     var saved = String(args.saved || "");
     if (saved && saved.indexOf("data:image") !== 0 && saved.length > 32) {
@@ -393,6 +441,11 @@
     if (saved && saved !== lastSavedArg) {
       lastSavedArg = saved;
       restoreFromUrl(saved);
+      return;
+    }
+    /* لا تستعد توقيع طرف قديم من التخزين إذا لم يمرّر بايثون saved للوثيقة الحالية */
+    if (isDocScopedKey(lsKey) && !saved) {
+      setStatus("ready");
       return;
     }
     var local = readLocal();
