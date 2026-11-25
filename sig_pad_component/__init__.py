@@ -18,7 +18,7 @@ def sig_pad(
     accent: str = "#0044cc",
     default=None,
 ):
-    """لوحة توقيع ثنائية الاتجاه تُرجع dict {action, data_url, pad_id, ts} عند الحفظ/المسح."""
+    """لوحة توقيع ثنائية الاتجاه: حفظ تلقائي بعد رفع الإصبع، أو '__CLEARED__' عند المسح."""
     return _sig_pad(
         title=title,
         subtitle=subtitle or "",

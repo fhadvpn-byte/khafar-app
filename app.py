@@ -3172,15 +3172,24 @@ def strip_signature_data_url(raw: str) -> str:
 
 def consume_sig_pad_result(result, *, kind: str) -> dict | None:
     """يعيد نتيجة اللوحة مرة واحدة لكل ختم زمني حتى لا تُعاد معالجة نفس الحفظ."""
-    if not result:
+    if result is None or result == "":
         return None
-    if isinstance(result, str):
+    cleared_token = "__CLEARED__"
+    if isinstance(result, str) and str(result).strip() == cleared_token:
+        result = {"action": "clear", "data_url": cleared_token, "ts": cleared_token}
+    elif isinstance(result, str):
         result = {"action": "save", "data_url": result, "ts": ""}
     if not isinstance(result, dict):
         return None
     ts = str(result.get("ts") or "")
-    data_url = str(result.get("data_url") or "")
+    data_url = str(result.get("data_url") or "").strip()
     action = str(result.get("action") or "")
+    if data_url == cleared_token:
+        action = "clear"
+        result = dict(result)
+        result["action"] = "clear"
+        result["data_url"] = cleared_token
+        ts = ts or cleared_token
     marker_key = f"_sigpad_ts_{kind}"
     marker_val = ts or (action + ":" + data_url[:48])
     if marker_val and st.session_state.get(marker_key) == marker_val:
@@ -3198,6 +3207,9 @@ def _apply_sig_pad_event_to_session(pad_id: str, event: dict | None) -> None:
     pad_from_event = str(event.get("pad_id") or "").strip()
     pad_id = pad_from_event or str(pad_id).strip()
     action = str(event.get("action") or "")
+    data_url_raw = str(event.get("data_url") or "").strip()
+    if data_url_raw == "__CLEARED__":
+        action = "clear"
     live = dict(st.session_state.get("live_sig_pads") or {})
     party = dict(st.session_state.get("party_stamps") or {})
     if action == "clear":
@@ -3367,7 +3379,7 @@ def render_document_sig_pads(
         return collect_signatures_map()
 
     st.markdown("#### ✍️ تواقيع الأطراف (تُحفظ في الأرشيف مع ورقة A4)")
-    st.caption("ارسم بالإصبع ثم اضغط «حفظ» داخل كل لوحة — التوقيع يصل إلى بايثون وقاعدة البيانات مباشرة.")
+    st.caption("ارسم بالإصبع أو القلم ثم ارفع يدك — يُعتمد التوقيع ويُحفظ تلقائياً. زر «🧹 مسح التوقيع» يفرّغ الخانة.")
     live = dict(st.session_state.get("live_sig_pads") or {})
     party = dict(st.session_state.get("party_stamps") or {})
     stable = _stable_form_session_key()
@@ -4690,7 +4702,7 @@ def _live_pad_card(pad_id: str, title: str, subtitle: str) -> str:
         <canvas id="pad_{pad_id}" class="live-pad-canvas" width="900" height="220"
             style="touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; cursor:crosshair;"></canvas>
         <div class="live-pad-actions no-print">
-            <button type="button" class="clear-sig-btn" onclick="clearLivePad('{pad_id}')">مسح التوقيع</button>
+            <button type="button" class="clear-sig-btn" onclick="clearLivePad('{pad_id}')">🧹 مسح التوقيع</button>
         </div>
     </div>
     """
@@ -10618,7 +10630,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
         officer_pad_val = sig_pad(
             key="officer_settings_sig_pad",
             title="ارسم توقيع مستلم الخفر المناوب هنا (حبر أزرق رسمي #0044cc)",
-            subtitle="ارسم بالإصبع أو الماوس ثم اضغط «حفظ واعتماد التوقيع المرسوم» داخل اللوحة.",
+            subtitle="ارسم ثم ارفع الإصبع أو القلم — يُعتمد التوقيع ويُحفظ تلقائياً دون زر.",
             saved=officer_saved_now,
             ls_key=DUTY_SIG_LS_KEY,
             pad_id="officer",
@@ -10627,14 +10639,14 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
         officer_pad_event = consume_sig_pad_result(officer_pad_val, kind="officer")
         if officer_pad_event:
             action = str(officer_pad_event.get("action") or "")
+            data_url_raw = str(officer_pad_event.get("data_url") or "").strip()
             _, hash_now = ensure_device_identity()
-            if action == "clear":
+            if action == "clear" or data_url_raw == "__CLEARED__":
                 st.session_state[DUTY_SIG_KEY] = ""
                 if hash_now:
                     cur = get_device_shift(hash_now)
                     cur[DUTY_SIG_KEY] = ""
                     save_device_shift(hash_now, cur)
-                st.success("تم مسح توقيع مستلم الخفر المناوب من الجهاز.")
             else:
                 payload = compress_signature_b64(strip_signature_data_url(officer_pad_event.get("data_url") or ""))
                 if payload:
@@ -10643,52 +10655,50 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                         cur = get_device_shift(hash_now)
                         cur[DUTY_SIG_KEY] = payload
                         save_device_shift(hash_now, cur)
-                    st.success("تم حفظ واعتماد توقيع مستلم الخفر المناوب من اللوحة.")
                 else:
-                    st.warning("تعذّر قراءة التوقيع المرسوم — أعد الرسم ثم احفظ من زر اللوحة.")
+                    st.warning("تعذّر قراءة التوقيع المرسوم — أعد الرسم على اللوحة.")
 
         sig_upload = khafar_file_uploader(
-            "أو ارفع صورة توقيع شفافة (من المعرض أو الكاميرا) كخيار مساند",
+            "أو ارفع صورة توقيع شفافة (من المعرض أو الكاميرا) — تُعتمد تلقائياً فور الاختيار",
             key="duty_sig_upload_mu",
             accept_multiple_files=False,
             allow_pdf=False,
             preserve_alpha=True,
             help=UPLOAD_HELP_CAPTION + " يُحوَّل الحبر تلقائياً إلى الأزرق الرسمي #0044cc.",
         )
-        up_col, del_col = st.columns(2)
-        with up_col:
-            if st.button("💾 حفظ صورة التوقيع المرفوعة", type="primary", use_container_width=True):
-                payload = ""
-                if sig_upload is not None:
-                    processed, err = process_uploaded_attachment_with_status(sig_upload, purpose="signature")
-                    if not processed:
-                        st.warning(err or "⚠️ نوع الملف غير مدعوم، يرجى إرفاق صورة أو ملف PDF.")
-                    else:
-                        payload = compress_signature_b64((processed or {}).get("b64") or "")
-                if not payload and sig_upload is None:
-                    st.warning("ارفع صورة التوقيع أولاً، أو استخدم زر الحفظ داخل اللوحة بعد الرسم.")
-                elif not payload and sig_upload is not None:
+        if sig_upload is not None:
+            processed, err = process_uploaded_attachment_with_status(sig_upload, purpose="signature")
+            if not processed:
+                st.warning(err or "⚠️ نوع الملف غير مدعوم، يرجى إرفاق صورة أو ملف PDF.")
+            else:
+                payload = compress_signature_b64((processed or {}).get("b64") or "")
+                if not payload:
                     st.warning("تعذّر اعتماد صورة التوقيع المرفوعة — جرّب صورة أوضح أو صيغة أخرى.")
-                elif payload:
-                    _, hash_now = ensure_device_identity()
-                    if not _cookie_uid_ready:
-                        st.caption("⏳ تتم مزامنة تعريف الجهاز مع المتصفح — الحفظ بالمعرّف الاحتياطي متاح الآن.")
-                    st.session_state[DUTY_SIG_KEY] = payload
-                    cur = get_device_shift(hash_now)
-                    cur[DUTY_SIG_KEY] = payload
-                    save_device_shift(hash_now, cur)
-                    st.success("✅ تم إرفاق المرفق بنجاح وجاهز للظهور في التقرير المطبوع")
-                    st.success("تم حفظ توقيع مستلم الخفر المناوب على هذا الجهاز وتفعيله تلقائياً.")
-                    safe_rerun()
-        with del_col:
-            if st.button("🗑️ حذف / إعادة رسم توقيع مستلم الخفر المناوب", use_container_width=True):
-                st.session_state[DUTY_SIG_KEY] = ""
-                if DEVICE_HASH:
-                    cur = get_device_shift(DEVICE_HASH)
-                    cur[DUTY_SIG_KEY] = ""
-                    save_device_shift(DEVICE_HASH, cur)
-                st.success("تم حذف التوقيع المحفوظ. يمكنك إعادة الرسم الآن.")
-                safe_rerun()
+                else:
+                    raw_name = str(getattr(sig_upload, "name", "") or "sig")
+                    upload_token = hashlib.sha256(
+                        f"{raw_name}|{len(payload)}|{payload[:96]}".encode("utf-8")
+                    ).hexdigest()
+                    if st.session_state.get("_officer_upload_token") != upload_token:
+                        _, hash_now = ensure_device_identity()
+                        if not _cookie_uid_ready:
+                            st.caption("⏳ تتم مزامنة تعريف الجهاز مع المتصفح — الحفظ بالمعرّف الاحتياطي متاح الآن.")
+                        st.session_state[DUTY_SIG_KEY] = payload
+                        cur = get_device_shift(hash_now)
+                        cur[DUTY_SIG_KEY] = payload
+                        save_device_shift(hash_now, cur)
+                        st.session_state["_officer_upload_token"] = upload_token
+                        st.success("✅ تم اعتماد صورة التوقيع المرفوعة تلقائياً وهي جاهزة للظهور في التقرير المطبوع")
+                        safe_rerun()
+        if st.button("🗑️ حذف / إعادة رسم توقيع مستلم الخفر المناوب", use_container_width=True):
+            st.session_state[DUTY_SIG_KEY] = ""
+            st.session_state["_officer_upload_token"] = ""
+            if DEVICE_HASH:
+                cur = get_device_shift(DEVICE_HASH)
+                cur[DUTY_SIG_KEY] = ""
+                save_device_shift(DEVICE_HASH, cur)
+            st.success("تم حذف التوقيع المحفوظ. يمكنك إعادة الرسم الآن.")
+            safe_rerun()
 
         preview_sig = str(st.session_state.get(DUTY_SIG_KEY) or shift.get(DUTY_SIG_KEY) or "").strip()
         if preview_sig:
@@ -10702,12 +10712,12 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
             except Exception:
                 st.caption("تعذّر عرض معاينة التوقيع المحفوظ.")
         else:
-            st.info("لا يوجد توقيع محفوظ حالياً — ارسم على اللوحة أو ارفع صورة ثم احفظ.")
+            st.info("لا يوجد توقيع محفوظ حالياً — ارسم على اللوحة أو ارفع صورة ليُعتمد تلقائياً.")
 
     with mgr_tab:
         st.markdown("### ✍️ اعتماد التوقيع الحي لمدير وحدة الحوادث")
         st.caption(
-            "محمي برمز سري. ارسم على اللوحة ثم اضغط «حفظ واعتماد التوقيع المرسوم» داخلها، "
+            "محمي برمز سري. ارسم على اللوحة ثم ارفع الإصبع ليُعتمد التوقيع تلقائياً، "
             "أو ارفع صورة مساندة — يُحفظ في SQLite ويظهر لجميع أفراد الخفر تلقائياً بحبر أزرق رسمي."
         )
         if "manager_pin_ok" not in st.session_state:
@@ -10766,12 +10776,12 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 st.success("تم تحديث بيانات المدير وخيار الظهور التلقائي.")
                 safe_rerun()
 
-            st.markdown("##### أولاً: ارسم ثم احفظ التوقيع من داخل اللوحة")
+            st.markdown("##### أولاً: ارسم التوقيع — يُعتمد تلقائياً بعد رفع الإصبع")
             mgr_saved_now = str(mgr_now.get("manager_sig_b64") or "").strip()
             mgr_pad_val = sig_pad(
                 key="manager_settings_sig_pad",
                 title="توقيع مدير وحدة الحوادث (إصبع أو قلم — حبر أزرق رسمي #0044cc)",
-                subtitle="بعد الرسم اضغط «حفظ واعتماد التوقيع المرسوم» داخل اللوحة لاعتماده فوراً لجميع الأفراد.",
+                subtitle="ارسم ثم ارفع الإصبع أو القلم — يُعتمد التوقيع ويُحفظ تلقائياً لجميع الأفراد.",
                 saved=mgr_saved_now,
                 ls_key="khafar_manager_sig",
                 pad_id="manager",
@@ -10780,14 +10790,14 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
             mgr_pad_event = consume_sig_pad_result(mgr_pad_val, kind="manager")
             if mgr_pad_event:
                 action = str(mgr_pad_event.get("action") or "")
-                if action == "clear":
+                data_url_raw = str(mgr_pad_event.get("data_url") or "").strip()
+                if action == "clear" or data_url_raw == "__CLEARED__":
                     mgr_now = save_manager_signature_settings(
                         mgr_name,
                         mgr_title or DEFAULT_MANAGER_TITLE,
                         "",
                         auto_insert=bool(mgr_auto),
                     )
-                    st.success("تم مسح توقيع المدير المعتمد.")
                 else:
                     raw_b64 = strip_signature_data_url(mgr_pad_event.get("data_url") or "")
                     if raw_b64:
@@ -10799,14 +10809,11 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                                 mgr_title or DEFAULT_MANAGER_TITLE,
                                 auto_insert=bool(mgr_auto),
                             )
-                            st.success(
-                                f"✅ تم اعتماد توقيع المدير من اللوحة: {saved.get('display_name') or DEFAULT_MANAGER_TITLE}"
-                            )
                             mgr_now = saved
                         except Exception as exc:
                             st.error(f"تعذّر اعتماد توقيع اللوحة: {exc}")
                     else:
-                        st.warning("ارسم التوقيع أولاً ثم اضغط حفظ داخل اللوحة.")
+                        st.warning("تعذّر قراءة التوقيع المرسوم — أعد الرسم على اللوحة.")
 
             st.markdown("##### ثانياً: أو ارفع ملفاً لاعتماده فوراً لجميع الأفراد")
             mgr_upload = khafar_file_uploader(
@@ -10863,7 +10870,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 if mgr_now.get("updated_at"):
                     st.caption(f"آخر تحديث: {mgr_now.get('updated_at')}")
             else:
-                st.warning("لا يوجد توقيع مدير معتمد حالياً — نزّل من اللوحة ثم ارفع الملف أعلاه.")
+                st.warning("لا يوجد توقيع مدير معتمد حالياً — ارسم على اللوحة أو ارفع صورة ليُعتمد تلقائياً.")
 
             if not bool(mgr_now.get("auto_insert", True)) and saved_sig:
                 st.warning("التوقيع محفوظ لكن الظهور التلقائي متوقف مؤقتاً.")

@@ -8,7 +8,8 @@
     html, body {
       margin: 0 !important;
       padding: 0 !important;
-      height: auto !important;
+      height: 310px !important;
+      max-height: 310px !important;
       min-height: 0 !important;
       overflow: hidden !important;
       background: transparent !important;
@@ -19,28 +20,43 @@
       background: #101820;
       border: 1px solid var(--accent, #1e6b50);
       border-radius: 12px;
-      padding: 10px;
+      padding: 8px 10px 10px;
       margin: 2px;
       box-sizing: border-box;
+      height: 306px;
+      overflow: hidden;
     }
     .title {
       font-weight: 800;
       color: #f3cc7a;
       font-size: 13px;
-      margin-bottom: 4px;
+      margin: 0 0 4px;
       text-align: center;
+      line-height: 1.35;
     }
     .sub {
       color: #94a3b8;
       font-size: 11px;
       text-align: center;
-      margin: 0 0 8px;
-      line-height: 1.45;
-      min-height: 14px;
+      margin: 0 0 4px;
+      line-height: 1.35;
+      min-height: 0;
     }
+    .badge {
+      text-align: center;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.4;
+      min-height: 20px;
+      margin: 0 0 6px;
+      color: #94a3b8;
+    }
+    .badge.signing { color: #f3cc7a; }
+    .badge.saved { color: #34d399; }
+    .badge.ready { color: #93c5fd; }
     canvas {
       width: 100%;
-      height: 180px;
+      height: 168px;
       border: 1.5px dashed var(--accent, #0044cc);
       border-radius: 8px;
       background: #ffffff;
@@ -55,60 +71,47 @@
     }
     .actions {
       display: flex;
-      gap: 8px;
       justify-content: center;
       margin-top: 8px;
-      flex-wrap: wrap;
     }
     button {
       border: 1px solid #d4a853;
       background: #112924;
       color: #fff;
-      border-radius: 8px;
-      padding: 8px 12px;
+      border-radius: 10px;
+      padding: 11px 18px;
       font-weight: 800;
       cursor: pointer;
-      font-size: 12.5px;
+      font-size: 14px;
       font-family: inherit;
+      min-height: 44px;
+      width: 100%;
+      max-width: 420px;
     }
-    button.primary {
-      background: #145a48;
-      border-color: #34d399;
-    }
-    .ok {
-      color: #34d399;
-      font-size: 12px;
-      font-weight: 700;
-      text-align: center;
-      margin-top: 6px;
-      min-height: 18px;
-      line-height: 1.4;
-    }
-    .err { color: #fca5a5; }
   </style>
 </head>
 <body>
   <div id="padCard">
     <div class="title" id="padTitle">ارسم التوقيع هنا (حبر أزرق رسمي #0044cc)</div>
     <div class="sub" id="padSub"></div>
+    <div class="badge ready" id="padStatus">جاهزة للتوقيع الجديد</div>
     <canvas id="pad" width="900" height="220" tabindex="-1"></canvas>
     <div class="actions">
-      <button type="button" class="primary" id="btnSave">💾 حفظ واعتماد التوقيع المرسوم</button>
-      <button type="button" id="btnClear">🧹 مسح اللوحة</button>
+      <button type="button" id="btnClear">🧹 مسح التوقيع</button>
     </div>
-    <div class="ok" id="padStatus"></div>
   </div>
   <script>
 (function () {
   var INK = "#0044cc";
   var CANVAS_W = 900;
   var CANVAS_H = 220;
+  var FRAME_H = 310;
+  var DEBOUNCE_MS = 700;
   var canvas = document.getElementById("pad");
   var ctx = canvas.getContext("2d", { willReadFrequently: true });
   var statusEl = document.getElementById("padStatus");
   var titleEl = document.getElementById("padTitle");
   var subEl = document.getElementById("padSub");
-  var cardEl = document.getElementById("padCard");
   var drawing = false;
   var lastX = 0, lastY = 0, midX = 0, midY = 0;
   var lastTouchTs = 0;
@@ -117,25 +120,30 @@
   var padId = "officer";
   var restoring = false;
   var lastSavedArg = "";
-  var lastHeight = 0;
-  var lastWidth = window.innerWidth || 0;
+  var saveTimer = null;
+  var lastSentFp = "";
+  var heightSent = false;
+  var justCleared = false;
 
-  /* أبعاد الـ canvas ثابتة من HTML — يُمنع إعادة تعيين width/height هنا. */
   function send(type, data) {
     var msg = Object.assign({ isStreamlitMessage: true, type: type }, data || {});
     try { window.parent.postMessage(msg, "*"); } catch (e) {}
   }
   function setReady() { send("streamlit:componentReady", { apiVersion: 1 }); }
   function setHeight() {
-    if (!cardEl) return;
-    var h = Math.ceil((cardEl.offsetHeight || 0) + 4);
-    h = Math.min(Math.max(h, 280), 420);
-    if (lastHeight && Math.abs(h - lastHeight) <= 3) return;
-    lastHeight = h;
-    send("streamlit:setFrameHeight", { height: h });
+    if (heightSent) return;
+    heightSent = true;
+    send("streamlit:setFrameHeight", { height: FRAME_H });
   }
   function setValue(value) {
     send("streamlit:setComponentValue", { value: value, dataType: "json" });
+  }
+
+  function setStatus(kind) {
+    statusEl.className = "badge " + (kind || "ready");
+    if (kind === "signing") statusEl.textContent = "✍️ جاري التوقيع...";
+    else if (kind === "saved") statusEl.textContent = "✅ تم اعتماد وحفظ التوقيع تلقائياً";
+    else statusEl.textContent = "جاهزة للتوقيع الجديد";
   }
 
   function posFromClient(clientX, clientY) {
@@ -164,10 +172,34 @@
     return false;
   }
 
+  function inkFingerprint() {
+    try {
+      var d = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H).data;
+      var h = 2166136261;
+      for (var i = 3; i < d.length; i += 48) {
+        h ^= d[i];
+        h = Math.imul(h, 16777619);
+        h ^= d[i - 1] || 0;
+      }
+      return String(h >>> 0);
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function cancelAutoSave() {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+  }
+
   function beginDraw(pt) {
+    cancelAutoSave();
     drawing = true;
     hasInk = true;
     lastX = pt.x; lastY = pt.y; midX = pt.x; midY = pt.y;
+    setStatus("signing");
     ctx.fillStyle = INK;
     ctx.beginPath();
     ctx.arc(pt.x, pt.y, 1.6, 0, Math.PI * 2);
@@ -187,32 +219,67 @@
     ctx.stroke();
     lastX = pt.x; lastY = pt.y; midX = nextMidX; midY = nextMidY;
   }
-  var autoSaveTimer = null;
   function endDraw() {
     drawing = false;
-    // إرسال تلقائي إلى بايثون فور رفع الإصبع/الماوس (بدون اشتراط زر)
     scheduleAutoSave();
   }
+
   function scheduleAutoSave() {
-    if (autoSaveTimer) {
-      try { clearTimeout(autoSaveTimer); } catch (e) {}
-      autoSaveTimer = null;
+    cancelAutoSave();
+    if (!hasInk && !canvasHasInk()) return;
+    setStatus("signing");
+    saveTimer = setTimeout(commitAutoSave, DEBOUNCE_MS);
+  }
+
+  function persistLocal(dataUrl) {
+    var raw = "";
+    if (dataUrl && dataUrl.indexOf(",") !== -1) raw = dataUrl.split(",")[1] || "";
+    try { if (lsKey) localStorage.setItem(lsKey, raw || dataUrl || ""); } catch (e) {}
+    try { if (padId) localStorage.setItem("pad_" + padId, dataUrl || ""); } catch (e) {}
+  }
+  function clearLocal() {
+    try { if (lsKey) localStorage.removeItem(lsKey); } catch (e) {}
+    try { if (padId) localStorage.removeItem("pad_" + padId); } catch (e) {}
+  }
+  function readLocal() {
+    var v = "";
+    try { v = localStorage.getItem("pad_" + padId) || ""; } catch (e) {}
+    if (!v) {
+      try { v = localStorage.getItem(lsKey) || ""; } catch (e2) {}
     }
-    autoSaveTimer = setTimeout(function () {
-      autoSaveTimer = null;
-      if (restoring) return;
-      if (!hasInk && !canvasHasInk()) return;
-      var dataUrl = exportPng();
-      persistLocal(dataUrl);
-      statusEl.className = "ok";
-      statusEl.textContent = "تم اعتماد التوقيع تلقائياً.";
-      setValue({
-        action: "save",
-        data_url: dataUrl,
-        pad_id: padId,
-        ts: Date.now()
-      });
-    }, 180);
+    if (!v) return "";
+    if (v.indexOf("data:image") === 0) return v;
+    return "data:image/png;base64," + v;
+  }
+
+  function exportPng() {
+    var out = document.createElement("canvas");
+    out.width = CANVAS_W;
+    out.height = CANVAS_H;
+    var octx = out.getContext("2d");
+    octx.fillStyle = "#ffffff";
+    octx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    octx.drawImage(canvas, 0, 0);
+    return out.toDataURL("image/png");
+  }
+
+  function commitAutoSave() {
+    saveTimer = null;
+    if (drawing || restoring) return;
+    if (!hasInk && !canvasHasInk()) return;
+    var fp = inkFingerprint();
+    if (fp && fp === lastSentFp) return;
+    var dataUrl = exportPng();
+    persistLocal(dataUrl);
+    lastSentFp = fp;
+    setStatus("saved");
+    setValue({
+      action: "save",
+      data_url: dataUrl,
+      pad_id: padId,
+      ts: Date.now(),
+      fp: fp
+    });
   }
 
   function onTouchStart(ev) {
@@ -270,27 +337,6 @@
     endDraw();
   });
 
-  function persistLocal(dataUrl) {
-    var raw = "";
-    if (dataUrl && dataUrl.indexOf(",") !== -1) raw = dataUrl.split(",")[1] || "";
-    try { if (lsKey) localStorage.setItem(lsKey, raw || dataUrl || ""); } catch (e) {}
-    try { if (padId) localStorage.setItem("pad_" + padId, dataUrl || ""); } catch (e) {}
-  }
-  function clearLocal() {
-    try { if (lsKey) localStorage.removeItem(lsKey); } catch (e) {}
-    try { if (padId) localStorage.removeItem("pad_" + padId); } catch (e) {}
-  }
-  function readLocal() {
-    var v = "";
-    try { v = localStorage.getItem("pad_" + padId) || ""; } catch (e) {}
-    if (!v) {
-      try { v = localStorage.getItem(lsKey) || ""; } catch (e2) {}
-    }
-    if (!v) return "";
-    if (v.indexOf("data:image") === 0) return v;
-    return "data:image/png;base64," + v;
-  }
-
   function restoreFromUrl(url, done) {
     if (!url) { if (done) done(false); return; }
     restoring = true;
@@ -299,6 +345,8 @@
       try {
         ctx.drawImage(img, 0, 0, CANVAS_W, CANVAS_H);
         hasInk = canvasHasInk();
+        lastSentFp = inkFingerprint();
+        if (hasInk) setStatus("saved");
       } catch (e) {}
       restoring = false;
       if (done) done(true);
@@ -310,48 +358,17 @@
     img.src = url;
   }
 
-  function exportPng() {
-    var out = document.createElement("canvas");
-    out.width = CANVAS_W;
-    out.height = CANVAS_H;
-    var octx = out.getContext("2d");
-    octx.fillStyle = "#ffffff";
-    octx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-    octx.drawImage(canvas, 0, 0);
-    return out.toDataURL("image/png");
-  }
-
-  document.getElementById("btnSave").onclick = function () {
-    if (!hasInk && !canvasHasInk()) {
-      statusEl.className = "ok err";
-      statusEl.textContent = "ارسم التوقيع أولاً على اللوحة.";
-      return;
-    }
-    var dataUrl = exportPng();
-    persistLocal(dataUrl);
-    statusEl.className = "ok";
-    statusEl.textContent = "تم حفظ واعتماد التوقيع المرسوم.";
-    setValue({
-      action: "save",
-      data_url: dataUrl,
-      pad_id: padId,
-      ts: Date.now()
-    });
-  };
-
   document.getElementById("btnClear").onclick = function () {
+    cancelAutoSave();
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
     hasInk = false;
     drawing = false;
+    lastSentFp = "";
+    lastSavedArg = "";
+    justCleared = true;
     clearLocal();
-    statusEl.className = "ok";
-    statusEl.textContent = "تم مسح اللوحة.";
-    setValue({
-      action: "clear",
-      data_url: "",
-      pad_id: padId,
-      ts: Date.now()
-    });
+    setStatus("ready");
+    setValue("__CLEARED__");
   };
 
   function applyArgs(args) {
@@ -363,14 +380,16 @@
     if (args.accent) {
       document.documentElement.style.setProperty("--accent", String(args.accent));
     }
+    if (drawing || saveTimer) return;
     var saved = String(args.saved || "");
     if (saved && saved.indexOf("data:image") !== 0 && saved.length > 32) {
       saved = "data:image/png;base64," + saved;
     }
-    if (canvasHasInk() || hasInk) {
-      lastSavedArg = saved;
+    if (justCleared) {
+      if (!saved) justCleared = false;
       return;
     }
+    if (hasInk || canvasHasInk()) return;
     if (saved && saved !== lastSavedArg) {
       lastSavedArg = saved;
       restoreFromUrl(saved);
@@ -378,7 +397,6 @@
     }
     var local = readLocal();
     if (local) restoreFromUrl(local);
-    setTimeout(setHeight, 20);
   }
 
   window.addEventListener("message", function (ev) {
@@ -387,16 +405,8 @@
     applyArgs(data.args || {});
   });
 
-  window.addEventListener("resize", function () {
-    var w = window.innerWidth || 0;
-    if (w === lastWidth) return;
-    lastWidth = w;
-    setTimeout(setHeight, 20);
-  });
-
   setReady();
-  setTimeout(setHeight, 20);
-  setTimeout(setHeight, 120);
+  setHeight();
 })();
   </script>
 </body>
