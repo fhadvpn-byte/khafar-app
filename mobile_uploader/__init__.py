@@ -67,19 +67,13 @@ def _maybe_convert_heic(data: bytes, name: str, mime: str, *, preserve_alpha: bo
         out_name = name if str(name).lower().endswith(".pdf") else f"{Path(name or 'مرفق').stem}.pdf"
         return data, out_name, "application/pdf"
     try:
-        opened = Image.open(io.BytesIO(data))
-        img = ImageOps.exif_transpose(opened)
+        img = Image.open(io.BytesIO(data))
+        img = ImageOps.exif_transpose(img)
     except Exception:
         return data, name, mime
 
     stem = Path(name or "صورة").stem or "صورة"
-    max_edge = 1800
-    # JPEG جاهز من المكوّن (Canvas) ضمن الحد وبدون تدوير EXIF إضافي: لا تُعد الضغط
-    was_jpeg = data[:2] == b"\xff\xd8"
-    if was_jpeg and (not preserve_alpha) and (img is opened) and max(img.size) <= max_edge:
-        out_name = name if str(name).lower().endswith((".jpg", ".jpeg")) else f"{stem}.jpg"
-        return data, out_name, "image/jpeg"
-
+    max_edge = 1600
     if max(img.size) > max_edge:
         img.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
 
@@ -99,7 +93,7 @@ def _maybe_convert_heic(data: bytes, name: str, mime: str, *, preserve_alpha: bo
         img = bg
     elif img.mode != "RGB":
         img = img.convert("RGB")
-    img.save(buf, format="JPEG", quality=90, optimize=True)
+    img.save(buf, format="JPEG", quality=85, optimize=True)
     return buf.getvalue(), f"{stem}.jpg", "image/jpeg"
 
 

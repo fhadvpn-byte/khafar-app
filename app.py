@@ -94,8 +94,8 @@ def format_entity(role_label: str, optional_name: str) -> str:
     return f"{r} / {n}" if (r and n) else (r or n)
 
 
-ATTACH_MAX_PX = 1800
-ATTACH_JPEG_QUALITY = 90
+ATTACH_MAX_PX = 1600
+ATTACH_JPEG_QUALITY = 85
 SIG_UPLOAD_MAX_PX = 1600
 UPLOAD_HELP_CAPTION = "المعرض أو الكاميرا أو ملف PDF — جاهز للجوال والكمبيوتر."
 
@@ -180,8 +180,8 @@ def normalize_mobile_upload(uploaded_file, *, purpose: str = "attachment"):
         return _NormalizedUpload(raw, f"{stem}.pdf", "application/pdf"), None
 
     try:
-        opened = Image.open(io.BytesIO(raw))
-        img = ImageOps.exif_transpose(opened)
+        img = Image.open(io.BytesIO(raw))
+        img = ImageOps.exif_transpose(img)
     except Exception:
         return None, "⚠️ نوع الملف غير مدعوم، يرجى إرفاق صورة أو ملف PDF."
 
@@ -201,12 +201,7 @@ def normalize_mobile_upload(uploaded_file, *, purpose: str = "attachment"):
             rgb.save(buf, format="PNG", optimize=True)
             return _NormalizedUpload(buf.getvalue(), f"{stem}.png", "image/png"), None
 
-        # مرفقات النماذج/المركبات: JPEG واضح (حد 1800px / جودة 90) بعد EXIF
-        # JPEG جاهز من mobile_uploader ضمن الحد وبدون حاجة لتدوير EXIF → لا تُعاد ضغطه
-        mime_hint = str(getattr(uploaded_file, "type", "") or "").lower()
-        already_jpeg = raw[:2] == b"\xff\xd8" or "jpeg" in mime_hint or "jpg" in mime_hint
-        if already_jpeg and (img is opened) and max(img.size) <= ATTACH_MAX_PX:
-            return _NormalizedUpload(raw, f"{stem}.jpg", "image/jpeg"), None
+        # مرفقات النماذج/المركبات: JPEG مضغوط واضح بعد EXIF
         rgb = _image_to_rgb_white(img)
         if max(rgb.size) > ATTACH_MAX_PX:
             rgb.thumbnail((ATTACH_MAX_PX, ATTACH_MAX_PX), Image.Resampling.LANCZOS)
@@ -5786,15 +5781,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 b64 = att.get("b64") or ""
                 cards.append(
                     f'<div class="att-card">'
-                    f'<img class="khafar-att-img" src="data:{mime};base64,{b64}" alt="مرفق مصور" loading="eager" />'
+                    f'<img src="data:{mime};base64,{b64}" alt="" />'
                     f"</div>"
                 )
-        if image_count <= 1:
-            att_grid_cls = "khafar-att-grid attachment-grid atts-1 atts-single"
-        elif image_count == 2:
-            att_grid_cls = "khafar-att-grid attachment-grid atts-2 atts-multi"
-        else:
-            att_grid_cls = "khafar-att-grid attachment-grid atts-3 atts-multi"
+        att_grid_cls = "attachment-grid atts-single" if image_count <= 1 else "attachment-grid atts-multi"
         attachment_block = f"""
         <div class="attachment-section">
             <div class="attachment-title">📎 المرفقات المصورة المعتمدة في التقرير</div>
@@ -6215,88 +6205,32 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         display: block !important;
     }}
     .attachment-section {{
-        margin-top: 4px; border: 1px dashed #000000; border-radius: 6px; padding: 6px 8px;
+        margin-top: 4px; border: 1px dashed #000000; border-radius: 6px; padding: 3px 6px;
         background: #f8fafc; page-break-inside: avoid; break-inside: avoid;
     }}
     .attachment-title {{
-        font-size: 12px; font-weight: 800; color: #000000; margin-bottom: 4px; text-align: right;
+        font-size: 12px; font-weight: 800; color: #000000; margin-bottom: 2px; text-align: right;
     }}
-    /* شبكة المرفقات — منفصلة تماماً عن قيود صور التواقيع/الشعار */
-    .khafar-att-grid, .attachment-grid.khafar-att-grid {{
-        display: grid !important;
-        gap: 8px !important;
-        padding: 6px 8px !important;
-        align-items: center !important;
-        justify-items: center !important;
-        overflow: visible !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
+    .attachment-grid {{
+        display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; overflow: hidden;
     }}
-    .khafar-att-grid.atts-1 {{ grid-template-columns: 1fr !important; }}
-    .khafar-att-grid.atts-2,
-    .khafar-att-grid.atts-3 {{
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    .att-card {{ flex: 1 1 0; text-align: center; min-width: 0; }}
+    .att-card img {{
+        max-width: 100%; width: auto; height: auto; object-fit: contain;
+        border: 1.4px solid #000000; border-radius: 4px; background: #fff; display: block; margin: 0 auto;
     }}
-    .att-card {{
-        text-align: center; min-width: 0; width: 100%;
-        display: flex; align-items: center; justify-content: center;
+    .attachment-grid.atts-single .att-card img,
+    .attachment-grid.atts-multi .att-card img {{
+        max-height: 80px !important; height: auto !important;
     }}
-    .khafar-att-img,
-    .att-card img.khafar-att-img,
-    #a4Sheet .khafar-att-img,
-    .a4-sheet .khafar-att-img {{
-        width: auto !important;
-        height: auto !important;
-        max-width: 96% !important;
-        object-fit: contain !important;
-        border: 1.4px solid #000000 !important;
-        border-radius: 4px !important;
-        background: #fff !important;
-        display: block !important;
-        margin: 0 auto !important;
-        /* لا ترث max-height الخاص بالتواقيع (45/48/50/60px) */
-        max-height: 250px !important;
-        cursor: zoom-in;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-    }}
-    .khafar-att-grid.atts-1 .khafar-att-img {{
-        max-height: 250px !important; max-width: 96% !important;
-    }}
-    .khafar-att-grid.atts-2 .khafar-att-img {{
-        max-height: 210px !important; max-width: 100% !important;
-    }}
-    .khafar-att-grid.atts-3 .khafar-att-img {{
-        max-height: 145px !important; max-width: 100% !important;
-    }}
+    /* صور المرفقات ثابتة مضغوطة — لا تُكبَّر أبداً عبر expandLegal */
     .att-caption, .att-pdf-name {{ display: none !important; }}
     .att-pdf-card {{
-        border: 1.4px solid #000000; border-radius: 4px; padding: 6px 10px; background: #fff;
-        min-height: 64px; display: flex; align-items: center; justify-content: center; gap: 6px;
+        border: 1.4px solid #000000; border-radius: 4px; padding: 2px 6px; background: #fff;
+        max-height: 75px; display: flex; align-items: center; justify-content: center; gap: 4px;
     }}
-    .att-pdf-icon {{ font-size: 18px; line-height: 1; }}
-    .att-pdf-note {{ font-size: 11px; color: #000000; font-weight: 700; }}
-    /* Lightbox للمعاينة على الشاشة فقط */
-    #khafarAttLightbox {{
-        display: none; position: fixed; inset: 0; z-index: 99999;
-        background: rgba(0,0,0,0.88); align-items: center; justify-content: center;
-        padding: 16px; box-sizing: border-box; direction: rtl;
-    }}
-    #khafarAttLightbox.open {{ display: flex !important; }}
-    #khafarAttLightbox img {{
-        max-width: min(96vw, 1100px); max-height: 88vh; width: auto; height: auto;
-        object-fit: contain; border-radius: 8px; background: #fff;
-        box-shadow: 0 12px 40px rgba(0,0,0,0.45);
-    }}
-    #khafarAttLightbox .khafar-att-lb-close {{
-        position: absolute; top: 14px; left: 14px; width: 42px; height: 42px;
-        border: none; border-radius: 999px; background: #fff; color: #111;
-        font-size: 22px; font-weight: 900; cursor: pointer; line-height: 42px;
-    }}
-    @media print {{
-        #khafarAttLightbox {{ display: none !important; visibility: hidden !important; }}
-        .khafar-att-img {{ cursor: default !important; }}
-    }}
+    .att-pdf-icon {{ font-size: 16px; line-height: 1; }}
+    .att-pdf-note {{ font-size: 10px; color: #000000; font-weight: 700; }}
     .a4-sheet table a, .a4-sheet .legal-box a, a[href^="tel"] {{
         color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
     }}
@@ -6459,7 +6393,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             overflow: hidden !important; background: #ffffff !important; direction: rtl !important;
         }}
         .toolbar, .no-print, .zoom-bar, .live-sig-dock, .clear-sig-btn, .sig-guide-hint, .sig-mode-note,
-        .live-pad-actions, .live-sig-dock-head, .ios-print-hint, #khafarAttLightbox {{ display: none !important; }}
+        .live-pad-actions, .live-sig-dock-head, .ios-print-hint {{ display: none !important; }}
         .sig-guide, .sig-guide-print-clean {{
             border: none !important; padding: 0 !important; margin: 0 !important; background: transparent !important;
         }}
@@ -7044,7 +6978,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             try {{
                 const logos = sheet.querySelectorAll(".hdr-center img, .hdr-logo, img.sig-slot-img");
                 logos.forEach(function(img) {{
-                    if (img.classList && img.classList.contains("khafar-att-img")) return;
                     const cs = (doc.defaultView || window).getComputedStyle(img);
                     const h = parseFloat(cs.height) || parseFloat(img.style.maxHeight) || 0;
                     if (h > 28) {{
@@ -7053,17 +6986,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                         img.style.setProperty("width", nh + "px", "important");
                         img.style.setProperty("max-height", nh + "px", "important");
                         img.style.setProperty("max-width", nh + "px", "important");
-                    }}
-                }});
-                /* تقليص تدريجي للمرفقات فقط عند تجاوز الصفحة — حد أدنى مقروء */
-                const attImgs = sheet.querySelectorAll("img.khafar-att-img");
-                attImgs.forEach(function(img) {{
-                    const cs = (doc.defaultView || window).getComputedStyle(img);
-                    const h = parseFloat(img.style.maxHeight) || parseFloat(cs.maxHeight) || 250;
-                    if (h > 96) {{
-                        img.style.setProperty("max-height", Math.max(96, h - 14) + "px", "important");
-                        img.style.setProperty("width", "auto", "important");
-                        img.style.setProperty("height", "auto", "important");
                     }}
                 }});
             }} catch (e5) {{}}
@@ -7247,25 +7169,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             steps += 1;
             if (atCap(next) && dataFs >= 13.5 - 0.01) break;
         }}
-        /* إن بقي فراغ ورقي ومرفق واحد: اسمح بالتمدد حتى 280px للقراءة الواضحة */
-        try {{
-            const attImgs = sheet.querySelectorAll("img.khafar-att-img");
-            if (attImgs.length === 1) {{
-                void sheet.offsetHeight;
-                let rem = freeSpace();
-                if (rem > 40) {{
-                    const cur = parseFloat(attImgs[0].style.maxHeight) || 250;
-                    const nextH = Math.min(280, cur + Math.min(40, rem - 20));
-                    attImgs[0].style.setProperty("max-height", nextH + "px", "important");
-                    attImgs[0].style.setProperty("width", "auto", "important");
-                    attImgs[0].style.setProperty("height", "auto", "important");
-                    void sheet.offsetHeight;
-                    if (measureUsedH() > TARGET_H_PX - 18) {{
-                        attImgs[0].style.setProperty("max-height", Math.max(250, cur) + "px", "important");
-                    }}
-                }}
-            }}
-        }} catch (eAtt) {{}}
         applyPrintPhysicalSize(doc, true);
         return steps;
     }}
@@ -7713,24 +7616,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     max-width: 95% !important;
     object-fit: contain !important;
     margin: 2px auto !important;
-  }}
-  /* المرفقات خارج قيد صور التواقيع تماماً */
-  img.khafar-att-img,
-  .khafar-att-grid img.khafar-att-img,
-  #a4Sheet img.khafar-att-img {{
-    width: auto !important;
-    height: auto !important;
-    max-width: 96% !important;
-    object-fit: contain !important;
-    display: block !important;
-    margin: 0 auto !important;
-  }}
-  .khafar-att-grid.atts-1 img.khafar-att-img {{ max-height: 250px !important; }}
-  .khafar-att-grid.atts-2 img.khafar-att-img {{ max-height: 210px !important; }}
-  .khafar-att-grid.atts-3 img.khafar-att-img {{ max-height: 145px !important; }}
-  #khafarAttLightbox {{ display: none !important; }}
-  @media print {{
-    #khafarAttLightbox {{ display: none !important; visibility: hidden !important; }}
   }}
   #khafarIosShareTray {{
     display: none;
@@ -8621,44 +8506,13 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     var sigHeads = sheet.querySelectorAll('table.sig-tbl th, .sig-head');
     var sigCells = sheet.querySelectorAll('table.sig-tbl td, .sig-cell');
     var sigImgs = sheet.querySelectorAll('img.sig-slot-img');
-    var attImgs = sheet.querySelectorAll('img.khafar-att-img');
+    var attImgs = sheet.querySelectorAll('.att-card img');
     var attSec = sheet.querySelector('.attachment-section');
     var footerQr = sheet.querySelector('.footer-qr');
 
     var rowsCnt = sheet.querySelectorAll('table.data-tbl tr').length;
     var textLen = legalBody ? (legalBody.textContent || '').trim().length : 0;
     var hasAtts = attImgs && attImgs.length > 0;
-    var attCount = attImgs ? attImgs.length : 0;
-    function defaultAttMaxH() {{
-      if (attCount <= 1) return 250;
-      if (attCount === 2) return 210;
-      return 145;
-    }}
-    function applyAttMaxH(px) {{
-      if (!attImgs) return;
-      attImgs.forEach(function(im) {{
-        im.style.setProperty('max-height', px + 'px', 'important');
-        im.style.setProperty('width', 'auto', 'important');
-        im.style.setProperty('height', 'auto', 'important');
-        im.style.setProperty('object-fit', 'contain', 'important');
-        im.style.setProperty('max-width', attCount <= 1 ? '96%' : '100%', 'important');
-      }});
-    }}
-    /* حارس التوازن: ابدأ كبيراً (حتى 280px لمرفق واحد إن سمحت المساحة) */
-    var attMaxH = defaultAttMaxH();
-    if (attCount === 1) {{
-      applyAttMaxH(280);
-      void sheet.offsetHeight;
-      if (sheet.scrollHeight <= targetH) {{
-        attMaxH = 280;
-      }} else {{
-        applyAttMaxH(250);
-        attMaxH = 250;
-        void sheet.offsetHeight;
-      }}
-    }} else if (attCount > 0) {{
-      applyAttMaxH(attMaxH);
-    }}
 
     if (rowsCnt <= 6 && textLen <= 560 && sigCells.length <= 3) {{
       tblCells.forEach(function(td) {{
@@ -8743,13 +8597,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       }});
       if (attSec) {{
         attSec.style.setProperty('margin', '2px 0', 'important');
-        attSec.style.setProperty('padding', '4px 6px', 'important');
+        attSec.style.setProperty('padding', '2px 5px', 'important');
       }}
-      /* قلّص المرفقات تدريجياً فقط بالقدر اللازم — حد أدنى مقروء */
-      if (attCount > 0) {{
-        attMaxH = Math.max(96, attMaxH - (attCount === 1 ? 16 : 12));
-        applyAttMaxH(attMaxH);
-      }}
+      attImgs.forEach(function(im) {{
+        im.style.setProperty('max-height', (step > 5 ? '44px' : '54px'), 'important');
+      }});
       sigHeads.forEach(function(th) {{
         th.style.setProperty('font-size', '9.2px', 'important');
         th.style.setProperty('padding', '2px 4px', 'important');
@@ -8974,34 +8826,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     return 'Maroor_AlArdah_' + suffix + '.pdf';
   }}
 
-  function waitForKhafarAttImages(root) {{
-    var scope = root || document;
-    var imgs = Array.prototype.slice.call(scope.querySelectorAll('img.khafar-att-img'));
-    if (!imgs.length) return Promise.resolve();
-    return Promise.all(imgs.map(function(img) {{
-      try {{
-        if (img.complete && img.naturalWidth > 0) return Promise.resolve();
-        if (typeof img.decode === 'function') {{
-          return img.decode().catch(function() {{ return null; }});
-        }}
-      }} catch (e) {{}}
-      return new Promise(function(resolve) {{
-        var done = function() {{ resolve(null); }};
-        img.addEventListener('load', done, {{ once: true }});
-        img.addEventListener('error', done, {{ once: true }});
-        setTimeout(done, 1800);
-      }});
-    }});
-  }}
-  try {{ window.waitForKhafarAttImages = waitForKhafarAttImages; }} catch (eW) {{}}
-
   function buildOfficialPdfArrayBuffer() {{
     applyToxicologyDirectorBlock(document);
     window.syncAllLivePads();
 
     return ensurePdfLibraries().then(function() {{
-      return waitForKhafarAttImages(document);
-    }}).then(function() {{
       var origSheet = document.getElementById('a4Sheet');
       var stage = document.createElement('div');
       stage.style.cssText = 'position:fixed;top:0;right:0;width:794px;background:#ffffff;z-index:-9999;opacity:1;pointer-events:none;margin:0;padding:0;direction:rtl;';
@@ -9015,14 +8844,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         if (liveSlot && cSlot && liveSlot.getAttribute('src')) {{
           cSlot.setAttribute('src', liveSlot.getAttribute('src'));
           cSlot.setAttribute('style', liveSlot.getAttribute('style') || 'display:block !important; max-height:48px !important;');
-        }}
-      }});
-      /* انسخ أنماط/مصادر المرفقات كما هي بعد التوازن */
-      origSheet.querySelectorAll('img.khafar-att-img').forEach(function(liveAtt, idx) {{
-        var cAtt = clone.querySelectorAll('img.khafar-att-img')[idx];
-        if (liveAtt && cAtt) {{
-          if (liveAtt.getAttribute('src')) cAtt.setAttribute('src', liveAtt.getAttribute('src'));
-          if (liveAtt.getAttribute('style')) cAtt.setAttribute('style', liveAtt.getAttribute('style'));
         }}
       }});
 
@@ -9040,9 +8861,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       ensureAllSignaturesBlue(clone);
       balanceSheetElement(clone, 1085, true, false, true);
 
-      return waitForKhafarAttImages(clone).then(function() {{
-        return new Promise(function(resolve) {{ setTimeout(resolve, 70); }});
-      }}).then(function() {{
+      return new Promise(function(resolve) {{ setTimeout(resolve, 70); }}).then(function() {{
         var capturePromise;
         if (window.modernScreenshot && window.modernScreenshot.domToJpeg) {{
           capturePromise = window.modernScreenshot.domToJpeg(clone, {{ scale: 0.5, quality: 0.5, backgroundColor: '#ffffff' }})
@@ -9282,71 +9101,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       idoc.open();
       idoc.write(printDocHtml);
       idoc.close();
-      var goPrint = function() {{
+      setTimeout(function() {{
         try {{ balanceSheetTypography(idoc, targetH, true, false); }} catch (e) {{}}
         ifr.contentWindow.focus();
         ifr.contentWindow.print();
-      }};
-      if (typeof waitForKhafarAttImages === 'function') {{
-        waitForKhafarAttImages(idoc).then(function() {{ setTimeout(goPrint, 120); }}).catch(function() {{ setTimeout(goPrint, 420); }});
-      }} else {{
-        setTimeout(goPrint, 420);
-      }}
+      }}, 420);
     }});
   }}
 }})();
-
-  /* Lightbox لتكبير المرفقات على الشاشة فقط */
-  (function() {{
-    function ensureLightbox() {{
-      var box = document.getElementById('khafarAttLightbox');
-      if (box) return box;
-      box = document.createElement('div');
-      box.id = 'khafarAttLightbox';
-      box.setAttribute('aria-hidden', 'true');
-      box.innerHTML = '<button type="button" class="khafar-att-lb-close" aria-label="إغلاق">✕</button><img alt="معاينة المرفق" />';
-      document.body.appendChild(box);
-      var closeBtn = box.querySelector('.khafar-att-lb-close');
-      function closeLb() {{
-        box.classList.remove('open');
-        box.setAttribute('aria-hidden', 'true');
-        var im = box.querySelector('img');
-        if (im) im.removeAttribute('src');
-      }}
-      if (closeBtn) closeBtn.addEventListener('click', function(ev) {{
-        ev.preventDefault(); ev.stopPropagation(); closeLb();
-      }});
-      box.addEventListener('click', function(ev) {{
-        if (ev.target === box) closeLb();
-      }});
-      document.addEventListener('keydown', function(ev) {{
-        if (ev.key === 'Escape') closeLb();
-      }});
-      return box;
-    }}
-    function openLightbox(src) {{
-      if (!src) return;
-      var box = ensureLightbox();
-      var im = box.querySelector('img');
-      if (im) im.src = src;
-      box.classList.add('open');
-      box.setAttribute('aria-hidden', 'false');
-    }}
-    function bindAttLightbox() {{
-      document.querySelectorAll('img.khafar-att-img').forEach(function(img) {{
-        if (img.dataset.khafarLbBound === '1') return;
-        img.dataset.khafarLbBound = '1';
-        img.addEventListener('click', function(ev) {{
-          ev.preventDefault();
-          ev.stopPropagation();
-          openLightbox(img.currentSrc || img.src || '');
-        }});
-      }});
-    }}
-    bindAttLightbox();
-    setTimeout(bindAttLightbox, 400);
-    try {{ window.__khafarBindAttLightbox = bindAttLightbox; }} catch (e) {{}}
-  }})();
 </script>
 </body>
 </html>
