@@ -43,6 +43,10 @@ table:not(.sig-dock-tbl):not(.sig-tbl){width:100%!important;max-width:100%!impor
 table:not(.sig-tbl) th,table:not(.sig-tbl) td{box-sizing:border-box!important;overflow:hidden!important;white-space:normal!important;word-break:normal!important;overflow-wrap:break-word!important;padding-left:2px!important;padding-right:2px!important}
 table.sig-tbl,table.sig-tbl th,table.sig-tbl td,.sig-cell,.sig-footer{overflow:visible!important;height:auto!important;max-height:none!important;white-space:normal!important}
 table.sig-tbl img.sig-slot-img,table.sig-tbl img[id^="slot_"]{max-height:48px!important;max-width:95%!important;object-fit:contain!important;display:block!important;margin:4px auto 0!important;visibility:visible!important;opacity:1!important}
+img.khafar-att-img,.khafar-att-grid img.khafar-att-img,#a4Sheet img.khafar-att-img{max-width:96%!important;width:auto!important;height:auto!important;object-fit:contain!important;display:block!important;margin:0 auto!important}
+.khafar-att-grid.atts-1 img.khafar-att-img{max-height:250px!important}.khafar-att-grid.atts-2 img.khafar-att-img{max-height:210px!important}.khafar-att-grid.atts-3 img.khafar-att-img{max-height:145px!important}
+#khafarAttLightbox{display:none!important}
+@media print{#khafarAttLightbox{display:none!important}}
 </style><script id="kh-box-js">(function(){function fit(d){
 d.querySelectorAll('table').forEach(function(t){
 if(t.closest('.live-sig-dock')||t.matches('.data-tbl,.sig-tbl')||!t.rows.length||(t.tHead&&t.tHead.rows.length>1))return;
