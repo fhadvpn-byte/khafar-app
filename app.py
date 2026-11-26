@@ -6341,20 +6341,36 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             border: 1.8px solid #0f3d2e !important;
             border-radius: 4px !important;
             overflow: visible !important;
-            display: table !important;
-            table-layout: fixed !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: flex-start !important;
+            align-items: stretch !important;
             box-shadow: none !important;
             transform-origin: top center !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             color-adjust: exact !important;
         }}
-        .a4-row {{ display: table-row !important; }}
-        .a4-cell {{ display: table-cell !important; width: 100% !important; }}
-        .a4-row-mid {{ height: auto !important; }}
-        .legal-wrap-cell {{ vertical-align: top !important; padding: 4px 0 !important; }}
-        .sig-bottom-cell {{ vertical-align: bottom !important; padding: 0 !important; }}
+        .a4-row {{ display: block !important; width: 100% !important; flex: 0 0 auto !important; height: auto !important; }}
+        .a4-cell {{ display: block !important; width: 100% !important; height: auto !important; }}
+        .a4-row-mid {{ height: auto !important; flex: 0 0 auto !important; }}
+        .a4-row-bot {{ margin-top: auto !important; flex: 0 0 auto !important; }}
+        .legal-wrap-cell {{
+            vertical-align: top !important; padding: 0 3.5mm !important;
+            flex: 0 0 auto !important; margin: 0 !important; height: auto !important;
+        }}
+        .sig-bottom-cell {{ vertical-align: bottom !important; padding: 0 3.5mm 3mm 3.5mm !important; }}
         .a4-fit {{ display: contents !important; }}
+        .legal-box {{
+            flex: 0 0 auto !important; justify-content: flex-start !important;
+            margin-top: 10px !important; margin-bottom: 10px !important;
+            padding: 10px 14px !important; font-size: 13.2px !important; line-height: 1.75 !important;
+            height: auto !important; min-height: 0 !important;
+        }}
+        .attachment-section {{
+            margin-top: 8px !important; flex: 0 0 auto !important; height: auto !important;
+        }}
+        .footer-qr {{ margin-top: 6px !important; flex: 0 0 auto !important; }}
         .a4-sheet, .a4-sheet p, .a4-sheet td, .a4-sheet th, .a4-sheet div, .a4-sheet span,
         .a4-paper, .a4-paper p, .a4-paper td, .a4-paper th, .a4-paper div, .a4-paper span {{
             color: #000000 !important;
@@ -6505,17 +6521,23 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     table.data-tbl.cols-4 td.lbl {{ width: 20%; }}
     table.data-tbl.cols-4 td.val.span3 {{ width: auto; }}
     .legal-box {{
+        display: block !important;
+        flex: 0 0 auto !important;
+        justify-content: flex-start !important;
+        align-items: stretch !important;
         background: #ffffff !important; border: 1px solid #94a3b8; border-right: 4px solid #0f3d2e !important;
-        border-radius: 4px; padding: 10px 12px !important; margin-bottom: 12px !important;
-        font-size: 12.5px !important; line-height: 1.75 !important;
+        border-radius: 4px; padding: 10px 14px !important;
+        margin-top: 10px !important; margin-bottom: 10px !important;
+        font-size: 13.2px !important; line-height: 1.75 !important;
         text-align: justify !important; text-justify: inter-word !important; text-align-last: right !important;
         direction: rtl !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important;
         overflow-wrap: break-word !important; word-break: normal !important; white-space: normal !important;
         word-spacing: normal !important; color: #000000 !important; font-weight: 700 !important;
+        height: auto !important; min-height: 0 !important; max-height: none !important;
     }}
     .legal-box > div.legal-title:first-child {{ margin-bottom: 8px !important; font-weight: 800 !important; text-align: right !important; }}
     .legal-box div {{
-        font-size: 12.5px !important; line-height: 1.75 !important; color: #000000 !important; font-weight: 700 !important;
+        font-size: 13.2px !important; line-height: 1.75 !important; color: #000000 !important; font-weight: 700 !important;
         text-align: justify !important; text-justify: inter-word !important; text-align-last: right !important;
         direction: rtl !important; overflow-wrap: break-word !important; word-break: normal !important;
         white-space: normal !important; word-spacing: normal !important;
@@ -6551,11 +6573,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .sig-head {{ color: #000000 !important; font-weight: 800 !important; border: 1.4px solid #000000 !important; }}
     .sig-cell {{ border: 1.4px solid #000000 !important; color: #000000 !important; }}
     .sig-footer {{
-        display: flex; flex-direction: column; flex: 1 1 auto;
+        display: flex !important; flex-direction: column !important;
+        flex: 0 0 auto !important;
+        margin-top: 0 !important;
         page-break-inside: avoid; break-inside: avoid;
+        width: 100% !important;
     }}
     .footer-qr {{
-        margin-top: 8px !important;
+        margin-top: 6px !important;
         background: #f4f7f6; border: 1.4px solid #000000; border-radius: 6px;
         padding: 5px 8px !important; display: flex; flex-direction: row; justify-content: space-between; align-items: center;
         direction: rtl !important;
@@ -6564,6 +6589,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         page-break-inside: avoid; break-inside: avoid;
         color: #000000 !important; font-weight: 700 !important;
         overflow: hidden !important;
+        flex: 0 0 auto !important;
     }}
     .footer-qr > div:first-child {{
         flex: 1 1 auto; min-width: 0; text-align: right !important; padding-left: 8px !important;
@@ -6574,8 +6600,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         display: block !important;
     }}
     .attachment-section {{
-        margin-top: 4px; border: 1px dashed #000000; border-radius: 6px; padding: 3px 6px;
+        margin-top: 8px !important; margin-bottom: 0 !important;
+        flex: 0 0 auto !important;
+        border: 1px dashed #000000; border-radius: 6px; padding: 3px 6px;
         background: #f8fafc; page-break-inside: avoid; break-inside: avoid;
+        height: auto !important;
     }}
     .attachment-title {{
         font-size: 12px; font-weight: 800; color: #000000; margin-bottom: 2px; text-align: right;
@@ -6629,14 +6658,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         background: #ffffff;
         margin: 0 auto;
     }}
-    .a4-sheet, .a4-paper, .a4-page, .print-area {{
+    .a4-sheet, .a4-paper, .a4-page, .print-area, #a4Sheet {{
         width: 100% !important;
         height: 285mm !important;
         min-height: 285mm !important;
         max-height: 285mm !important;
         box-sizing: border-box !important;
-        display: table !important;
-        table-layout: fixed !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: flex-start !important;
+        align-items: stretch !important;
         border: 1.8px solid #0f3d2e !important;
         border-radius: 4px !important;
         background: #ffffff !important;
@@ -6646,21 +6677,47 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         page-break-after: avoid !important;
         page-break-inside: avoid !important;
     }}
-    .a4-row {{ display: table-row !important; }}
-    .a4-cell {{ display: table-cell !important; width: 100% !important; }}
-    .a4-row-top {{ height: auto !important; }}
-    .a4-row-mid {{ height: 100% !important; }}
-    .a4-row-bot {{ height: auto !important; }}
+    .a4-row {{
+        display: block !important;
+        width: 100% !important;
+        flex: 0 0 auto !important;
+        height: auto !important;
+        max-height: none !important;
+    }}
+    .a4-cell {{
+        display: block !important;
+        width: 100% !important;
+        height: auto !important;
+    }}
+    .a4-row-top {{ height: auto !important; flex: 0 0 auto !important; }}
+    .a4-row-mid {{
+        height: auto !important;
+        flex: 0 0 auto !important;
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+    }}
+    .a4-row-bot {{
+        height: auto !important;
+        flex: 0 0 auto !important;
+        margin-top: auto !important;
+    }}
     .a4-top-cell {{ vertical-align: top !important; padding: 3mm 3.5mm 0 3.5mm !important; }}
     .legal-wrap-cell {{
         vertical-align: top !important;
-        padding: 2mm 3.5mm !important;
+        padding: 0 3.5mm !important;
+        display: block !important;
+        flex: 0 0 auto !important;
+        height: auto !important;
+        margin: 0 !important;
     }}
     .sig-bottom-cell {{
         vertical-align: bottom !important;
         padding: 0 3.5mm 3mm 3.5mm !important;
+        display: block !important;
+        flex: 0 0 auto !important;
+        margin-top: 0 !important;
     }}
-    .sig-footer {{ width: 100% !important; }}
+    .sig-footer {{ width: 100% !important; flex: 0 0 auto !important; }}
 
     /* spacious */
     .a4-tier-spacious .hdr-center, .a4-tier-spacious .hdr-center img, .a4-tier-spacious .hdr-logo {{
@@ -6677,10 +6734,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         font-size: 13.5px !important; line-height: 1.65 !important; padding: 10px 12px !important;
     }}
     .a4-tier-spacious .legal-box, .a4-tier-spacious .legal-box .legal-body, .a4-tier-spacious .legal-box .legal-title {{
-        font-size: 15px !important; line-height: 2.1 !important;
+        font-size: 13.5px !important; line-height: 1.75 !important;
     }}
     .a4-tier-spacious .legal-box {{
-        padding: 18px !important; margin: 4px 0 10px !important;
+        padding: 10px 14px !important; margin-top: 10px !important; margin-bottom: 10px !important;
+        flex: 0 0 auto !important; height: auto !important; justify-content: flex-start !important;
     }}
     .a4-tier-spacious .legal-title {{ margin-bottom: 10px !important; }}
     .a4-tier-spacious table.sig-tbl td, .a4-tier-spacious .sig-cell {{
@@ -6837,11 +6895,25 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             height: 1035px !important;
             max-height: 1035px !important;
         }}
-        .a4-row {{ display: table-row !important; }}
-        .a4-cell {{ display: table-cell !important; width: 100% !important; }}
-        .a4-row-mid {{ height: 100% !important; }}
-        .legal-wrap-cell {{ vertical-align: top !important; }}
-        .sig-bottom-cell {{ vertical-align: bottom !important; }}
+        .a4-sheet, .a4-paper, #a4Sheet {{
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: flex-start !important;
+            align-items: stretch !important;
+        }}
+        .a4-row {{ display: block !important; width: 100% !important; flex: 0 0 auto !important; height: auto !important; }}
+        .a4-cell {{ display: block !important; width: 100% !important; height: auto !important; }}
+        .a4-row-mid {{ height: auto !important; flex: 0 0 auto !important; }}
+        .a4-row-bot {{ margin-top: auto !important; flex: 0 0 auto !important; }}
+        .legal-wrap-cell {{ vertical-align: top !important; flex: 0 0 auto !important; height: auto !important; }}
+        .sig-bottom-cell {{ vertical-align: bottom !important; flex: 0 0 auto !important; }}
+        .legal-box {{
+            flex: 0 0 auto !important; justify-content: flex-start !important;
+            margin-top: 10px !important; margin-bottom: 10px !important;
+            height: auto !important; min-height: 0 !important;
+        }}
+        .attachment-section {{ margin-top: 8px !important; flex: 0 0 auto !important; }}
+        .footer-qr {{ margin-top: 6px !important; }}
         .a4-paper, .a4-paper *, .a4-sheet, .a4-sheet * {{
             color: #000000 !important; opacity: 1 !important;
             -webkit-print-color-adjust: exact !important;
@@ -7560,10 +7632,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     function balanceA4Page(rootDoc) {{
         const doc = rootDoc || document;
         applyPrintPhysicalSize(doc, true);
+        // تصغير الخطوط فقط عند تجاوز سعة A4 — لا نوسّع مربع النص حتى لا يعود الفراغ فوق/تحت الإقرار
         const down = stepDownFitA4(doc);
-        const up = expandLegalToFillSpace(doc);
         applyPrintPhysicalSize(doc, true);
-        return {{ down: down, up: up }};
+        return {{ down: down, up: 0 }};
     }}
     try {{ window.getPrintHeightTargets = getPrintHeightTargets; }} catch (e) {{}}
     try {{ window.applyPrintPhysicalSize = applyPrintPhysicalSize; }} catch (e) {{}}
@@ -7764,8 +7836,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + 'html.a4-print-desktop .a4-sheet,html.a4-print-desktop .a4-paper,'
             + 'body.a4-print-desktop .a4-sheet,body.a4-print-desktop .a4-paper{{height:1035px !important;max-height:1035px !important;}}'
             + '.a4-row{{display:table-row !important;}}.a4-cell{{display:table-cell !important;width:100% !important;}}'
-            + '.a4-row-mid{{height:100% !important;}}.legal-wrap-cell{{vertical-align:top !important;}}'
+            + '.a4-sheet,#a4Sheet{{display:flex !important;flex-direction:column !important;justify-content:flex-start !important;}}'
+            + '.a4-row{{display:block !important;flex:0 0 auto !important;height:auto !important;}}'
+            + '.a4-row-mid{{height:auto !important;flex:0 0 auto !important;}}.legal-wrap-cell{{vertical-align:top !important;flex:0 0 auto !important;}}'
+            + '.a4-row-bot{{margin-top:auto !important;flex:0 0 auto !important;}}'
             + '.sig-bottom-cell{{vertical-align:bottom !important;}}'
+            + '.legal-box{{flex:0 0 auto !important;justify-content:flex-start !important;margin-top:10px !important;margin-bottom:10px !important;height:auto !important;}}'
+            + '.attachment-section{{margin-top:8px !important;flex:0 0 auto !important;}}'
+            + '.footer-qr{{margin-top:6px !important;}}'
             + '@media screen{{'
             + 'html,body{{margin:0 !important;padding:12px !important;background:#0f172a !important;'
             + 'display:flex !important;flex-direction:column !important;align-items:center !important;'
@@ -7897,7 +7975,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + 'free=newFree;steps+=1;if(atCap(next)&&dataFs>=13.49)break;}}'
             + 'applyPrintPhysicalSize(doc);return steps;}}'
             + 'function balanceA4Page(rootDoc){{var doc=rootDoc||document;applyPrintPhysicalSize(doc);'
-            + 'stepDownFitA4(doc);expandLegalToFillSpace(doc);applyPrintPhysicalSize(doc);}}'
+            + 'stepDownFitA4(doc);applyPrintPhysicalSize(doc);}}'
             + 'window.stepDownFitA4=stepDownFitA4;window.expandLegalToFillSpace=expandLegalToFillSpace;window.balanceA4Page=balanceA4Page;'
             + 'function go(){{try{{balanceA4Page(document);}}catch(e){{}}try{{window.focus();}}catch(e2){{}}try{{window.print();}}catch(e3){{}}}}'
             + 'if(document.fonts&&document.fonts.ready){{document.fonts.ready.then(function(){{setTimeout(go,450);}});}}'
@@ -8008,16 +8086,41 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   .live-sig-dock {{ position: relative !important; z-index: 25 !important; pointer-events: auto !important; }}
   canvas[id^="pad_"], .live-sig-dock canvas {{ touch-action: none !important; -ms-touch-action: none !important; -webkit-user-select: none !important; user-select: none !important; -webkit-touch-callout: none !important; pointer-events: auto !important; cursor: crosshair !important; display: block !important; }}
   .legal-box {{
-    display: flex !important;
+    display: block !important;
     flex-direction: column !important;
-    justify-content: center !important;
-    flex: 1 1 auto !important;
+    justify-content: flex-start !important;
+    flex: 0 0 auto !important;
+    margin-top: 10px !important;
+    margin-bottom: 10px !important;
+    padding: 10px 14px !important;
+    font-size: 13.2px !important;
+    line-height: 1.75 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     background: #f8fafc !important;
     border: 1.4px solid #cbd5e1 !important;
     border-right: 5px solid #0f3d2e !important;
     border-radius: 6px !important;
     width: 100% !important;
     box-sizing: border-box !important;
+  }}
+  .a4-row-mid, .legal-wrap-cell {{
+    flex: 0 0 auto !important;
+    height: auto !important;
+    justify-content: flex-start !important;
+  }}
+  .a4-row-bot {{
+    margin-top: auto !important;
+    flex: 0 0 auto !important;
+  }}
+  .attachment-section {{
+    margin-top: 8px !important;
+    flex: 0 0 auto !important;
+  }}
+  .footer-qr {{
+    margin-top: 6px !important;
+    flex: 0 0 auto !important;
   }}
   .legal-box .legal-box-title {{
     font-weight: 800 !important;
@@ -8208,7 +8311,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     #a4Sheet {{
       display: flex !important;
       flex-direction: column !important;
-      justify-content: space-between !important;
+      justify-content: flex-start !important;
+      align-items: stretch !important;
       width: 100% !important;
       min-width: 0 !important;
       max-width: none !important;
@@ -8221,6 +8325,23 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       page-break-after: avoid !important;
       page-break-inside: avoid !important;
       break-inside: avoid !important;
+    }}
+    #a4Sheet .a4-row-mid, #a4Sheet .legal-wrap-cell, #a4Sheet .legal-box {{
+      flex: 0 0 auto !important;
+      height: auto !important;
+      margin-top: 0 !important;
+      justify-content: flex-start !important;
+    }}
+    #a4Sheet .legal-box {{
+      margin-top: 10px !important;
+      margin-bottom: 10px !important;
+    }}
+    #a4Sheet .a4-row-bot {{
+      margin-top: auto !important;
+      flex: 0 0 auto !important;
+    }}
+    #a4Sheet .footer-qr {{
+      margin-top: 6px !important;
     }}
   }}
 </style>
