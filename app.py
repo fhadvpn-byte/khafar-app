@@ -3384,7 +3384,7 @@ def _signature_is_solid_blue_blob(raw_b64: str) -> bool:
                 solid += 1
             elif a >= 200 and min(r, g, b) < 40 and b >= 100:
                 solid += 1
-        return sampled > 0 and (solid / sampled) > 0.60
+        return sampled > 0 and (solid / sampled) > 0.55
     except Exception:
         return False
 
@@ -6252,7 +6252,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .sig-grid .sig-slot-img, .sig-multi .sig-slot-img, .sig-tbl .sig-slot-img,
     img.sig-slot-img, img[id^="slot_"], #slot_duty, #slot_officer, #slot_citizen,
     #slot_p1, #slot_p2, #slot_p3, #slot_p4, #slot_p5, #slot_guarantor, #slot_bailed {{
-        height: 40px !important; max-height: 42px !important; max-width: 92% !important;
+        height: 38px !important; max-height: 40px !important; max-width: 92% !important;
         width: auto !important; object-fit: contain !important; display: block !important;
         margin: 2px auto !important;
         background: #ffffff !important; mix-blend-mode: normal !important;
@@ -6262,7 +6262,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     table.sig-tbl img#slot_duty, table.sig-tbl img#slot_officer,
     #slot_duty.sig-slot-img, #slot_officer.sig-slot-img,
     img#slot_duty, img#slot_officer {{
-        height: 40px !important; max-height: 42px !important; max-width: 92% !important;
+        height: 38px !important; max-height: 40px !important; max-width: 92% !important;
         width: auto !important; object-fit: contain !important; display: block !important;
         margin: 2px auto !important; opacity: 1 !important; filter: contrast(1.15);
         visibility: visible !important; background: #ffffff !important; mix-blend-mode: normal !important;
@@ -6286,58 +6286,61 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     @media print {{
         .sig-tbl .sig-slot-img, .sig-grid .sig-slot-img, .sig-multi .sig-slot-img, img.sig-slot-img {{
             display: inline-block !important; visibility: visible !important; opacity: 1 !important;
-            max-height: 50px !important; height: auto !important;
+            height: 38px !important; max-height: 40px !important;
             background: #ffffff !important; mix-blend-mode: normal !important;
             border: none !important; box-shadow: none !important;
             -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
         }}
         table.sig-tbl img#slot_duty, table.sig-tbl img#slot_officer,
         img#slot_duty, img#slot_officer {{
-            height: 40px !important; max-height: 42px !important; max-width: 92% !important;
+            height: 38px !important; max-height: 40px !important; max-width: 92% !important;
             margin: 2px auto !important; opacity: 1 !important; filter: contrast(1.15);
             -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
         }}
     }}
     @media screen {{
-        body {{ padding: 8px !important; overflow-x: hidden; }}
+        body {{ padding: 8px !important; overflow-x: hidden; overflow-y: visible !important; height: auto !important; }}
         .toolbar {{ width: 100%; padding: 8px; }}
         .print-btn {{ width: 100% !important; max-width: none !important; font-size: 14px; padding: 12px 14px; }}
         .a4-preview-viewport {{
             direction: rtl !important;
             width: 100% !important;
-            overflow: auto !important;
+            overflow: visible !important;
             display: block !important;
             padding: 0 !important;
             margin: 0 !important;
-            height: auto;
+            height: auto !important;
+            max-height: none !important;
         }}
         .a4-page-frame {{
             direction: rtl !important;
             width: 210mm !important;
-            height: 297mm !important;
+            height: auto !important;
+            min-height: 297mm !important;
+            max-height: none !important;
             padding: 6mm 7mm !important;
             box-sizing: border-box !important;
-            margin: 0 auto !important;
-            overflow: hidden !important;
+            margin: 0 auto 28px auto !important;
+            overflow: visible !important;
             background: #ffffff !important;
             position: relative !important;
             box-shadow: 0 12px 32px rgba(0,0,0,0.45);
             transform-origin: top center !important;
         }}
-        .a4-sheet, .a4-paper {{
+        .a4-sheet, .a4-paper, #a4Sheet {{
             direction: rtl !important;
             width: 100% !important;
-            height: 285mm !important;
-            min-height: 285mm !important;
-            max-height: 285mm !important;
+            height: auto !important;
+            min-height: 297mm !important;
+            max-height: none !important;
             box-sizing: border-box !important;
-            margin: 0 auto !important;
+            margin: 0 auto 28px auto !important;
             background: #ffffff !important;
             color: #000000 !important;
             padding: 0 !important;
             border: 1.8px solid #0f3d2e !important;
             border-radius: 4px !important;
-            overflow: hidden !important;
+            overflow: visible !important;
             display: table !important;
             table-layout: fixed !important;
             box-shadow: none !important;
@@ -6348,7 +6351,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         .a4-row {{ display: table-row !important; }}
         .a4-cell {{ display: table-cell !important; width: 100% !important; }}
-        .a4-row-mid {{ height: 100% !important; }}
+        .a4-row-mid {{ height: auto !important; }}
         .legal-wrap-cell {{ vertical-align: top !important; padding: 4px 0 !important; }}
         .sig-bottom-cell {{ vertical-align: bottom !important; padding: 0 !important; }}
         .a4-fit {{ display: contents !important; }}
@@ -6745,7 +6748,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-dense-print img#slot_duty, .a4-dense-print img#slot_officer,
     .a4-tier-balanced img#slot_duty, .a4-tier-balanced img#slot_officer,
     .a4-tier-spacious img#slot_duty, .a4-tier-spacious img#slot_officer {{
-        height: 40px !important; max-height: 42px !important; max-width: 92% !important;
+        height: 38px !important; max-height: 40px !important; max-width: 92% !important;
         margin: 2px auto !important; opacity: 1 !important; filter: contrast(1.15);
     }}
     .a4-tier-dense .footer-qr, .a4-dense-print .footer-qr {{
@@ -7570,52 +7573,61 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     try {{ window.autoBalanceA4 = balanceA4Page; }} catch (e) {{}}
     try {{ window.fitSinglePageForPrint = balanceA4Page; }} catch (e) {{}}
 
+    function syncIframeHeight() {{
+        try {{
+            var h = Math.max(
+                (document.body && document.body.scrollHeight) || 0,
+                (document.documentElement && document.documentElement.scrollHeight) || 0,
+                (document.body && document.body.offsetHeight) || 0,
+                (document.documentElement && document.documentElement.offsetHeight) || 0
+            ) + 45;
+            if (h < 420) h = 420;
+            if (window.frameElement) {{
+                window.frameElement.style.height = h + "px";
+                window.frameElement.style.minHeight = h + "px";
+                window.frameElement.setAttribute("height", String(h));
+            }}
+        }} catch (eSync) {{}}
+    }}
+    try {{ window.syncIframeHeight = syncIframeHeight; }} catch (eW) {{}}
+
     function fitA4Preview() {{
         if (window.matchMedia && window.matchMedia("print").matches) return;
         const viewport = document.getElementById("a4PreviewViewport");
         const frame = document.getElementById("a4PageFrame");
         const paper = document.getElementById("a4Sheet");
         if (!viewport || !frame) return;
-        // المعاينة على الشاشة تبقى بمظهر A4 الكامل؛ الطباعة تضبط السقف الآمن لاحقاً
+        // على الشاشة: اعرض كامل الورقة بلا قص — الطباعة تُضبط في prepareA4Print
         try {{
             frame.style.width = "210mm";
-            frame.style.height = "297mm";
-            frame.style.maxHeight = "297mm";
-            frame.style.margin = "0 auto";
+            frame.style.height = "auto";
+            frame.style.minHeight = "297mm";
+            frame.style.maxHeight = "none";
+            frame.style.overflow = "visible";
+            frame.style.margin = "0 auto 28px auto";
             frame.style.direction = "rtl";
             frame.style.transformOrigin = "top center";
             frame.style.transform = "";
             frame.style.zoom = "";
             if (paper) {{
                 paper.style.width = "100%";
-                paper.style.height = "285mm";
-                paper.style.minHeight = "285mm";
-                paper.style.maxHeight = "285mm";
-                paper.style.margin = "0 auto";
+                paper.style.height = "auto";
+                paper.style.minHeight = "297mm";
+                paper.style.maxHeight = "none";
+                paper.style.overflow = "visible";
+                paper.style.margin = "0 auto 28px auto";
                 paper.style.zoom = "";
                 paper.style.transform = "none";
             }}
         }} catch (e) {{}}
-        try {{
-            // للمعاينة: استخدم سقف الجهاز حتى يظهر نفس توازن الطباعة
-            balanceA4Page(document);
-        }} catch (eBal) {{}}
         const avail = Math.max(viewport.clientWidth || window.innerWidth || 794, 1);
         const natural = frame.offsetWidth || Math.round(210 * 96 / 25.4) || 794;
         const fitZoom = Math.max(0.15, Math.min(1, avail / Math.max(natural, 1)));
         frame.style.zoom = String(fitZoom);
-        viewport.style.overflow = "hidden";
+        viewport.style.overflow = "visible";
         viewport.style.height = "auto";
-        try {{
-            if (window.frameElement) {{
-                const dock = document.querySelector(".live-sig-dock");
-                const dockH = dock ? dock.offsetHeight + 18 : 0;
-                const toolbar = document.querySelector(".toolbar");
-                const tH = toolbar ? toolbar.offsetHeight + 12 : 0;
-                const viewH = viewport.scrollHeight || (frame.offsetHeight * fitZoom);
-                window.frameElement.style.height = Math.ceil(viewH + 120 + dockH + tH) + "px";
-            }}
-        }} catch (e2) {{}}
+        viewport.style.maxHeight = "none";
+        try {{ syncIframeHeight(); }} catch (e2) {{}}
     }}
 
     function syncAllLivePads() {{
@@ -7666,26 +7678,29 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         const frame = document.getElementById("a4PageFrame");
         const paper = document.getElementById("a4Sheet");
         if (viewport) {{
-            viewport.style.height = "";
-            viewport.style.overflow = "hidden";
+            viewport.style.height = "auto";
+            viewport.style.overflow = "visible";
+            viewport.style.maxHeight = "none";
         }}
         if (frame) {{
             frame.style.zoom = "";
             frame.style.removeProperty("transform");
             frame.style.removeProperty("width");
-            frame.style.removeProperty("height");
-            frame.style.removeProperty("margin");
-            frame.style.removeProperty("overflow");
+            frame.style.height = "auto";
+            frame.style.minHeight = "297mm";
+            frame.style.maxHeight = "none";
+            frame.style.overflow = "visible";
+            frame.style.margin = "0 auto 28px auto";
         }}
         if (paper) {{
             paper.style.zoom = "";
             paper.style.removeProperty("transform");
             paper.style.removeProperty("width");
-            paper.style.removeProperty("height");
-            paper.style.removeProperty("min-height");
-            paper.style.removeProperty("max-height");
-            paper.style.removeProperty("overflow");
-            paper.style.removeProperty("margin");
+            paper.style.height = "auto";
+            paper.style.minHeight = "297mm";
+            paper.style.maxHeight = "none";
+            paper.style.overflow = "visible";
+            paper.style.margin = "0 auto 28px auto";
             // امسح تصغير step-down من العناصر الداخلية بإعادة تحميل الأنماط عبر إزالة inline typography
             try {{
                 paper.querySelectorAll("[style]").forEach(function(el) {{
@@ -7703,6 +7718,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             }} catch (e3) {{}}
         }}
         scheduleA4Fit();
+        try {{ syncIframeHeight(); }} catch (e4) {{}}
     }}
 
     function collectPrintStyles() {{
@@ -7940,6 +7956,36 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     window.addEventListener("afterprint", restoreA4Preview);
     function scheduleA4Fit() {{
         fitA4Preview();
+        try {{ syncIframeHeight(); }} catch (eH) {{}}
+    }}
+    function bindSyncIframeHeight() {{
+        try {{ syncIframeHeight(); }} catch (e0) {{}}
+        try {{
+            document.addEventListener("DOMContentLoaded", function() {{ syncIframeHeight(); scheduleA4Fit(); }});
+        }} catch (e1) {{}}
+        window.addEventListener("load", function() {{
+            syncIframeHeight();
+            scheduleA4Fit();
+            try {{
+                Array.prototype.forEach.call(document.images || [], function(im) {{
+                    if (!im || im.complete) return;
+                    im.addEventListener("load", function() {{ syncIframeHeight(); scheduleA4Fit(); }});
+                    im.addEventListener("error", function() {{ syncIframeHeight(); }});
+                }});
+            }} catch (eImg) {{}}
+        }});
+        try {{
+            if (window.ResizeObserver) {{
+                new ResizeObserver(function() {{ syncIframeHeight(); }}).observe(document.body);
+                var sheetObs = document.getElementById("a4Sheet");
+                if (sheetObs) new ResizeObserver(function() {{ syncIframeHeight(); }}).observe(sheetObs);
+                var dockObs = document.querySelector(".live-sig-dock");
+                if (dockObs) new ResizeObserver(function() {{ syncIframeHeight(); }}).observe(dockObs);
+            }}
+        }} catch (eRo) {{}}
+        setTimeout(syncIframeHeight, 80);
+        setTimeout(syncIframeHeight, 400);
+        setTimeout(syncIframeHeight, 1200);
     }}
     window.addEventListener("load", scheduleA4Fit);
     window.addEventListener("resize", scheduleA4Fit);
@@ -7952,6 +7998,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     setTimeout(scheduleA4Fit, 150);
     setTimeout(scheduleA4Fit, 600);
+    bindSyncIframeHeight();
 </script>
 
 
@@ -7992,9 +8039,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   img.sig-slot-img {{
     background: #ffffff !important;
     mix-blend-mode: normal !important;
-    max-height: 50px !important;
+    height: 38px !important;
+    max-height: 40px !important;
     width: auto !important;
-    max-width: 95% !important;
+    max-width: 92% !important;
     object-fit: contain !important;
     margin: 2px auto !important;
   }}
@@ -8103,15 +8151,19 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     #khafarZoomViewport {{
       width: 100% !important;
       overflow-x: auto !important;
-      overflow-y: hidden !important;
+      overflow-y: visible !important;
       direction: rtl !important;
       padding-bottom: 6px !important;
+      height: auto !important;
+      max-height: none !important;
       -webkit-overflow-scrolling: touch !important;
     }}
     #khafarZoomSizer {{
       margin: 0 auto !important;
       position: relative !important;
-      overflow: hidden !important;
+      overflow: visible !important;
+      height: auto !important;
+      max-height: none !important;
     }}
     #khafarZoomCanvas {{
       width: 794px !important;
@@ -8247,9 +8299,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             d[i] = 0; d[i + 1] = 56; d[i + 2] = 168; d[i + 3] = oa;
             if (oa >= 180) solid += 1;
           }}
-          if (!anyInk || (sampled > 0 && (solid / sampled) > 0.60)) {{
+          if (!anyInk || (sampled > 0 && (solid / sampled) > 0.55)) {{
             imgEl.removeAttribute('src');
             imgEl.style.setProperty('display', 'none', 'important');
+            try {{
+              Object.keys(sessionStorage || {{}}).forEach(function(k) {{
+                if (!k) return;
+                if (k.indexOf('khafar_doc_sig') === 0 || k.indexOf('pad_') === 0 || k.indexOf('khafar_duty_sig') === 0 || k.indexOf('khafar_manager_sig') === 0) {{
+                  /* لا تمسح كل المفاتيح؛ يُترك المسح لصور الـ slot التالفة فقط */
+                }}
+              }});
+            }} catch (eSs) {{}}
             return;
           }}
           cctx.putImageData(imData, 0, 0);
@@ -8330,7 +8390,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       }}
       if (saved.indexOf('data:image') !== 0) saved = 'data:image/png;base64,' + saved;
       slot.setAttribute('src', saved);
-      slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; height:40px !important; max-height:42px !important; width:auto !important; max-width:92% !important; margin:2px auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
+      slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; height:38px !important; max-height:40px !important; width:auto !important; max-width:92% !important; margin:2px auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
       colorizeDataImgToBlue(slot);
       try {{ if (typeof setPadStatus === 'function') setPadStatus(padId, 'saved'); }} catch (eS) {{}}
       return;
@@ -8374,7 +8434,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     octx.putImageData(od, 0, 0);
     var dataUrl = out.toDataURL('image/png');
     slot.setAttribute('src', dataUrl);
-    slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; height:40px !important; max-height:42px !important; width:auto !important; max-width:92% !important; margin:2px auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
+    slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; height:38px !important; max-height:40px !important; width:auto !important; max-width:92% !important; margin:2px auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
     colorizeDataImgToBlue(slot);
     try {{
       var b64 = (dataUrl.split(',')[1] || '');
@@ -9115,11 +9175,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     window.__syncKhafarFrameHeight = function() {{
       try {{
+        if (typeof syncIframeHeight === 'function') {{
+          syncIframeHeight();
+          return;
+        }}
         if (window.frameElement) {{
           var rect = viewport.getBoundingClientRect();
           var totalH = Math.ceil((window.pageYOffset || document.documentElement.scrollTop || 0) + rect.top + sizer.offsetHeight + 36);
           if (totalH > 350) {{
             window.frameElement.style.height = totalH + 'px';
+            window.frameElement.style.minHeight = totalH + 'px';
+            window.frameElement.setAttribute('height', String(totalH));
           }}
         }}
       }} catch (e) {{}}
@@ -11172,8 +11238,13 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     "وقّع عبر اللوحات أعلاه — يُعتمد التوقيع تلقائياً عند رفع الإصبع ويُحفظ في الأرشيف فوراً. "
                     "اضغط زر الطباعة أعلى ورقة A4 (متوافق مع Safari والآيفون)."
                 )
-                preview_h = 1180
+                preview_h = 1850
+                _sig_map_now = _sigs_for_html or {}
+                _pad_count = sum(1 for _k, _v in _sig_map_now.items() if _v)
+                preview_h += min(900, max(0, _pad_count) * 260)
                 if ready_record.get("show_attachments_in_print") and parse_attachments(ready_record.get("attachment_b64")):
+                    preview_h += 260
+                if str(form_def.get("category") or "") == "إقرار" or "كفالة" in str(form_def.get("title") or ""):
                     preview_h += 220
                 # تشغيل سكربت المعاينة/الطباعة داخل components.html فقط — دون st.markdown
                 components.html(a4_html, height=preview_h, scrolling=True)
@@ -11276,7 +11347,7 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
 
                 if st.checkbox("عرض ومعاينة ورقة الـ A4 الرسمية للطباعة", key=f"chk_prev_{r['id']}"):
                     # interactive_sig=False — لا لوحات فارغة تمسح التواقيع المحفوظة
-                    components.html(arch_html, height=1150, scrolling=True)
+                    components.html(arch_html, height=1850, scrolling=True)
 
 
 # =====================================================================

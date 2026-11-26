@@ -458,4 +458,4 @@ def ensure_bail_rendered(g):
             elif "row" in pl: bkw[pn] = rows
             elif pl in ("fields_map", "values", "data", "vals"): bkw[pn] = vals
             elif prm.default is inspect._empty: bkw[pn] = ""
-        comp.html(bh(**bkw), height=1180, scrolling=True)
+        comp.html(bh(**bkw), height=1850, scrolling=True)
