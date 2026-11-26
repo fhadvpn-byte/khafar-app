@@ -142,7 +142,7 @@ def khafar_file_uploader(
     رافع ملفات جوال ثنائي الاتجاه.
     - accept_multiple_files=False → يعيد KhafarUploadedFile | None
     - accept_multiple_files=True → يعيد list[KhafarUploadedFile]
-    الارتفاع ديناميكي من index.html عبر setFrameHeight(scrollHeight+18) — لا تفرض قصّاً خارجياً.
+    الارتفاع ديناميكي حصراً من index.html عبر setFrameHeight — ممنوع تمرير height= ثابت.
     """
     store_key = f"_khafar_mu_files_{key}"
     token_key = f"_khafar_mu_token_{key}"
@@ -152,7 +152,7 @@ def khafar_file_uploader(
     if subtitle is None:
         subtitle = "المعرض أو الكاميرا — متوافق مع أندرويد والآيفون"
 
-    # لا نمرّر ارتفاعاً ثابتاً؛ الإطار يتوسع من الواجهة عند إضافة/حذف المصغرات
+    # لا height= هنا إطلاقاً — أي ارتفاع ثابت يمنع استعادة الإطار بعد streamlit:render
     result = _mobile_uploader(
         title=label or "إرفاق ملفات",
         subtitle=subtitle or "",

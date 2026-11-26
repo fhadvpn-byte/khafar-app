@@ -1214,15 +1214,23 @@ div[data-testid="stHorizontalBlock"] div.stButton > button {
     color-scheme: normal !important;
     background: transparent !important;
 }
-/* لا تفرض height/max-height على mobile_uploader — الارتفاع من setFrameHeight فقط */
+/* mobile_uploader فقط: حرّر الإطار بالكامل — الارتفاع من setFrameHeight بعد كل streamlit:render */
 .stApp iframe[title*="khafar_mobile_uploader"],
-.stApp iframe[title*="mobile_uploader"] {
+.stApp iframe[title*="mobile_uploader"],
+.stApp div[data-testid="stCustomComponentV1"]:has(iframe[title*="khafar_mobile_uploader"]) iframe,
+.stApp div[data-testid="element-container"]:has(iframe[title*="khafar_mobile_uploader"]) iframe {
     min-height: 0 !important;
     max-height: none !important;
     height: auto !important;
     overflow: visible !important;
     vertical-align: top !important;
     align-self: flex-start !important;
+}
+.stApp div[data-testid="stCustomComponentV1"]:has(iframe[title*="khafar_mobile_uploader"]),
+.stApp div[data-testid="element-container"]:has(iframe[title*="khafar_mobile_uploader"]) {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
 }
 
 .stApp [data-testid="stAppViewContainer"],
@@ -6095,7 +6103,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     attachment_block = ""
     image_count = 0
     show_atts = rec.get("show_attachments_in_print", True)
-    att_items = parse_attachments(rec.get("attachment_b64"))
+    att_items = resolve_record_attachments(rec)
     form_id_for_att = str(rec.get("form_id") or "")
     settle_parties = (
         _count_parties(rec.get("fields") or {}) if form_id_for_att == "decl_settlement" else 0
@@ -6114,7 +6122,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             else:
                 image_count += 1
                 mime = html.escape(str(att.get("mime") or "image/png"))
-                b64 = att.get("b64") or ""
+                b64 = str(att.get("b64") or "").strip()
+                if b64.startswith("data:") and "," in b64:
+                    b64 = b64.split(",", 1)[-1]
+                if not b64:
+                    continue
                 cards.append(
                     f'<div class="att-card">'
                     f'<img src="data:{mime};base64,{b64}" alt="" />'
@@ -6122,16 +6134,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 )
         att_grid_style = ""
         if form_id_for_att == "decl_settlement" and image_count > 0:
-            # شبكة ذكية للتنازل تحافظ على صفحة A4 واحدة حتى مع عدة أطراف
-            party_mod = ""
-            if settle_parties >= 5:
-                party_mod = " atts-parties-max"
-            elif settle_parties >= 4:
-                party_mod = " atts-parties-hi"
+            # شبكة أفقية مضغوطة للتنازل — تبقى الورقة صفحة A4 واحدة مع كل الأطراف
+            party_mod = " atts-parties-hi" if settle_parties >= 4 else ""
             if image_count == 1:
                 att_grid_cls = f"attachment-grid atts-settle-1{party_mod}"
-            elif image_count == 2:
-                att_grid_cls = f"attachment-grid atts-settle-2{party_mod}"
             elif image_count <= 5:
                 att_grid_cls = f"attachment-grid atts-settle-row{party_mod}"
                 att_grid_style = (
@@ -6145,7 +6151,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 )
         else:
             att_grid_cls = "attachment-grid atts-single" if image_count <= 1 else "attachment-grid atts-multi"
-        attachment_block = f"""
+        if cards:
+            attachment_block = f"""
         <div class="attachment-section">
             <div class="attachment-title">📎 المرفقات المصورة المعتمدة في التقرير</div>
             <div class="{att_grid_cls}"{att_grid_style}>{"".join(cards)}</div>
@@ -6661,9 +6668,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         max-height: 140px !important; max-width: 95% !important;
         width: auto !important; height: auto !important; object-fit: contain !important;
     }}
-    /* شبكة مرفقات ذكية لإقرار الصلح والتنازل فقط */
+    /* شبكة مرفقات ذكية لإقرار الصلح والتنازل فقط — مضغوطة لتبقى الورقة 1/1 */
     .attachment-grid.atts-settle-1,
-    .attachment-grid.atts-settle-2,
     .attachment-grid.atts-settle-row,
     .attachment-grid.atts-settle-many {{
         display: grid !important; gap: 6px !important; align-items: start !important;
@@ -6671,27 +6677,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     .attachment-grid.atts-settle-1 {{ grid-template-columns: 1fr !important; }}
     .attachment-grid.atts-settle-1 .att-card img {{
-        max-height: 140px !important; max-width: 95% !important;
+        max-height: 135px !important; max-width: 95% !important;
         width: auto !important; height: auto !important; object-fit: contain !important;
     }}
-    .attachment-grid.atts-settle-1.atts-parties-hi .att-card img,
-    .attachment-grid.atts-settle-1.atts-parties-max .att-card img {{
-        max-height: 115px !important;
-    }}
-    .attachment-grid.atts-settle-2 {{ grid-template-columns: 1fr 1fr !important; }}
-    .attachment-grid.atts-settle-2 .att-card img {{
-        max-height: 120px !important; max-width: 95% !important;
-        width: auto !important; height: auto !important; object-fit: contain !important;
-    }}
-    .attachment-grid.atts-settle-2.atts-parties-hi .att-card img,
-    .attachment-grid.atts-settle-2.atts-parties-max .att-card img {{
-        max-height: 100px !important;
+    .attachment-grid.atts-settle-1.atts-parties-hi .att-card img {{
+        max-height: 105px !important;
     }}
     .attachment-grid.atts-settle-row .att-card img {{
-        max-height: 95px !important; max-width: 100% !important;
+        max-height: 105px !important; max-width: 100% !important;
         width: auto !important; height: auto !important; object-fit: contain !important;
     }}
-    .attachment-grid.atts-settle-row.atts-parties-max .att-card img {{
+    .attachment-grid.atts-settle-row.atts-parties-hi .att-card img {{
         max-height: 85px !important;
     }}
     .attachment-grid.atts-settle-many .att-card img {{
@@ -9923,6 +9919,45 @@ def sync_attachments_to_session():
     st.session_state.attachment_b64 = serialize_attachments(items)
 
 
+def resolve_record_attachments(rec: dict | None) -> list:
+    """استخراج المرفقات من سجل الوثيقة (attachment_b64 أو قائمة attachments)."""
+    rec = rec or {}
+    items = parse_attachments(rec.get("attachment_b64"))
+    if items:
+        return items
+    return parse_attachments(rec.get("attachments"))
+
+
+def merge_uploader_files_into_session(uploaded_files) -> int:
+    """تطبيع مخرجات khafar_file_uploader ودمجها في session attachments. يعيد عدد المضاف."""
+    if not uploaded_files:
+        return 0
+    raw_list = uploaded_files if isinstance(uploaded_files, (list, tuple)) else [uploaded_files]
+    existing = list(st.session_state.get("attachments") or [])
+    if not existing and st.session_state.get("attachment_b64"):
+        existing = parse_attachments(st.session_state.attachment_b64)
+    known = {attachment_fingerprint(a) for a in existing}
+    added = 0
+    for uf in raw_list:
+        item, err = process_uploaded_attachment_with_status(uf, purpose="attachment")
+        if not item:
+            if err:
+                st.warning(err)
+            else:
+                st.warning("⚠️ نوع الملف غير مدعوم، يرجى إرفاق صورة أو ملف PDF.")
+            continue
+        fp = attachment_fingerprint(item)
+        if fp in known:
+            continue
+        existing.append(item)
+        known.add(fp)
+        added += 1
+    if added:
+        st.session_state.attachments = existing
+        sync_attachments_to_session()
+    return added
+
+
 def reset_doc_state():
     t_now = datetime.now(KSA_TZ)
     auto_no = f"KH-{t_now.strftime('%y%m%d-%H%M%S')}"
@@ -10882,7 +10917,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 if form_def["require_image"]
                 else "📎 إرفاق صورة الهوية / التقرير الأولي أو مرفق داعم (اختياري)"
             )
-            # رافع جوال ثنائي الاتجاه — accept=image/* نقي يفتح المعرض الأصلي
+            # رافع جوال ثنائي الاتجاه — نفس المسار الموحد لكل النماذج بما فيها إقرار الصلح والتنازل
             uploaded_files = khafar_file_uploader(
                 att_label,
                 key=f"att_mu_{st.session_state.doc_no}",
@@ -10893,23 +10928,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 help=UPLOAD_HELP_CAPTION,
             )
             if uploaded_files and not st.session_state.citizen_locked:
-                existing = list(st.session_state.get("attachments") or [])
-                known = {attachment_fingerprint(a) for a in existing}
-                added = 0
-                for uf in uploaded_files:
-                    item, err = process_uploaded_attachment_with_status(uf, purpose="attachment")
-                    if not item:
-                        st.warning(err or "⚠️ نوع الملف غير مدعوم، يرجى إرفاق صورة أو ملف PDF.")
-                        continue
-                    fp = attachment_fingerprint(item)
-                    if fp in known:
-                        continue
-                    existing.append(item)
-                    known.add(fp)
-                    added += 1
+                added = merge_uploader_files_into_session(uploaded_files)
                 if added:
-                    st.session_state.attachments = existing
-                    sync_attachments_to_session()
                     st.success("✅ تم إرفاق المرفق بنجاح وجاهز للظهور في التقرير المطبوع")
                     st.toast(f"تم حفظ {added} مرفق في الجلسة", icon="📎")
                     # لا نغيّر مفتاح المكوّن — البصمة تمنع التكرار بعد rerun
@@ -10921,10 +10941,12 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 help="عند التفعيل تُدرج الصور المرفوعة داخل ورقة A4 ونسخة الطباعة/PDF.",
             )
 
+            sync_attachments_to_session()
             persisted_atts = list(st.session_state.get("attachments") or [])
             if not persisted_atts and st.session_state.get("attachment_b64"):
                 persisted_atts = parse_attachments(st.session_state.attachment_b64)
                 st.session_state.attachments = persisted_atts
+                sync_attachments_to_session()
 
             if persisted_atts:
                 st.markdown("##### 🖼️ معاينة المرفقات المحفوظة في الجلسة")
@@ -11293,6 +11315,12 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 officer_full_final = (st.session_state.officer_full_override or "").strip() or unit_display
 
                 sync_attachments_to_session()
+                # ضمان وصول مرفقات الجلسة (بما فيها إقرار الصلح والتنازل) إلى A4 والأرشيف
+                _atts_now = list(st.session_state.get("attachments") or [])
+                if not _atts_now and st.session_state.get("attachment_b64"):
+                    _atts_now = parse_attachments(st.session_state.attachment_b64)
+                    st.session_state.attachments = _atts_now
+                    sync_attachments_to_session()
                 _consume_live_sig_bridge()
 
                 # التقاط التواقيع عبر sig_pad ثنائي الاتجاه قبل بناء A4 والحفظ
@@ -11364,7 +11392,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     "citizen_auth_mode": st.session_state.citizen_auth_mode,
                     "officer_stamp_b64": officer_b64,
                     "saved_officer_sig_b64": saved_officer_sig,
-                    "attachment_b64": st.session_state.attachment_b64,
+                    "attachment_b64": st.session_state.attachment_b64 or serialize_attachments(_atts_now),
+                    "attachments": list(_atts_now),
                     "show_attachments_in_print": bool(st.session_state.get("show_attachments_in_print", True)),
                     "officer_full": officer_full_final,
                     "duty_full": (mgr_cfg.get("display_name") if mgr_active else duty_display),
@@ -11432,7 +11461,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 _sig_map_now = _sigs_for_html or {}
                 _pad_count = sum(1 for _k, _v in _sig_map_now.items() if _v)
                 preview_h += min(900, max(0, _pad_count) * 260)
-                if ready_record.get("show_attachments_in_print") and parse_attachments(ready_record.get("attachment_b64")):
+                if ready_record.get("show_attachments_in_print") and resolve_record_attachments(ready_record):
                     preview_h += 260
                 if str(form_def.get("category") or "") == "إقرار" or "كفالة" in str(form_def.get("title") or ""):
                     preview_h += 220
