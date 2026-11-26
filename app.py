@@ -6305,23 +6305,25 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         .a4-preview-viewport {{
             direction: rtl !important;
             width: 100% !important;
-            overflow: visible !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
             display: block !important;
             padding: 0 !important;
             margin: 0 !important;
             height: auto !important;
-            max-height: none !important;
+            max-height: 1220px !important;
         }}
         .a4-page-frame {{
             direction: rtl !important;
             width: 210mm !important;
             height: auto !important;
-            min-height: 297mm !important;
-            max-height: none !important;
+            min-height: 0 !important;
+            max-height: 1220px !important;
             padding: 6mm 7mm !important;
             box-sizing: border-box !important;
-            margin: 0 auto 28px auto !important;
-            overflow: visible !important;
+            margin: 0 auto 12px auto !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
             background: #ffffff !important;
             position: relative !important;
             box-shadow: 0 12px 32px rgba(0,0,0,0.45);
@@ -6331,10 +6333,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             direction: rtl !important;
             width: 100% !important;
             height: auto !important;
-            min-height: 297mm !important;
+            min-height: 0 !important;
             max-height: none !important;
             box-sizing: border-box !important;
-            margin: 0 auto 28px auto !important;
+            margin: 0 auto !important;
             background: #ffffff !important;
             color: #000000 !important;
             padding: 0 !important;
@@ -7574,17 +7576,20 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     try {{ window.fitSinglePageForPrint = balanceA4Page; }} catch (e) {{}}
 
     function syncIframeHeight() {{
+        // مرة واحدة فقط من ارتفاع الورقة الفعلي — بلا حلقة ResizeObserver/scrollHeight للجسم
         try {{
-            var h = Math.max(
-                (document.body && document.body.scrollHeight) || 0,
-                (document.documentElement && document.documentElement.scrollHeight) || 0,
-                (document.body && document.body.offsetHeight) || 0,
-                (document.documentElement && document.documentElement.offsetHeight) || 0
-            ) + 45;
-            if (h < 420) h = 420;
+            var frame = document.getElementById("a4PageFrame") || document.querySelector(".a4-page-frame");
+            var frameH = 0;
+            if (frame) {{
+                var rect = frame.getBoundingClientRect();
+                frameH = Math.ceil((rect && rect.height) ? rect.height : (frame.offsetHeight || 0));
+            }}
+            var h = Math.max(125, Math.ceil(frameH + 24));
+            if (h > 1220) h = 1220;
             if (window.frameElement) {{
                 window.frameElement.style.height = h + "px";
-                window.frameElement.style.minHeight = h + "px";
+                window.frameElement.style.minHeight = "0";
+                window.frameElement.style.maxHeight = "1220px";
                 window.frameElement.setAttribute("height", String(h));
             }}
         }} catch (eSync) {{}}
@@ -7597,14 +7602,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         const frame = document.getElementById("a4PageFrame");
         const paper = document.getElementById("a4Sheet");
         if (!viewport || !frame) return;
-        // على الشاشة: اعرض كامل الورقة بلا قص — الطباعة تُضبط في prepareA4Print
+        // على الشاشة: سقف ثابت يمنع تمدد iframe بلا نهاية
         try {{
             frame.style.width = "210mm";
             frame.style.height = "auto";
-            frame.style.minHeight = "297mm";
-            frame.style.maxHeight = "none";
-            frame.style.overflow = "visible";
-            frame.style.margin = "0 auto 28px auto";
+            frame.style.minHeight = "0";
+            frame.style.maxHeight = "1220px";
+            frame.style.overflowX = "hidden";
+            frame.style.overflowY = "auto";
+            frame.style.margin = "0 auto 12px auto";
             frame.style.direction = "rtl";
             frame.style.transformOrigin = "top center";
             frame.style.transform = "";
@@ -7612,10 +7618,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             if (paper) {{
                 paper.style.width = "100%";
                 paper.style.height = "auto";
-                paper.style.minHeight = "297mm";
+                paper.style.minHeight = "0";
                 paper.style.maxHeight = "none";
                 paper.style.overflow = "visible";
-                paper.style.margin = "0 auto 28px auto";
+                paper.style.margin = "0 auto";
                 paper.style.zoom = "";
                 paper.style.transform = "none";
             }}
@@ -7624,10 +7630,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         const natural = frame.offsetWidth || Math.round(210 * 96 / 25.4) || 794;
         const fitZoom = Math.max(0.15, Math.min(1, avail / Math.max(natural, 1)));
         frame.style.zoom = String(fitZoom);
-        viewport.style.overflow = "visible";
+        viewport.style.overflowX = "hidden";
+        viewport.style.overflowY = "auto";
         viewport.style.height = "auto";
-        viewport.style.maxHeight = "none";
-        try {{ syncIframeHeight(); }} catch (e2) {{}}
+        viewport.style.maxHeight = "1220px";
     }}
 
     function syncAllLivePads() {{
@@ -7679,28 +7685,30 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         const paper = document.getElementById("a4Sheet");
         if (viewport) {{
             viewport.style.height = "auto";
-            viewport.style.overflow = "visible";
-            viewport.style.maxHeight = "none";
+            viewport.style.overflowX = "hidden";
+            viewport.style.overflowY = "auto";
+            viewport.style.maxHeight = "1220px";
         }}
         if (frame) {{
             frame.style.zoom = "";
             frame.style.removeProperty("transform");
             frame.style.removeProperty("width");
             frame.style.height = "auto";
-            frame.style.minHeight = "297mm";
-            frame.style.maxHeight = "none";
-            frame.style.overflow = "visible";
-            frame.style.margin = "0 auto 28px auto";
+            frame.style.minHeight = "0";
+            frame.style.maxHeight = "1220px";
+            frame.style.overflowX = "hidden";
+            frame.style.overflowY = "auto";
+            frame.style.margin = "0 auto 12px auto";
         }}
         if (paper) {{
             paper.style.zoom = "";
             paper.style.removeProperty("transform");
             paper.style.removeProperty("width");
             paper.style.height = "auto";
-            paper.style.minHeight = "297mm";
+            paper.style.minHeight = "0";
             paper.style.maxHeight = "none";
             paper.style.overflow = "visible";
-            paper.style.margin = "0 auto 28px auto";
+            paper.style.margin = "0 auto";
             // امسح تصغير step-down من العناصر الداخلية بإعادة تحميل الأنماط عبر إزالة inline typography
             try {{
                 paper.querySelectorAll("[style]").forEach(function(el) {{
@@ -7717,7 +7725,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                 }});
             }} catch (e3) {{}}
         }}
-        scheduleA4Fit();
+        try {{ fitA4Preview(); }} catch (eFit) {{}}
         try {{ syncIframeHeight(); }} catch (e4) {{}}
     }}
 
@@ -7958,47 +7966,20 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         fitA4Preview();
         try {{ syncIframeHeight(); }} catch (eH) {{}}
     }}
-    function bindSyncIframeHeight() {{
-        try {{ syncIframeHeight(); }} catch (e0) {{}}
+    // ضبط ارتفاع إطار المعاينة مرة واحدة عند التحميل فقط — بلا ResizeObserver/setInterval
+    function bindSyncIframeHeightOnce() {{
         try {{
-            document.addEventListener("DOMContentLoaded", function() {{ syncIframeHeight(); scheduleA4Fit(); }});
-        }} catch (e1) {{}}
+            document.addEventListener("DOMContentLoaded", function() {{
+                try {{ fitA4Preview(); }} catch (e0) {{}}
+                try {{ syncIframeHeight(); }} catch (e1) {{}}
+            }});
+        }} catch (eDom) {{}}
         window.addEventListener("load", function() {{
-            syncIframeHeight();
-            scheduleA4Fit();
-            try {{
-                Array.prototype.forEach.call(document.images || [], function(im) {{
-                    if (!im || im.complete) return;
-                    im.addEventListener("load", function() {{ syncIframeHeight(); scheduleA4Fit(); }});
-                    im.addEventListener("error", function() {{ syncIframeHeight(); }});
-                }});
-            }} catch (eImg) {{}}
+            try {{ fitA4Preview(); }} catch (e2) {{}}
+            try {{ syncIframeHeight(); }} catch (e3) {{}}
         }});
-        try {{
-            if (window.ResizeObserver) {{
-                new ResizeObserver(function() {{ syncIframeHeight(); }}).observe(document.body);
-                var sheetObs = document.getElementById("a4Sheet");
-                if (sheetObs) new ResizeObserver(function() {{ syncIframeHeight(); }}).observe(sheetObs);
-                var dockObs = document.querySelector(".live-sig-dock");
-                if (dockObs) new ResizeObserver(function() {{ syncIframeHeight(); }}).observe(dockObs);
-            }}
-        }} catch (eRo) {{}}
-        setTimeout(syncIframeHeight, 80);
-        setTimeout(syncIframeHeight, 400);
-        setTimeout(syncIframeHeight, 1200);
     }}
-    window.addEventListener("load", scheduleA4Fit);
-    window.addEventListener("resize", scheduleA4Fit);
-    if (window.ResizeObserver) {{
-        const previewBox = document.getElementById("a4PreviewViewport");
-        if (previewBox) new ResizeObserver(scheduleA4Fit).observe(previewBox);
-    }}
-    if (document.fonts && document.fonts.ready) {{
-        document.fonts.ready.then(scheduleA4Fit);
-    }}
-    setTimeout(scheduleA4Fit, 150);
-    setTimeout(scheduleA4Fit, 600);
-    bindSyncIframeHeight();
+    bindSyncIframeHeightOnce();
 </script>
 
 
@@ -8151,11 +8132,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     #khafarZoomViewport {{
       width: 100% !important;
       overflow-x: auto !important;
-      overflow-y: visible !important;
+      overflow-y: auto !important;
       direction: rtl !important;
       padding-bottom: 6px !important;
       height: auto !important;
-      max-height: none !important;
+      max-height: 1220px !important;
       -webkit-overflow-scrolling: touch !important;
     }}
     #khafarZoomSizer {{
@@ -8163,7 +8144,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       position: relative !important;
       overflow: visible !important;
       height: auto !important;
-      max-height: none !important;
+      max-height: 1220px !important;
     }}
     #khafarZoomCanvas {{
       width: 794px !important;
@@ -9180,13 +9161,13 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
           return;
         }}
         if (window.frameElement) {{
-          var rect = viewport.getBoundingClientRect();
-          var totalH = Math.ceil((window.pageYOffset || document.documentElement.scrollTop || 0) + rect.top + sizer.offsetHeight + 36);
-          if (totalH > 350) {{
-            window.frameElement.style.height = totalH + 'px';
-            window.frameElement.style.minHeight = totalH + 'px';
-            window.frameElement.setAttribute('height', String(totalH));
-          }}
+          var frameEl = document.getElementById('a4PageFrame') || document.querySelector('.a4-page-frame');
+          var frameH = frameEl ? Math.ceil((frameEl.getBoundingClientRect().height || frameEl.offsetHeight || 0)) : 900;
+          var totalH = Math.max(125, Math.min(1220, frameH + 24));
+          window.frameElement.style.height = totalH + 'px';
+          window.frameElement.style.minHeight = '0';
+          window.frameElement.style.maxHeight = '1220px';
+          window.frameElement.setAttribute('height', String(totalH));
         }}
       }} catch (e) {{}}
     }};
@@ -11238,14 +11219,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     "وقّع عبر اللوحات أعلاه — يُعتمد التوقيع تلقائياً عند رفع الإصبع ويُحفظ في الأرشيف فوراً. "
                     "اضغط زر الطباعة أعلى ورقة A4 (متوافق مع Safari والآيفون)."
                 )
-                preview_h = 1850
-                _sig_map_now = _sigs_for_html or {}
-                _pad_count = sum(1 for _k, _v in _sig_map_now.items() if _v)
-                preview_h += min(900, max(0, _pad_count) * 260)
-                if ready_record.get("show_attachments_in_print") and parse_attachments(ready_record.get("attachment_b64")):
-                    preview_h += 260
-                if str(form_def.get("category") or "") == "إقرار" or "كفالة" in str(form_def.get("title") or ""):
-                    preview_h += 220
+                # سقف ثابت يمنع نزول مربع المعاينة بلا نهاية؛ الارتفاع الداخلي يُضبط مرة عند التحميل
+                preview_h = 1220
                 # تشغيل سكربت المعاينة/الطباعة داخل components.html فقط — دون st.markdown
                 components.html(a4_html, height=preview_h, scrolling=True)
 
