@@ -449,21 +449,21 @@ def restore_vault_if_needed(db_path: str | None = None) -> dict:
         cfg = get_vault_config()
         result["configured"] = bool(cfg.get("configured"))
         if not cfg.get("configured"):
-            result["reason"] = "secrets_missing"
+            result["reason"] = "لم تُضبط مفاتيح الخزنة بعد"
             return result
         if not _local_is_empty(path):
-            result["reason"] = "local_has_data"
+            result["reason"] = "البيانات المحلية موجودة — تم تخطي الاسترجاع"
             return result
         data, _sha = _fetch_vault_file(cfg)
         if not data:
-            result["reason"] = "remote_empty"
+            result["reason"] = "لا توجد نسخة سحابية بعد"
             return result
         ok = import_vault_state(data, path)
         result["restored"] = bool(ok)
-        result["reason"] = "ok" if ok else "import_failed"
+        result["reason"] = "تم الاسترجاع السحابي" if ok else "تعذّر الاسترجاع السحابي"
         return result
     except Exception as exc:
-        result["reason"] = f"error:{exc}"
+        result["reason"] = f"خطأ أثناء الاسترجاع: {exc}"
         return result
 
 
@@ -483,25 +483,25 @@ def _upload_vault_state(cfg: dict, state: dict, sha: str | None = None) -> tuple
         body["sha"] = sha
     code, payload = _github_api("PUT", url, token, body)
     if code in (200, 201):
-        return True, "uploaded"
+        return True, "تم الحفظ السحابي"
     if code == 409:
         # تعارض — أعد جلب sha وحاول مرة أخرى
         _data, fresh_sha = _fetch_vault_file(cfg)
         if not fresh_sha:
-            return False, "conflict_no_sha"
+            return False, "تعارض في المزامنة — تعذّر جلب النسخة الحالية"
         body["sha"] = fresh_sha
         code2, payload2 = _github_api("PUT", url, token, body)
         if code2 in (200, 201):
-            return True, "uploaded_after_conflict"
-        return False, str((payload2 or {}).get("message") or f"http_{code2}")
+            return True, "تم الحفظ السحابي بعد حل التعارض"
+        return False, str((payload2 or {}).get("message") or f"فشل المزامنة ({code2})")
     if code == 404 and not sha:
         # الفرع قد يكون master
         body["branch"] = "master"
         code3, payload3 = _github_api("PUT", url, token, body)
         if code3 in (200, 201):
-            return True, "uploaded_master"
-        return False, str((payload3 or {}).get("message") or f"http_{code3}")
-    return False, str((payload or {}).get("message") or f"http_{code}")
+            return True, "تم الحفظ السحابي"
+        return False, str((payload3 or {}).get("message") or f"فشل المزامنة ({code3})")
+    return False, str((payload or {}).get("message") or f"فشل المزامنة ({code})")
 
 
 def _run_backup() -> None:
@@ -510,14 +510,14 @@ def _run_backup() -> None:
         try:
             cfg = get_vault_config()
             if not cfg.get("configured"):
-                _last_backup_status = {"ok": False, "at": _now_label(), "msg": "secrets_missing"}
+                _last_backup_status = {"ok": False, "at": _now_label(), "msg": "لم تُضبط مفاتيح الخزنة بعد"}
                 return
             state = export_vault_state(get_unified_db_path())
             _data, sha = _fetch_vault_file(cfg)
             ok, msg = _upload_vault_state(cfg, state, sha)
             _last_backup_status = {"ok": ok, "at": _now_label(), "msg": msg}
         except Exception as exc:
-            _last_backup_status = {"ok": False, "at": _now_label(), "msg": str(exc)}
+            _last_backup_status = {"ok": False, "at": _now_label(), "msg": f"تعذّرت المزامنة: {exc}"}
 
 
 def trigger_vault_backup(*, immediate: bool = False, from_visit: bool = False) -> None:

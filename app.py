@@ -97,7 +97,7 @@ def format_entity(role_label: str, optional_name: str) -> str:
 
 
 ATTACH_MAX_PX = 1600
-ATTACH_JPEG_QUALITY = 85
+ATTACH_JPEG_QUALITY = 88
 SIG_UPLOAD_MAX_PX = 1600
 UPLOAD_HELP_CAPTION = "المعرض أو الكاميرا أو ملف PDF — جاهز للجوال والكمبيوتر."
 
@@ -864,16 +864,16 @@ img[src*="avatars.githubusercontent.com"] {
     border: 1px solid rgba(212, 175, 55, 0.25) !important;
     border-right: 4px solid #D4AF37 !important;
     border-radius: 12px !important;
-    font-weight: 800 !important;
-    font-size: 15.5px !important;
+    font-weight: 700 !important;
+    font-size: 16px !important;
     min-height: 54px !important;
     height: auto !important;
     text-align: right !important;
     justify-content: flex-start !important;
     align-items: flex-start !important;
-    padding: 10px 14px !important;
+    padding: 12px 16px !important;
     white-space: normal !important;
-    line-height: 1.4 !important;
+    line-height: 1.45 !important;
     box-shadow: none !important;
     overflow: visible !important;
     text-overflow: unset !important;
@@ -6396,9 +6396,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         max-width: 100%; width: auto; height: auto; object-fit: contain;
         border: 1.4px solid #000000; border-radius: 4px; background: #fff; display: block; margin: 0 auto;
     }}
-    .attachment-grid.atts-single .att-card img,
+    .attachment-grid.atts-single .att-card img {{
+        max-height: 185px !important; max-width: 95% !important;
+        width: auto !important; height: auto !important; object-fit: contain !important;
+    }}
+    .attachment-grid.atts-multi {{
+        display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 8px !important;
+        align-items: start !important; overflow: hidden !important;
+    }}
     .attachment-grid.atts-multi .att-card img {{
-        max-height: 80px !important; height: auto !important;
+        max-height: 140px !important; max-width: 95% !important;
+        width: auto !important; height: auto !important; object-fit: contain !important;
     }}
     /* صور المرفقات ثابتة مضغوطة — لا تُكبَّر أبداً عبر expandLegal */
     .att-caption, .att-pdf-name {{ display: none !important; }}
@@ -9498,6 +9506,132 @@ def form_short_hint(subtitle: str, max_words: int = 3) -> str:
     return " ".join(words[:max_words]) if words else ""
 
 
+
+_DUTY_ROSTER_META_KEY = "duty_quick_roster"
+_ARDAH_HQ_GPS = "17.0375, 43.0764"
+_INCIDENT_META_KEYS = (
+    "incident_no", "incident_date", "incident_time", "incident_loc", "plate_no",
+    "otar_no", "otar", "vehicle_desc", "party_phone", "gps",
+)
+
+
+def load_duty_roster() -> list:
+    """قائمة المناوبين السريعة من قاعدة البيانات الموحدة."""
+    try:
+        conn = db_connect()
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS khafar_stats_meta (key TEXT PRIMARY KEY, value TEXT)"
+        )
+        row = conn.execute(
+            "SELECT value FROM khafar_stats_meta WHERE key=? LIMIT 1",
+            (_DUTY_ROSTER_META_KEY,),
+        ).fetchone()
+        conn.close()
+        if not row or not row[0]:
+            return []
+        data = json.loads(row[0])
+        if isinstance(data, list):
+            return [x for x in data if isinstance(x, dict) and (x.get("name") or x.get("rank"))]
+    except Exception:
+        pass
+    return list(st.session_state.get("_duty_roster_cache") or [])
+
+
+def save_duty_roster(items: list) -> None:
+    clean = []
+    seen = set()
+    for it in items or []:
+        if not isinstance(it, dict):
+            continue
+        rank = str(it.get("rank") or "").strip()
+        name = str(it.get("name") or "").strip()
+        if not name:
+            continue
+        key = f"{rank}|{name}".casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        clean.append({"rank": rank or "مستلم الخفر المناوب", "name": name})
+    st.session_state["_duty_roster_cache"] = clean
+    try:
+        conn = db_connect()
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS khafar_stats_meta (key TEXT PRIMARY KEY, value TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO khafar_stats_meta(key, value) VALUES(?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (_DUTY_ROSTER_META_KEY, json.dumps(clean, ensure_ascii=False)),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+    try:
+        khafar_cloud_vault.trigger_vault_backup(immediate=True)
+    except Exception:
+        pass
+
+
+def officer_name_needs_setup(shift_data: dict | None = None) -> bool:
+    data = shift_data if isinstance(shift_data, dict) else {}
+    name = str(data.get("officer_name") or st.session_state.get("officer_full_override") or "").strip()
+    rank = str(data.get("officer_rank") or "").strip()
+    if not name:
+        return True
+    if name in ("غير محدد", "-", "مستلم الخفر المناوب"):
+        return True
+    if name == rank == "مستلم الخفر المناوب":
+        return True
+    return False
+
+
+def capture_last_incident_meta(fid: str, values: dict, form_def: dict | None = None) -> None:
+    meta = dict(st.session_state.get("_last_incident_meta") or {})
+    src = values if isinstance(values, dict) else {}
+    for key in _INCIDENT_META_KEYS:
+        val = str(src.get(key) or "").strip()
+        if val:
+            meta[key] = val
+    if form_uses_reference_number(form_def):
+        ref = normalize_western_digits(str(st.session_state.get("doc_no") or "").strip())
+        if ref:
+            meta["incident_no"] = ref
+            primary = form_primary_ref_field_key(form_def) if form_def else ""
+            if primary:
+                meta[primary] = ref
+    if meta:
+        st.session_state["_last_incident_meta"] = meta
+
+
+def apply_last_incident_meta(fid: str, form_def: dict | None = None) -> int:
+    meta = st.session_state.get("_last_incident_meta") or {}
+    if not isinstance(meta, dict) or not meta:
+        return 0
+    field_keys = {str(f.get("key") or "") for f in ((form_def or {}).get("fields") or [])}
+    applied = 0
+    for key, val in meta.items():
+        if not val:
+            continue
+        targets = [key]
+        if key == "incident_no" and form_def and form_uses_reference_number(form_def):
+            primary = form_primary_ref_field_key(form_def)
+            if primary:
+                targets.append(primary)
+        for tk in targets:
+            if tk and (tk in field_keys or tk == "incident_no"):
+                st.session_state[f"inp_{fid}_{tk}"] = val
+                applied += 1
+            if tk and form_def and form_uses_reference_number(form_def) and tk in (
+                form_primary_ref_field_key(form_def),
+                "incident_no",
+            ):
+                st.session_state[f"manual_ref_inp_{fid}"] = normalize_western_digits(str(val))
+                st.session_state.manual_ref_no = normalize_western_digits(str(val))
+                st.session_state.doc_no = normalize_western_digits(str(val))
+    return applied
+
+
 def open_form_from_catalog(fid: str):
     st.session_state.opened_form_id = fid
     reset_doc_state()
@@ -9984,12 +10118,42 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     st.session_state.doc_no = pref_ref
             cat_badge_cls = {"إقرار": "green", "محضر": "gold", "إحالة طبية": "med", "تكميل": "tak"}.get(form_def["category"], "green")
 
-            top_bar1, top_bar2, top_bar3 = st.columns([1.3, 1.3, 1.4])
+            if officer_name_needs_setup(shift):
+                warn_c1, warn_c2 = st.columns([3.2, 1.4])
+                with warn_c1:
+                    st.markdown(
+                        "<div style='background:#13382B;border:1.5px solid #D4AF37;border-radius:10px;"
+                        "padding:10px 12px;color:#FEF3C7;font-weight:800;margin:4px 0 8px 0;'>"
+                        "⚠️ لم يُسجَّل اسم مستلم الخفر المناوب — سجّل الاسم والتوقيع قبل الطباعة لتجنب وثائق ناقصة."
+                        "</div>",
+                        unsafe_allow_html=True,
+                    )
+                with warn_c2:
+                    if st.button("⚙️ تسجيل اسم وتوقيع المناوب الآن", use_container_width=True, key=f"goto_duty_setup_{fid}"):
+                        st.session_state.nav_tab = "الإعدادات والبصمة"
+                        st.session_state.settings_subtab = "duty"
+                        st.session_state.opened_form_id = None
+                        safe_rerun()
+
+            top_bar1, top_bar2, top_bar3, top_bar4 = st.columns([1.15, 1.25, 1.2, 1.4])
             with top_bar1:
                 if st.button("↩️ العودة للنماذج", use_container_width=True):
                     st.session_state.opened_form_id = None
                     rotate_doc_sig_nonce(clear_party_sigs=True)
                     safe_rerun()
+            with top_bar4:
+                if st.button(
+                    "📋 تعبئة بيانات آخر حادث بالجلسة",
+                    use_container_width=True,
+                    disabled=st.session_state.citizen_locked or not st.session_state.get("_last_incident_meta"),
+                    key=f"fill_last_incident_{fid}",
+                ):
+                    n = apply_last_incident_meta(fid, form_def)
+                    if n:
+                        st.success("تم تعبئة بيانات آخر حادث مشترك في الجلسة.")
+                        safe_rerun()
+                    else:
+                        st.warning("لا توجد بيانات حادث مشتركة محفوظة في هذه الجلسة بعد.")
             with top_bar2:
                 if st.button("⚡ تعبئة بيانات تجريبية فورية", type="primary", use_container_width=True, disabled=st.session_state.citizen_locked):
                     rotate_doc_sig_nonce(clear_party_sigs=True)
@@ -10223,6 +10387,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         current_values[_primary_ref_key] = normalize_western_digits(str(legacy).strip())
                         if _primary_ref_key != "incident_no":
                             current_values["incident_no"] = current_values[_primary_ref_key]
+
+            capture_last_incident_meta(fid, current_values, form_def)
 
             if fid == "decl_hit_run":
                 if st.button("🔄 الانتقال لإقرار تنازل عن بلاغ صدم وهروب", use_container_width=True):
@@ -10924,36 +11090,49 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
     except Exception:
         pass
 
-    sett_tab, mgr_tab, otg_tab = st.tabs([
-        "👮 مناوبة الخفر",
-        "✍️ توقيع مدير الحوادث",
-        "🧬 بصمة الشحن OTG",
-    ])
+    if "settings_subtab" not in st.session_state:
+        st.session_state.settings_subtab = "duty"
+    _settings_labels = [
+        ("duty", "👮 مناوبة الخفر"),
+        ("manager", "✍️ توقيع مدير الحوادث"),
+        ("otg", "🧬 بصمة الشحن OTG"),
+    ]
+    _scols = st.columns(3)
+    for _i, (_sk, _sl) in enumerate(_settings_labels):
+        with _scols[_i]:
+            if st.button(
+                _sl,
+                key=f"settings_subtab_btn_{_sk}",
+                type="primary" if st.session_state.settings_subtab == _sk else "secondary",
+                use_container_width=True,
+            ):
+                st.session_state.settings_subtab = _sk
+                safe_rerun()
 
-    with sett_tab:
+    sett_tab = st.session_state.settings_subtab == "duty"
+    mgr_tab = st.session_state.settings_subtab == "manager"
+    otg_tab = st.session_state.settings_subtab == "otg"
+
+    if sett_tab:
         st.caption("إعدادات المناوبة والموقع تُحفظ على هذا الجوال فقط، ولا يراها من يفتح الرابط من جهاز آخر.")
-        with st.expander("🖥️ مسار بديل للحاسوب (بدون شريحة GPS)", expanded=not gps_is_live):
-            st.caption("الصق رابط خرائط Google من واتساب أو إحداثيات مثل 17.0375, 43.0764 لاعتمادها فوراً.")
-            paste_gps = st.text_input(
-                "رابط الخرائط أو الإحداثيات",
-                value="",
-                key="gps_paste_input",
-                placeholder="https://maps.google.com/?q=17.0375,43.0764",
-            )
-            if st.button("✅ اعتماد الموقع من الرابط/الإحداثيات", type="primary", use_container_width=True, key="gps_paste_apply"):
-                pasted = parse_gps_paste(paste_gps)
-                if not pasted:
-                    st.error("تعذر استخراج الإحداثيات من النص الملصوق.")
-                else:
+        st.markdown("#### 1) بيانات مستلم الخفر المناوب")
+        roster = load_duty_roster()
+        roster_labels = ["— اختر من القائمة السريعة —"] + [
+            f"{(x.get('rank') or '').strip()} {(x.get('name') or '').strip()}".strip() for x in roster
+        ]
+        pick = st.selectbox("⚡ قائمة اختيار سريع للمناوبين المحفوظين", options=roster_labels, key="duty_roster_pick")
+        if pick and pick != roster_labels[0]:
+            idx = roster_labels.index(pick) - 1
+            if 0 <= idx < len(roster):
+                chosen = roster[idx]
+                if st.button("✅ اعتماد المناوب المختار", type="primary", use_container_width=True, key="duty_roster_apply"):
                     _, hash_now = ensure_device_identity()
-                    if not _cookie_uid_ready:
-                        st.caption("⏳ تتم مزامنة تعريف الجهاز مع المتصفح — اعتمدنا المعرّف الاحتياطي فوراً.")
-                    formatted = format_live_gps(*pasted)
-                    update_default_gps(hash_now, formatted)
-                    st.session_state["gps_live_ok"] = True
-                    st.session_state["gps_live_value"] = formatted
-                    st.session_state["gps_toast"] = formatted
-                    st.success(f"تم اعتماد الموقع الفعلي: {formatted}")
+                    cur = get_device_shift(hash_now)
+                    cur["officer_rank"] = chosen.get("rank") or cur.get("officer_rank") or "مستلم الخفر المناوب"
+                    cur["officer_name"] = chosen.get("name") or ""
+                    cur[DUTY_SIG_KEY] = st.session_state.get(DUTY_SIG_KEY) or cur.get(DUTY_SIG_KEY) or ""
+                    save_device_shift(hash_now, cur)
+                    st.success("تم اعتماد بيانات المناوب من القائمة السريعة.")
                     safe_rerun()
         with st.form("shift_update_form"):
             s_dept = st.text_input("القسم", value=shift["dept_name"], disabled=True)
@@ -11007,8 +11186,31 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                 st.success("تم حفظ الإعدادات على هذا الجهاز فقط.")
                 safe_rerun()
 
-        # لوحة التوقيع الثنائية الاتجاه — خارج st.form حتى يصل الرسم إلى بايثون دون جسر نصي
-        st.markdown("##### ✍️ التوقيع المعتمد لمستلم الخفر المناوب (يُدرج تلقائياً في جميع النماذج)")
+        rc1, rc2 = st.columns(2)
+        with rc1:
+            if st.button("➕ حفظ المناوب الحالي في القائمة السريعة", use_container_width=True, key="duty_roster_add"):
+                cur_rank = str(shift.get("officer_rank") or "مستلم الخفر المناوب").strip()
+                cur_name = str(shift.get("officer_name") or "").strip()
+                if not cur_name:
+                    st.warning("أدخل اسم المناوب أولاً ثم احفظه في القائمة.")
+                else:
+                    items = load_duty_roster()
+                    items.append({"rank": cur_rank, "name": cur_name})
+                    save_duty_roster(items)
+                    st.success("تم حفظ المناوب في القائمة السريعة.")
+                    safe_rerun()
+        with rc2:
+            if roster and st.button("🗑️ حذف المناوب المختار من القائمة", use_container_width=True, key="duty_roster_del"):
+                if pick and pick != roster_labels[0]:
+                    idx = roster_labels.index(pick) - 1
+                    items = load_duty_roster()
+                    if 0 <= idx < len(items):
+                        items.pop(idx)
+                        save_duty_roster(items)
+                        st.success("تم حذف المناوب من القائمة السريعة.")
+                        safe_rerun()
+
+        st.markdown("#### 2) لوحة التوقيع المعتمد لمستلم الخفر")
         st.caption("يُحفظ التوقيع على هذا الجهاز فقط (SQLite + localStorage) ولا يُوضع في الكوكيز حتى لا يتجاوز حد 4KB.")
         officer_saved_now = str(st.session_state.get(DUTY_SIG_KEY) or shift.get(DUTY_SIG_KEY) or "").strip()
         officer_pad_val = sig_pad(
@@ -11020,6 +11222,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
             pad_id="officer",
             accent="#0044cc",
         )
+        _officer_sig_before = str(st.session_state.get(DUTY_SIG_KEY) or shift.get(DUTY_SIG_KEY) or "").strip()
         officer_pad_event = consume_sig_pad_result(officer_pad_val, kind="officer")
         if officer_pad_event:
             action = str(officer_pad_event.get("action") or "")
@@ -11027,18 +11230,29 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
             _, hash_now = ensure_device_identity()
             if action == "clear" or data_url_raw == "__CLEARED__":
                 st.session_state[DUTY_SIG_KEY] = ""
+                st.session_state["_officer_upload_token"] = ""
+                st.session_state.pop("_khafar_mu_files_duty_sig_upload_mu", None)
+                st.session_state.pop("_khafar_mu_token_duty_sig_upload_mu", None)
                 if hash_now:
                     cur = get_device_shift(hash_now)
                     cur[DUTY_SIG_KEY] = ""
                     save_device_shift(hash_now, cur)
+                if _officer_sig_before:
+                    safe_rerun()
             else:
-                payload = compress_signature_b64(strip_signature_data_url(officer_pad_event.get("data_url") or ""))
+                raw_b64 = strip_signature_data_url(data_url_raw)
+                # قبول data:image مباشرة حتى لو فشل الضغط الجزئي
+                payload = compress_signature_b64(raw_b64) if raw_b64 else ""
+                if not payload and raw_b64 and len(raw_b64) > 40:
+                    payload = raw_b64[:250000]
                 if payload:
                     st.session_state[DUTY_SIG_KEY] = payload
                     if hash_now:
                         cur = get_device_shift(hash_now)
                         cur[DUTY_SIG_KEY] = payload
                         save_device_shift(hash_now, cur)
+                    if payload != _officer_sig_before:
+                        safe_rerun()
                 else:
                     st.warning("تعذّر قراءة التوقيع المرسوم — أعد الرسم على اللوحة.")
 
@@ -11074,21 +11288,23 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                         st.session_state["_officer_upload_token"] = upload_token
                         st.success("✅ تم اعتماد صورة التوقيع المرفوعة تلقائياً وهي جاهزة للظهور في التقرير المطبوع")
                         safe_rerun()
-        if st.button("🗑️ حذف / إعادة رسم توقيع مستلم الخفر المناوب", use_container_width=True):
+        if st.button("🧹 مسح التوقيع", use_container_width=True, key="duty_sig_clear_btn"):
             st.session_state[DUTY_SIG_KEY] = ""
             st.session_state["_officer_upload_token"] = ""
+            st.session_state.pop("_khafar_mu_files_duty_sig_upload_mu", None)
+            st.session_state.pop("_khafar_mu_token_duty_sig_upload_mu", None)
             if DEVICE_HASH:
                 cur = get_device_shift(DEVICE_HASH)
                 cur[DUTY_SIG_KEY] = ""
                 save_device_shift(DEVICE_HASH, cur)
-            st.success("تم حذف التوقيع المحفوظ. يمكنك إعادة الرسم الآن.")
+            st.success("تم مسح التوقيع من اللوحة والإعدادات والخزنة السحابية.")
             safe_rerun()
 
         preview_sig = str(st.session_state.get(DUTY_SIG_KEY) or shift.get(DUTY_SIG_KEY) or "").strip()
         if preview_sig:
             st.markdown(
                 "<div style='background:#0f3d2e;border:1px solid #34d399;border-radius:10px;padding:10px 12px;"
-                "color:#ecfdf5;font-weight:800;margin:8px 0;'>✅ التوقيع محفوظ ومفعّل تلقائياً في جميع النماذج</div>",
+                "color:#ecfdf5;font-weight:800;margin:8px 0;'>✅ التوقيع المعتمد محفوظ ومفعّل تلقائياً في جميع النماذج</div>",
                 unsafe_allow_html=True,
             )
             try:
@@ -11098,7 +11314,43 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
         else:
             st.info("لا يوجد توقيع محفوظ حالياً — ارسم على اللوحة أو ارفع صورة ليُعتمد تلقائياً.")
 
-    with mgr_tab:
+        st.markdown("#### 3) إعدادات الموقع للكمبيوتر المكتبي (GPS)")
+        with st.expander("🖥️ مسار بديل للحاسوب (بدون شريحة GPS)", expanded=False):
+            st.caption("الصق رابط خرائط Google من واتساب أو إحداثيات مثل 17.0375, 43.0764 لاعتمادها فوراً.")
+            if st.button("📍 اعتماد إحداثيات مقر قسم مرور العارضة افتراضياً", use_container_width=True, key="gps_hq_default"):
+                _, hash_now = ensure_device_identity()
+                pair = signed_gps_pair(_ARDAH_HQ_GPS)
+                formatted = format_live_gps(*pair) if pair else _ARDAH_HQ_GPS
+                update_default_gps(hash_now, formatted)
+                st.session_state["gps_live_ok"] = True
+                st.session_state["gps_live_value"] = formatted
+                st.session_state["gps_toast"] = formatted
+                st.success(f"تم اعتماد إحداثيات المقر: {formatted}")
+                safe_rerun()
+            paste_gps = st.text_input(
+                "رابط الخرائط أو الإحداثيات",
+                value="",
+                key="gps_paste_input",
+                placeholder="https://maps.google.com/?q=17.0375,43.0764",
+            )
+            if st.button("✅ اعتماد الموقع من الرابط/الإحداثيات", type="primary", use_container_width=True, key="gps_paste_apply"):
+                pasted = parse_gps_paste(paste_gps)
+                if not pasted:
+                    st.error("تعذر استخراج الإحداثيات من النص الملصوق.")
+                else:
+                    _, hash_now = ensure_device_identity()
+                    if not _cookie_uid_ready:
+                        st.caption("⏳ تتم مزامنة تعريف الجهاز مع المتصفح — اعتمدنا المعرّف الاحتياطي فوراً.")
+                    formatted = format_live_gps(*pasted)
+                    update_default_gps(hash_now, formatted)
+                    st.session_state["gps_live_ok"] = True
+                    st.session_state["gps_live_value"] = formatted
+                    st.session_state["gps_toast"] = formatted
+                    st.success(f"تم اعتماد الموقع الفعلي: {formatted}")
+                    safe_rerun()
+
+
+    if mgr_tab:
         st.markdown("### ✍️ اعتماد التوقيع الحي لمدير وحدة الحوادث")
         st.caption(
             "محمي برمز سري. ارسم على اللوحة ثم ارفع الإصبع ليُعتمد التوقيع تلقائياً، "
@@ -11312,7 +11564,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
                     except Exception as exc:
                         st.error(f"تعذّرت الاستعادة: {exc}")
 
-    with otg_tab:
+    if otg_tab:
         st.caption("وضع المحاكاة الصوري معزول حتى توصيل القارئ الفعلي عبر Type-C.")
         selected_hw = st.selectbox(
             "بروتوكول القارئ المعتمد:",
