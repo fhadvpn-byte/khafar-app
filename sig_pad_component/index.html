@@ -57,7 +57,7 @@
     canvas {
       width: 100%;
       height: 168px;
-      border: 1.5px dashed var(--accent, #0044cc);
+      border: 1.5px dashed var(--accent, #0038A8);
       border-radius: 8px;
       background: #ffffff;
       touch-action: none;
@@ -92,7 +92,7 @@
 </head>
 <body>
   <div id="padCard">
-    <div class="title" id="padTitle">ارسم التوقيع هنا (حبر أزرق رسمي #0044cc)</div>
+    <div class="title" id="padTitle">ارسم التوقيع هنا (حبر أزرق رسمي #0038A8)</div>
     <div class="sub" id="padSub"></div>
     <div class="badge ready" id="padStatus">جاهزة للتوقيع الجديد</div>
     <canvas id="pad" width="900" height="220" tabindex="-1"></canvas>
@@ -102,11 +102,13 @@
   </div>
   <script>
 (function () {
-  var INK = "#0044cc";
+  var INK = "#0038A8";
+  var INK_RGB = { r: 0, g: 56, b: 168 };
   var CANVAS_W = 900;
   var CANVAS_H = 220;
   var FRAME_H = 310;
   var DEBOUNCE_MS = 700;
+  var CROP_PAD = 12;
   var canvas = document.getElementById("pad");
   var ctx = canvas.getContext("2d", { willReadFrequently: true });
   var statusEl = document.getElementById("padStatus");
@@ -195,15 +197,25 @@
     }
   }
 
+  function strokeWidth() {
+    var r = canvas.getBoundingClientRect();
+    var scaleX = CANVAS_W / Math.max(1, r.width || CANVAS_W);
+    var screenTarget = (window.innerWidth || 800) >= 900 ? 4.2 : 3.8;
+    var w = screenTarget * scaleX;
+    if (w < 3.6) w = 3.6;
+    if (w > 9.5) w = 9.5;
+    return w;
+  }
   function beginDraw(pt) {
     cancelAutoSave();
     drawing = true;
     hasInk = true;
     lastX = pt.x; lastY = pt.y; midX = pt.x; midY = pt.y;
     setStatus("signing");
+    var lw = strokeWidth();
     ctx.fillStyle = INK;
     ctx.beginPath();
-    ctx.arc(pt.x, pt.y, 1.6, 0, Math.PI * 2);
+    ctx.arc(pt.x, pt.y, Math.max(1.8, lw * 0.48), 0, Math.PI * 2);
     ctx.fill();
   }
   function moveDraw(pt) {
@@ -211,7 +223,7 @@
     var nextMidX = (lastX + pt.x) / 2;
     var nextMidY = (lastY + pt.y) / 2;
     ctx.strokeStyle = INK;
-    ctx.lineWidth = 3.2;
+    ctx.lineWidth = strokeWidth();
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.beginPath();
@@ -300,13 +312,55 @@
   }
 
   function exportPng() {
+    var src = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H).data;
+    var minX = CANVAS_W, minY = CANVAS_H, maxX = -1, maxY = -1;
+    for (var y = 0; y < CANVAS_H; y++) {
+      for (var x = 0; x < CANVAS_W; x++) {
+        var i = (y * CANVAS_W + x) * 4;
+        var a = src[i + 3];
+        var r = src[i], g = src[i + 1], b = src[i + 2];
+        var isInk = a > 20 || Math.min(r, g, b) < 235 || (b - r > 25);
+        if (!isInk) continue;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+    if (maxX < 0) {
+      var empty = document.createElement("canvas");
+      empty.width = 8;
+      empty.height = 8;
+      return empty.toDataURL("image/png");
+    }
+    minX = Math.max(0, minX - CROP_PAD);
+    minY = Math.max(0, minY - CROP_PAD);
+    maxX = Math.min(CANVAS_W - 1, maxX + CROP_PAD);
+    maxY = Math.min(CANVAS_H - 1, maxY + CROP_PAD);
+    var cw = maxX - minX + 1;
+    var ch = maxY - minY + 1;
     var out = document.createElement("canvas");
-    out.width = CANVAS_W;
-    out.height = CANVAS_H;
+    out.width = cw;
+    out.height = ch;
     var octx = out.getContext("2d");
-    octx.fillStyle = "#ffffff";
-    octx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-    octx.drawImage(canvas, 0, 0);
+    octx.clearRect(0, 0, cw, ch);
+    octx.drawImage(canvas, minX, minY, cw, ch, 0, 0, cw, ch);
+    var id = octx.getImageData(0, 0, cw, ch);
+    var d = id.data;
+    for (var j = 0; j < d.length; j += 4) {
+      if (d[j + 3] > 20 || Math.min(d[j], d[j + 1], d[j + 2]) < 235 || (d[j + 2] - d[j] > 25)) {
+        d[j] = INK_RGB.r;
+        d[j + 1] = INK_RGB.g;
+        d[j + 2] = INK_RGB.b;
+        d[j + 3] = 255;
+      } else {
+        d[j] = 0;
+        d[j + 1] = 0;
+        d[j + 2] = 0;
+        d[j + 3] = 0;
+      }
+    }
+    octx.putImageData(id, 0, 0);
     return out.toDataURL("image/png");
   }
 

@@ -14,7 +14,7 @@ import uuid
 import khafar_box_fix
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw, ImageOps, ImageFilter
 from abu_arish_impound import ABU_ARISH_IMPOUND_TEMPLATE
 from takmeel import TAKMEEL_FORMS, init_takmeel_db, render_takmeel_form
 import importlib, khafar_bail; khafar_bail = importlib.reload(khafar_bail) if getattr(khafar_bail, "_KHAFAR_BAIL_VER", "") != "v5" else khafar_bail; khafar_bail.reset_run_state()
@@ -3278,84 +3278,97 @@ def shift_light_payload(data: dict | None) -> dict:
     return {key: cleaned.get(key, "") for key in _SHIFT_TEXT_KEYS}
 
 
+# حبر أزرق رسمي غامق وحاد لتواقيع المناوب ومدير وحدة الحوادث
+OFFICIAL_INK_RGB = (0, 56, 168)  # #0038A8
+
+
+def _harden_signature_ink_rgba(img: Image.Image, ink: tuple[int, int, int] = OFFICIAL_INK_RGB) -> Image.Image:
+    """حوّل أي بكسل حبر إلى أزرق رسمي صلب alpha=255 مع خلفية شفافة."""
+    out = img.convert("RGBA")
+    px = out.load()
+    w, h = out.size
+    alpha_band = out.split()[-1]
+    a_min, a_max = alpha_band.getextrema()
+    has_transparency = a_min < 250
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if has_transparency:
+                is_ink = a > 20 or (a > 0 and (min(r, g, b) < 235 or (b - r) > 25))
+            else:
+                is_ink = min(r, g, b) < 235 or (b - r) > 25
+            px[x, y] = (*ink, 255) if is_ink else (0, 0, 0, 0)
+    return out
+
+
 def make_ink_transparent_b64(raw_b64: str, max_w: int = 520, max_h: int = 180) -> str:
-    """توقيع حبري رسمي: خلفية بيضاء ناصعة + حبر أزرق قلم (15,45,130) بدون أي كحلي/أسود."""
+    """توقيع حبري رسمي: قص تلقائي + تعزيز كثافة الحبر الأزرق #0038A8 (alpha=255)."""
     payload = str(raw_b64 or "").strip()
     if not payload:
         return ""
     if payload.startswith("data:"):
         payload = payload.split(",", 1)[-1]
     try:
-        ink = (0, 68, 204)  # حبر أزرق رسمي #0044cc
+        ink = OFFICIAL_INK_RGB
         img = Image.open(io.BytesIO(base64.b64decode(payload)))
-        img = ImageOps.exif_transpose(img)
-        if img.mode != "RGBA":
-            img = img.convert("RGBA")
-        img.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
+        img = ImageOps.exif_transpose(img).convert("RGBA")
         w, h = img.size
         src = img.load()
+        alpha_map = Image.new("L", (w, h), 0)
+        ap = alpha_map.load()
+        a_min, a_max = img.split()[-1].getextrema()
+        has_transparency = a_min < 250
 
-        # تقدير لون الخلفية من الزوايا والحواف (يشمل الخلفيات الكحلية الشفافة/المعتمة)
-        samples = []
-        for (sx, sy) in (
-            (0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1),
-            (w // 2, 0), (w // 2, h - 1), (0, h // 2), (w - 1, h // 2),
-        ):
-            r, g, b, a = src[sx, sy]
-            if a < 40:
-                samples.append((13, 40, 55))  # خلفية واجهة داكنة شائعة خلف الشفافية
-            else:
-                samples.append((r, g, b))
-        bg_r = sum(c[0] for c in samples) / len(samples)
-        bg_g = sum(c[1] for c in samples) / len(samples)
-        bg_b = sum(c[2] for c in samples) / len(samples)
-        bg_bright = (bg_r + bg_g + bg_b) / 3.0
-
-        strength = [[0.0] * w for _ in range(h)]
+        ink_count = 0
         for y in range(h):
             for x in range(w):
                 r, g, b, a = src[x, y]
-                if a < 40:
-                    strength[y][x] = 0.0
-                    continue
-                if r > 200 and g > 200 and b > 200:
-                    strength[y][x] = 0.0
-                    continue
-                dist = abs(r - bg_r) + abs(g - bg_g) + abs(b - bg_b)
-                brightness = (r + g + b) / 3.0
-                if bg_bright < 140:
-                    # خلفية داكنة/كحلية: الحبر هو ما يختلف عنها أو يكون أفتح/أزرق أوضح
-                    if dist < 55 and brightness < 150:
-                        strength[y][x] = 0.0
-                    else:
-                        strength[y][x] = max(0.0, min(1.0, dist / 220.0))
+                if has_transparency:
+                    is_ink = a > 20 or (min(r, g, b) < 235 and a > 8) or (b - r > 25 and a > 8)
                 else:
-                    # خلفية فاتحة: الحبر هو البكسل الأغمق
-                    strength[y][x] = max(0.0, min(1.0, (235.0 - brightness) / 180.0))
+                    is_ink = min(r, g, b) < 235 or (b - r) > 25
+                if not is_ink:
+                    continue
+                # كثافة أولية من الشفافية أو بُعد البكسل عن الأبيض
+                base = a if has_transparency and a > 20 else max(0, 255 - min(r, g, b), max(0, b - r) * 2)
+                if base < 12:
+                    base = 12
+                boosted = min(255, int(base * 3.0))
+                if boosted < 40:
+                    continue
+                ap[x, y] = 255
+                ink_count += 1
 
-        out = Image.new("RGBA", (w, h), (255, 255, 255, 255))
+        bbox = alpha_map.getbbox()
+        if not bbox or ink_count <= 0:
+            return ""
+
+        box_area = max(1, (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]))
+        # تقوية طفيفة لسُمك الخط إذا كانت الخطوط رفيعة
+        if (ink_count / box_area) < 0.24:
+            alpha_map = alpha_map.filter(ImageFilter.MaxFilter(3))
+            ap = alpha_map.load()
+
+        out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         out_px = out.load()
         for y in range(h):
             for x in range(w):
-                s = strength[y][x]
-                if 0 < x < w - 1 and 0 < y < h - 1:
-                    s = (
-                        s * 0.5
-                        + strength[y][x - 1] * 0.125
-                        + strength[y][x + 1] * 0.125
-                        + strength[y - 1][x] * 0.125
-                        + strength[y + 1][x] * 0.125
-                    )
-                if s < 0.10:
-                    out_px[x, y] = (255, 255, 255, 255)
-                else:
-                    t = max(0.18, min(1.0, s))
-                    out_px[x, y] = (
-                        int(255 + (ink[0] - 255) * t),
-                        int(255 + (ink[1] - 255) * t),
-                        int(255 + (ink[2] - 255) * t),
-                        255,
-                    )
+                if ap[x, y] > 0:
+                    out_px[x, y] = (ink[0], ink[1], ink[2], 255)
+
+        bbox = out.split()[-1].getbbox()
+        if not bbox:
+            return ""
+        margin = 8
+        left = max(0, bbox[0] - margin)
+        top = max(0, bbox[1] - margin)
+        right = min(w, bbox[2] + margin)
+        bottom = min(h, bbox[3] + margin)
+        out = out.crop((left, top, right, bottom))
+        if max(out.size) > max(max_w, max_h) or out.size[0] > max_w or out.size[1] > max_h:
+            out.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
+            out = _harden_signature_ink_rgba(out, ink)
+
         buf = io.BytesIO()
         out.save(buf, format="PNG", optimize=True)
         return base64.b64encode(buf.getvalue()).decode("utf-8")
@@ -3364,8 +3377,53 @@ def make_ink_transparent_b64(raw_b64: str, max_w: int = 520, max_h: int = 180) -
 
 
 def compress_signature_b64(raw_b64: str) -> str:
-    """ضغط توقيع مستلم الخفر المناوب إلى PNG صغير بحبر أزرق رسمي #0044cc."""
+    """ضغط توقيع مستلم الخفر المناوب إلى PNG صغير بحبر أزرق رسمي #0038A8."""
     return make_ink_transparent_b64(raw_b64, max_w=480, max_h=160)
+
+
+def _signature_needs_ink_repair(raw_b64: str) -> bool:
+    """يكشف التوقيع الباهت أو غير المقصوص لإعادة تعزيزه وحفظه تلقائياً."""
+    payload = str(raw_b64 or "").strip()
+    if not payload:
+        return False
+    if payload.startswith("data:"):
+        payload = payload.split(",", 1)[-1]
+    try:
+        img = Image.open(io.BytesIO(base64.b64decode(payload))).convert("RGBA")
+        w, h = img.size
+        if w * h <= 0:
+            return False
+        # لوحة عريضة غير مقصوصة (شائعة من شاشة الكمبيوتر)
+        alpha = img.split()[-1]
+        bbox = alpha.getbbox()
+        if bbox:
+            bw, bh = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            if w > max(bw * 2.2, bw + 80) or h > max(bh * 2.2, bh + 60):
+                return True
+        if _signature_has_dark_or_teal_bg(payload):
+            return True
+        px = img.load()
+        a_min, _a_max = alpha.getextrema()
+        has_transparency = a_min < 250
+        inkish = 0
+        faded = 0
+        step = max(1, (w * h) // 9000)
+        for i in range(0, w * h, step):
+            x, y = i % w, i // w
+            r, g, b, a = px[x, y]
+            if has_transparency:
+                is_ink = a > 20
+            else:
+                is_ink = min(r, g, b) < 235 or (b - r) > 25
+            if not is_ink:
+                continue
+            inkish += 1
+            # باهت: شفافية منخفضة أو مزج مع الأبيض بعيداً عن #0038A8
+            if a < 220 or r > 55 or g > 110:
+                faded += 1
+        return inkish > 0 and (faded / max(inkish, 1)) > 0.12
+    except Exception:
+        return True
 
 
 def strip_signature_data_url(raw: str) -> str:
@@ -3617,7 +3675,7 @@ def render_document_sig_pads(
             saved=saved,
             ls_key=f"khafar_doc_sig::{nonce}::{form_id}::{pad}",
             pad_id=pad,
-            accent="#0044cc",
+            accent="#0038A8",
         )
         ev = consume_sig_pad_result(val, kind=f"doc_{form_id}_{pad}_{nonce}")
         _apply_sig_pad_event_to_session(pad, ev)
@@ -3754,12 +3812,12 @@ def get_manager_signature_settings() -> dict:
         if (not out["manager_title"] or out["manager_title"] == DEFAULT_MANAGER_TITLE) and secrets_data.get("manager_title"):
             out["manager_title"] = secrets_data["manager_title"]
 
-    # نظّف التوقيع المحفوظ فوراً (خلفية بيضاء + حبر أزرق) دون إلزام بإعادة التوقيع
+    # تعزيز فوري للتوقيع الباهت/غير المقصوص إلى حبر أزرق صلب #0038A8
     raw_sig = str(out.get("manager_sig_b64") or "").strip()
     if raw_sig:
         cleaned_now = make_ink_transparent_b64(raw_sig, max_w=520, max_h=200) or raw_sig
         out["manager_sig_b64"] = cleaned_now
-        if _signature_has_dark_or_teal_bg(raw_sig):
+        if cleaned_now and _signature_needs_ink_repair(raw_sig):
             try:
                 save_manager_signature_settings(
                     out.get("manager_name", ""),
@@ -3837,6 +3895,8 @@ def save_manager_signature_settings(
     write_backup: bool = True,
 ) -> dict:
     cleaned_sig = make_ink_transparent_b64(manager_sig_b64, max_w=520, max_h=200) if manager_sig_b64 else ""
+    if manager_sig_b64 and not cleaned_sig:
+        cleaned_sig = strip_signature_data_url(manager_sig_b64)[:350000]
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     name = str(manager_name or "")[:180]
     title = str(manager_title or DEFAULT_MANAGER_TITLE)[:180] or DEFAULT_MANAGER_TITLE
@@ -4022,7 +4082,28 @@ def get_device_shift(device_hash: str) -> dict:
     conn.close()
     if not row:
         return _blank_shift()
-    return _clean_shift(dict(row))
+    cleaned = _clean_shift(dict(row))
+    raw_sig = str(cleaned.get(DUTY_SIG_KEY) or "").strip()
+    if raw_sig:
+        boosted = compress_signature_b64(raw_sig) or raw_sig
+        cleaned[DUTY_SIG_KEY] = boosted
+        if boosted and _signature_needs_ink_repair(raw_sig):
+            try:
+                # حفظ معزّز دون إعادة إطلاق get_device_shift
+                conn2 = db_connect()
+                conn2.execute(
+                    "UPDATE device_shifts SET duty_sig_b64=? WHERE device_hash=?",
+                    (boosted[:250000], device_hash),
+                )
+                conn2.commit()
+                conn2.close()
+                try:
+                    khafar_cloud_vault.trigger_vault_backup(immediate=True)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+    return cleaned
 
 
 def device_shift_exists(device_hash: str) -> bool:
@@ -5042,7 +5123,7 @@ def render_officer_sig_pad_html() -> str:
   .ok{{color:#34d399;font-size:12px;font-weight:700;text-align:center;margin-top:6px;min-height:18px}}
 </style></head><body>
 <div class="wrap">
-  <div class="title">ارسم توقيع مستلم الخفر المناوب هنا (حبر أزرق رسمي #0044cc)</div>
+  <div class="title">ارسم توقيع مستلم الخفر المناوب هنا (حبر أزرق رسمي #0038A8)</div>
   <canvas id="pad_officer_settings" width="900" height="220" tabindex="-1"></canvas>
   <div class="actions">
     <button type="button" id="btnClear">مسح اللوحة</button>
@@ -5072,8 +5153,8 @@ def render_officer_sig_pad_html() -> str:
   function move(e){{
     if (!drawing) return; if (e.cancelable) e.preventDefault(); e.stopPropagation();
     var p = pos(e);
-    ctx.lineWidth = 3.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#0044cc'; ctx.lineTo(p.x, p.y); ctx.stroke();
+    ctx.lineWidth = 4.0; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#0038A8'; ctx.lineTo(p.x, p.y); ctx.stroke();
   }}
   function end(e){{ if (e && e.cancelable) e.preventDefault(); drawing = false; }}
   canvas.addEventListener('pointerdown', start, {{passive:false}});
@@ -5156,8 +5237,8 @@ def render_manager_sig_pad_html() -> str:
   function move(e){
     if (!drawing) return; if (e.cancelable) e.preventDefault(); e.stopPropagation();
     var p = pos(e);
-    ctx.lineWidth = 3.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#0d47a1'; ctx.lineTo(p.x, p.y); ctx.stroke();
+    ctx.lineWidth = 4.0; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#0038A8'; ctx.lineTo(p.x, p.y); ctx.stroke();
   }
   function end(e){ if (e && e.cancelable) e.preventDefault(); drawing = false; }
   canvas.addEventListener('pointerdown', start, {passive:false});
@@ -5729,12 +5810,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     if duty_stamp_now:
         duty_box_inner = _sig_slot_img(duty_stamp_now, "slot_duty")
         if manager_auto:
-            duty_box_inner += (
-                '<div style="margin-top:4px;display:inline-block;border:1.2px solid #000;'
-                'padding:2px 8px;border-radius:4px;font-size:10.5px;font-weight:800;">'
-                "مُصادق ومُعتمد نظاماً"
-                "</div>"
-            )
+            duty_box_inner += '<div class="sig-approved-badge">مُصادق ومُعتمد نظاماً</div>'
     elif needs_duty_pad:
         duty_box_inner = (
             "<div class='sig-guide'>"
@@ -6150,6 +6226,21 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         margin: 4px auto 0 !important;
         background: #ffffff !important; mix-blend-mode: normal !important;
         border: none !important; box-shadow: none !important; visibility: visible !important; opacity: 1 !important;
+        filter: none;
+    }}
+    table.sig-tbl img#slot_duty, table.sig-tbl img#slot_officer,
+    #slot_duty.sig-slot-img, #slot_officer.sig-slot-img,
+    img#slot_duty, img#slot_officer {{
+        height: 50px !important; max-height: 54px !important; max-width: 92% !important;
+        width: auto !important; object-fit: contain !important; display: block !important;
+        margin: 3px auto !important; opacity: 1 !important; filter: contrast(1.2);
+        visibility: visible !important; background: #ffffff !important; mix-blend-mode: normal !important;
+    }}
+    .sig-approved-badge {{
+        margin-top: 2px !important; display: inline-block !important;
+        border: 1.2px solid #000000 !important; padding: 1px 7px !important; border-radius: 4px !important;
+        font-size: 9.5px !important; font-weight: 800 !important; line-height: 1.25 !important;
+        color: #000000 !important; background: #ffffff !important;
     }}
     td.sig-cell img.sig-slot-img, .sig-cell img.sig-slot-img, table.sig-tbl td {{
         background: #ffffff !important; mix-blend-mode: normal !important;
@@ -6167,6 +6258,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             max-height: 50px !important; height: auto !important;
             background: #ffffff !important; mix-blend-mode: normal !important;
             border: none !important; box-shadow: none !important;
+            -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+        }}
+        table.sig-tbl img#slot_duty, table.sig-tbl img#slot_officer,
+        img#slot_duty, img#slot_officer {{
+            height: 50px !important; max-height: 54px !important; max-width: 92% !important;
+            opacity: 1 !important; filter: contrast(1.2);
             -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
         }}
     }}
@@ -6613,6 +6710,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         height: 54px !important; min-height: 54px !important; padding: 4px 5px !important; font-size: 11px !important;
     }}
     .a4-tier-dense img.sig-slot-img, .a4-dense-print img.sig-slot-img {{ max-height: 40px !important; }}
+    .a4-tier-dense img#slot_duty, .a4-tier-dense img#slot_officer,
+    .a4-dense-print img#slot_duty, .a4-dense-print img#slot_officer,
+    .a4-tier-balanced img#slot_duty, .a4-tier-balanced img#slot_officer {{
+        height: 50px !important; max-height: 54px !important; max-width: 92% !important;
+        opacity: 1 !important; filter: contrast(1.2);
+    }}
     .a4-tier-dense .footer-qr, .a4-dense-print .footer-qr {{
         padding: 4px 7px !important; margin-top: 4px !important;
     }}
@@ -6830,7 +6933,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     </div>
 </div>
 <script>
-    const PEN_COLOR = '#0044cc';
+    const PEN_COLOR = '#0038A8';
     const LIVE_PADS = {json.dumps(live_pad_ids, ensure_ascii=False)};
     const PRELOADED_SIGS = {json.dumps(preloaded_live_sigs, ensure_ascii=False)};
     const DOC_SIG_NONCE = {json.dumps(ensure_doc_sig_nonce(), ensure_ascii=False)};
@@ -6972,7 +7075,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             canvas.dataset.dprReady = '1';
         }}
         ctx.strokeStyle = PEN_COLOR;
-        ctx.lineWidth = 2.8;
+        ctx.lineWidth = 3.8;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         let drawing = false;
@@ -8148,8 +8251,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       }});
       sheet.querySelectorAll('table.sig-tbl svg path, table.sig-tbl svg polyline, table.sig-tbl svg line').forEach(function(node) {{
         var st = (node.getAttribute('stroke') || '').toLowerCase();
-        if (st && st !== 'none' && st.indexOf('#fff') !== 0) node.setAttribute('stroke', '#0044cc');
-        node.style.setProperty('stroke', '#0044cc', 'important');
+        if (st && st !== 'none' && st.indexOf('#fff') !== 0) node.setAttribute('stroke', '#0038A8');
+        node.style.setProperty('stroke', '#0038A8', 'important');
       }});
     }} catch (e) {{}}
   }}
@@ -8324,7 +8427,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       window.__padInk[padId] = true;
       window.__cachedIosPdfAb = null;
       var lw = strokeWidth();
-      ctx.fillStyle = '#0044cc';
+      ctx.fillStyle = '#0038A8';
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, lw * 0.52, 0, Math.PI * 2);
       ctx.fill();
@@ -8334,7 +8437,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       if (!isDrawing) return;
       var nextMidX = (lastX + pt.x) / 2;
       var nextMidY = (lastY + pt.y) / 2;
-      ctx.strokeStyle = '#0044cc';
+      ctx.strokeStyle = '#0038A8';
       ctx.lineWidth = strokeWidth();
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -11276,12 +11379,12 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
         officer_saved_now = str(st.session_state.get(DUTY_SIG_KEY) or shift.get(DUTY_SIG_KEY) or "").strip()
         officer_pad_val = sig_pad(
             key="officer_settings_sig_pad",
-            title="ارسم توقيع مستلم الخفر المناوب هنا (حبر أزرق رسمي #0044cc)",
+            title="ارسم توقيع مستلم الخفر المناوب هنا (حبر أزرق رسمي #0038A8)",
             subtitle="ارسم ثم ارفع الإصبع أو القلم — يُعتمد التوقيع ويُحفظ تلقائياً دون زر.",
             saved=officer_saved_now,
             ls_key=DUTY_SIG_LS_KEY,
             pad_id="officer",
-            accent="#0044cc",
+            accent="#0038A8",
         )
         _officer_sig_before = str(st.session_state.get(DUTY_SIG_KEY) or shift.get(DUTY_SIG_KEY) or "").strip()
         officer_pad_event = consume_sig_pad_result(officer_pad_val, kind="officer")
@@ -11323,7 +11426,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
             accept_multiple_files=False,
             allow_pdf=False,
             preserve_alpha=True,
-            help=UPLOAD_HELP_CAPTION + " يُحوَّل الحبر تلقائياً إلى الأزرق الرسمي #0044cc.",
+            help=UPLOAD_HELP_CAPTION + " يُحوَّل الحبر تلقائياً إلى الأزرق الرسمي #0038A8.",
         )
         if sig_upload is not None:
             processed, err = process_uploaded_attachment_with_status(sig_upload, purpose="signature")
@@ -11477,7 +11580,7 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
             mgr_saved_now = str(mgr_now.get("manager_sig_b64") or "").strip()
             mgr_pad_val = sig_pad(
                 key="manager_settings_sig_pad",
-                title="توقيع مدير وحدة الحوادث (إصبع أو قلم — حبر أزرق رسمي #0044cc)",
+                title="توقيع مدير وحدة الحوادث (إصبع أو قلم — حبر أزرق رسمي #0038A8)",
                 subtitle="ارسم ثم ارفع الإصبع أو القلم — يُعتمد التوقيع ويُحفظ تلقائياً لجميع الأفراد.",
                 saved=mgr_saved_now,
                 ls_key="khafar_manager_sig",

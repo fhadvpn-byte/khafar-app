@@ -303,6 +303,7 @@ def export_vault_state(db_path: str | None = None) -> dict:
             "archive": _dump_table(conn, "records"),
             "shift_settings": _dump_table(conn, "shift_settings"),
             "device_shifts": _dump_table(conn, "device_shifts"),
+            # يشمل اسم المدير ومسماه وتوقيعه (manager_sig_b64) وخيار الإظهار التلقائي
             "manager_settings": _dump_table(conn, "manager_settings"),
             "khafar_visits": _dump_table(conn, "khafar_visits"),
             "khafar_doc_events": _dump_table(conn, "khafar_doc_events"),
