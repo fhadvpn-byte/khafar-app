@@ -1218,7 +1218,11 @@ div[data-testid="stHorizontalBlock"] div.stButton > button {
 .stApp iframe[title*="khafar_mobile_uploader"],
 .stApp iframe[title*="mobile_uploader"] {
     min-height: 0 !important;
-    overflow: hidden !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    vertical-align: top !important;
+    align-self: flex-start !important;
 }
 
 .stApp [data-testid="stAppViewContainer"],
@@ -6092,6 +6096,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     image_count = 0
     show_atts = rec.get("show_attachments_in_print", True)
     att_items = parse_attachments(rec.get("attachment_b64"))
+    form_id_for_att = str(rec.get("form_id") or "")
+    settle_parties = (
+        _count_parties(rec.get("fields") or {}) if form_id_for_att == "decl_settlement" else 0
+    )
     if show_atts and att_items:
         cards = []
         for att in att_items:
@@ -6112,11 +6120,35 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                     f'<img src="data:{mime};base64,{b64}" alt="" />'
                     f"</div>"
                 )
-        att_grid_cls = "attachment-grid atts-single" if image_count <= 1 else "attachment-grid atts-multi"
+        att_grid_style = ""
+        if form_id_for_att == "decl_settlement" and image_count > 0:
+            # شبكة ذكية للتنازل تحافظ على صفحة A4 واحدة حتى مع عدة أطراف
+            party_mod = ""
+            if settle_parties >= 5:
+                party_mod = " atts-parties-max"
+            elif settle_parties >= 4:
+                party_mod = " atts-parties-hi"
+            if image_count == 1:
+                att_grid_cls = f"attachment-grid atts-settle-1{party_mod}"
+            elif image_count == 2:
+                att_grid_cls = f"attachment-grid atts-settle-2{party_mod}"
+            elif image_count <= 5:
+                att_grid_cls = f"attachment-grid atts-settle-row{party_mod}"
+                att_grid_style = (
+                    f' style="grid-template-columns: repeat({image_count}, minmax(0, 1fr)); gap: 6px;"'
+                )
+            else:
+                cols = 4 if image_count >= 7 else 3
+                att_grid_cls = f"attachment-grid atts-settle-many{party_mod}"
+                att_grid_style = (
+                    f' style="grid-template-columns: repeat({cols}, minmax(0, 1fr)); gap: 6px;"'
+                )
+        else:
+            att_grid_cls = "attachment-grid atts-single" if image_count <= 1 else "attachment-grid atts-multi"
         attachment_block = f"""
         <div class="attachment-section">
             <div class="attachment-title">📎 المرفقات المصورة المعتمدة في التقرير</div>
-            <div class="{att_grid_cls}">{"".join(cards)}</div>
+            <div class="{att_grid_cls}"{att_grid_style}>{"".join(cards)}</div>
         </div>
         """
 
@@ -6627,6 +6659,43 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     .attachment-grid.atts-multi .att-card img {{
         max-height: 140px !important; max-width: 95% !important;
+        width: auto !important; height: auto !important; object-fit: contain !important;
+    }}
+    /* شبكة مرفقات ذكية لإقرار الصلح والتنازل فقط */
+    .attachment-grid.atts-settle-1,
+    .attachment-grid.atts-settle-2,
+    .attachment-grid.atts-settle-row,
+    .attachment-grid.atts-settle-many {{
+        display: grid !important; gap: 6px !important; align-items: start !important;
+        overflow: hidden !important; width: 100% !important;
+    }}
+    .attachment-grid.atts-settle-1 {{ grid-template-columns: 1fr !important; }}
+    .attachment-grid.atts-settle-1 .att-card img {{
+        max-height: 140px !important; max-width: 95% !important;
+        width: auto !important; height: auto !important; object-fit: contain !important;
+    }}
+    .attachment-grid.atts-settle-1.atts-parties-hi .att-card img,
+    .attachment-grid.atts-settle-1.atts-parties-max .att-card img {{
+        max-height: 115px !important;
+    }}
+    .attachment-grid.atts-settle-2 {{ grid-template-columns: 1fr 1fr !important; }}
+    .attachment-grid.atts-settle-2 .att-card img {{
+        max-height: 120px !important; max-width: 95% !important;
+        width: auto !important; height: auto !important; object-fit: contain !important;
+    }}
+    .attachment-grid.atts-settle-2.atts-parties-hi .att-card img,
+    .attachment-grid.atts-settle-2.atts-parties-max .att-card img {{
+        max-height: 100px !important;
+    }}
+    .attachment-grid.atts-settle-row .att-card img {{
+        max-height: 95px !important; max-width: 100% !important;
+        width: auto !important; height: auto !important; object-fit: contain !important;
+    }}
+    .attachment-grid.atts-settle-row.atts-parties-max .att-card img {{
+        max-height: 85px !important;
+    }}
+    .attachment-grid.atts-settle-many .att-card img {{
+        max-height: 75px !important; max-width: 100% !important;
         width: auto !important; height: auto !important; object-fit: contain !important;
     }}
     /* صور المرفقات ثابتة مضغوطة — لا تُكبَّر أبداً عبر expandLegal */

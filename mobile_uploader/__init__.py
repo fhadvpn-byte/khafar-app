@@ -142,6 +142,7 @@ def khafar_file_uploader(
     رافع ملفات جوال ثنائي الاتجاه.
     - accept_multiple_files=False → يعيد KhafarUploadedFile | None
     - accept_multiple_files=True → يعيد list[KhafarUploadedFile]
+    الارتفاع ديناميكي من index.html عبر setFrameHeight(scrollHeight+18) — لا تفرض قصّاً خارجياً.
     """
     store_key = f"_khafar_mu_files_{key}"
     token_key = f"_khafar_mu_token_{key}"
@@ -151,6 +152,7 @@ def khafar_file_uploader(
     if subtitle is None:
         subtitle = "المعرض أو الكاميرا — متوافق مع أندرويد والآيفون"
 
+    # لا نمرّر ارتفاعاً ثابتاً؛ الإطار يتوسع من الواجهة عند إضافة/حذف المصغرات
     result = _mobile_uploader(
         title=label or "إرفاق ملفات",
         subtitle=subtitle or "",
@@ -169,8 +171,11 @@ def khafar_file_uploader(
         ).hexdigest()
         st.session_state[store_key] = files
         st.session_state[token_key] = token
-    elif store_key in st.session_state and isinstance(result, dict) and result.get("action") == "update":
-        # قائمة فارغة صريحة من المكوّن = مسح
+    elif store_key in st.session_state and isinstance(result, dict) and result.get("action") in (
+        "update",
+        "clear",
+    ):
+        # قائمة فارغة صريحة أو مسح الكل من المكوّن
         if not (result.get("files") or []):
             st.session_state[store_key] = []
             st.session_state[token_key] = ""
