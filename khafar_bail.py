@@ -9,7 +9,7 @@ BAIL_TITLE = "إقرار كفالة حضورية وغرامية في حادث م
 BAIL_OPT = "🛡️ " + BAIL_TITLE
 BAIL_BANNER = "إقرار وتعهد كفالة حضورية وغرامية في حادث مروري"
 BAIL_SUB = "توثيق كفالة طرف في حادث مروري والتزام الكفيل بالحضور وسداد الحقوق المترتبة"
-BAIL_LEGAL_TITLE = "نص إقرار الكفالة والتعهد النظامي المعتمد:"
+BAIL_LEGAL_TITLE = ""  # يبدأ مربع النص مباشرة بنص الإقرار دون عنوان فرعي
 _STATE = {"sel": False, "built": False, "cleared": False}
 
 def reset_run_state():

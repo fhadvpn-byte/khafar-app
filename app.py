@@ -1743,6 +1743,50 @@ def _form_display_title(form_def: dict, values: dict, form_id: str = "") -> str:
 _form_display_title = khafar_med_age.wrap_catalog_fn(_form_display_title)
 
 
+def _official_recipient_heading(raw_name: str) -> str:
+    """عنوان المخاطبة الرسمي: سعادة مدير … المحترم — بلا أقواس وبلا تكرار الألقاب."""
+    name = str(raw_name or "").strip()
+    name = re.sub(r"^[\s\(\（\[]+", "", name)
+    name = re.sub(r"[\s\)\）\]]+$", "", name).strip()
+    name = re.sub(r"^[(\（]\s*", "", name)
+    name = re.sub(r"\s*[)\）]$", "", name).strip()
+    if not name:
+        name = "...................."
+    has_saada = name.startswith("سعادة")
+    has_mudir = bool(re.match(r"^(سعادة\s+)?مدير\b", name))
+    if has_saada and has_mudir:
+        heading = name
+    elif has_mudir:
+        heading = f"سعادة {name}"
+    elif has_saada:
+        rest = name[len("سعادة"):].strip()
+        heading = f"سعادة مدير {rest}" if rest else "سعادة مدير ...................."
+    else:
+        heading = f"سعادة مدير {name}"
+    if "المحترم" not in heading:
+        heading = f"{heading} المحترم"
+    return html.escape(heading)
+
+
+def _format_medical_letter_html(recipient_raw: str, body_html: str) -> str:
+    """خطاب طبي/جنائي رسمي من 3 أجزاء HTML داخل مربع النص."""
+    heading = _official_recipient_heading(recipient_raw)
+    body = str(body_html or "").strip()
+    return (
+        f'<div class="legal-addr" style="text-align:center !important; text-align-last:center !important; '
+        f'font-weight:800 !important; font-size:13.5px !important; margin:0 0 4px 0 !important; '
+        f'line-height:1.35 !important; padding:0 !important;">'
+        f"{heading}</div>"
+        f'<div class="legal-salam" style="text-align:right !important; text-align-last:right !important; '
+        f'font-weight:700 !important; font-size:13px !important; margin:0 0 4px 0 !important; '
+        f'line-height:1.35 !important; padding:0 !important;">'
+        f"السلام عليكم ورحمة الله وبركاته</div>"
+        f'<div class="legal-letter-body" style="text-align:right !important; text-align-last:right !important; '
+        f'line-height:1.65 !important; margin:0 !important; padding:0 !important;">'
+        f"{body}</div>"
+    )
+
+
 def _med_injury_legal(m: dict) -> str:
     plural = _is_plural_case(m, "med_injury")
     mode_raw = str((m or {}).get("cases_mode") or "").strip()
@@ -1766,14 +1810,14 @@ def _med_injury_legal(m: dict) -> str:
         exit_clause = "حيال خروجه"
         arrive_clause = "والواصل إليكم"
     mode = _rtl_isolate(mode_text, as_html=True) if mode_text else _val(m, "cases_mode")
-    return (
-        f"سعادة مدير ({_val(m, 'hospital_name')}) المحترم، السلام عليكم ورحمة الله وبركاته.. "
+    body = (
         f"إشارةً إلى الحادث المروري رقم ({_val(m, 'incident_no')})، نبعث لسعادتكم ({mode})، {data_label}: "
         f"({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')} - {_val(m, 'plate_no')})"
         f"{extras}، {arrive_clause} ({_sel(m, 'transport_way')}). "
         f"نأمل الأمر بإجراء الكشف الطبي اللازم {aid_clause}، {report_clause}، "
         f"مع اعتماد التوجيه الأمني التالي {exit_clause}: ({_sel(m, 'security_hold')})."
     )
+    return _format_medical_letter_html(str((m or {}).get("hospital_name") or ""), body)
 
 
 def _med_morgue_legal(m: dict) -> str:
@@ -1795,14 +1839,14 @@ def _med_morgue_legal(m: dict) -> str:
         "وإجراء الكشف الطبي اللازم وموافاتنا بتقارير الوفاة المعتمدة لكل حالة",
         plural,
     )
-    return (
-        f"سعادة مدير ({_val(m, 'hospital_name')}) المحترم، السلام عليكم ورحمة الله وبركاته.. "
+    body = (
         f"على إثر الحادث المروري الجسيم رقم ({_val(m, 'incident_no')})، جرى بعث ({mode}) للإيداع بثلاجة الموتى طرفكم، "
         f"{body_label}: ({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')} - {_val(m, 'plate_no')})"
         f"{extras}، حيث كانت واقعة الوفاة والنقل: ({_sel(m, 'transport_death')}). "
         f"نأمل من سعادتكم الأمر بـ{receive_clause}، {report_clause}، "
         f"مع التقيد التام بالتوجيه النظامي التالي: ({_sel(m, 'forensic_order')})."
     )
+    return _format_medical_letter_html(str((m or {}).get("hospital_name") or ""), body)
 _med_morgue_legal = khafar_med_age.wrap_catalog_fn(_med_morgue_legal)
 
 
@@ -2117,14 +2161,14 @@ def _toxicology_legal(values: dict) -> str:
         if awtar
         else ""
     )
-    return (
-        f"سعادة مدير ({_val(values, 'lab_dest')}) المحترم، السلام عليكم ورحمة الله وبركاته.. "
+    body = (
         f"استناداً إلى أحكام نظام المرور ولائحته التنفيذية وإجراءات الاستدلال في الحادث/المحضر رقم ({_val(values, 'incident_no')})"
         f"{awtar_clause}، "
         f"نبعث لسعادتكم المدعو ({_val(values, 'party_name')})، حامل الهوية رقم ({_val(values, 'party_id')})، وعلاقته بالواقعة ({_val(values, 'plate_no')})، "
         f"وذلك بناءً على المسوغ النظامي: ({_sel(values, 'suspicion_signs')}). نأمل توجيه المختصين بإجراء ({_sel(values, 'sample_type')}) وفق الأصول الفنية المعتمدة "
         f"وتوثيق وقت أخذ العينة وسلسلة الحيازة النظامية، وموافاتنا بالتقرير المخبري القطعي السري في مظروف رسمي مختوم، مع مراعاة الترتيب الأمني: ({_val(values, 'escort_info')})."
     )
+    return _format_medical_letter_html(str((values or {}).get("lab_dest") or ""), body)
 
 
 def _statement_legal(values: dict) -> str:
@@ -5972,7 +6016,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     if is_letter:
         legal_box_title = "صيغة الخطاب الرسمي الموجه لحجز مرور محافظة أبو عريش:"
     elif is_medical:
-        legal_box_title = "نص الخطاب والتوجيه الرسمي المعتمد:"
+        legal_box_title = ""
+    elif str(rec.get("category") or "") == "إقرار":
+        # الإقرارات الميدانية (شاملة الكفالة): يبدأ المربع مباشرة بنص الإقرار
+        legal_box_title = ""
     else:
         legal_box_title = f"الصيغة النظامية المعتمدة ({rec['category']}):"
     cleaned_legal_text = normalize_official_legal_text(rec.get("legal_text") or "")
@@ -6335,14 +6382,28 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         overflow-wrap: break-word !important; word-break: normal !important; white-space: normal !important;
         word-spacing: normal !important; color: #000000 !important; font-weight: 700 !important;
     }}
-    .legal-box > div:first-child {{ margin-bottom: 8px !important; font-weight: 800 !important; text-align: right !important; }}
+    .legal-box > div.legal-title:first-child {{ margin-bottom: 8px !important; font-weight: 800 !important; text-align: right !important; }}
     .legal-box div {{
         font-size: 12.5px !important; line-height: 1.75 !important; color: #000000 !important; font-weight: 700 !important;
         text-align: justify !important; text-justify: inter-word !important; text-align-last: right !important;
         direction: rtl !important; overflow-wrap: break-word !important; word-break: normal !important;
         white-space: normal !important; word-spacing: normal !important;
     }}
-    .legal-box > div:first-child {{ text-align: right !important; }}
+    .legal-box > div.legal-title:first-child {{ text-align: right !important; }}
+    .legal-box .legal-addr {{
+        text-align: center !important; text-align-last: center !important; font-weight: 800 !important;
+        font-size: 13.5px !important; margin: 0 0 4px 0 !important; line-height: 1.35 !important;
+        padding: 0 !important;
+    }}
+    .legal-box .legal-salam {{
+        text-align: right !important; text-align-last: right !important; font-weight: 700 !important;
+        font-size: 13px !important; margin: 0 0 4px 0 !important; line-height: 1.35 !important;
+        padding: 0 !important;
+    }}
+    .legal-box .legal-letter-body {{
+        text-align: right !important; text-align-last: right !important; line-height: 1.65 !important;
+        margin: 0 !important; padding: 0 !important;
+    }}
     table.sig-tbl {{
         table-layout: fixed !important; width: 100% !important;
         border-collapse: collapse; margin-top: 10px; text-align: center;
@@ -6743,7 +6804,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         <div class="a4-row a4-row-mid">
             <div class="a4-cell legal-wrap-cell">
                 <div class="legal-box" dir="rtl">
-                    <div class="legal-title" dir="rtl">{legal_box_title}</div>
+                    {f'<div class="legal-title" dir="rtl">{html.escape(legal_box_title)}</div>' if legal_box_title else ''}
                     <div class="legal-body" dir="rtl">&#8207;{cleaned_legal_text}</div>
                 </div>
                 {attachment_block}
