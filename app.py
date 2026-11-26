@@ -14,7 +14,7 @@ import uuid
 import khafar_box_fix
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
-from PIL import Image, ImageDraw, ImageOps, ImageFilter
+from PIL import Image, ImageDraw, ImageOps
 from abu_arish_impound import ABU_ARISH_IMPOUND_TEMPLATE
 from takmeel import TAKMEEL_FORMS, init_takmeel_db, render_takmeel_form
 import importlib, khafar_bail; khafar_bail = importlib.reload(khafar_bail) if getattr(khafar_bail, "_KHAFAR_BAIL_VER", "") != "v5" else khafar_bail; khafar_bail.reset_run_state()
@@ -3280,82 +3280,61 @@ def shift_light_payload(data: dict | None) -> dict:
 
 # حبر أزرق رسمي غامق وحاد لتواقيع المناوب ومدير وحدة الحوادث
 OFFICIAL_INK_RGB = (0, 56, 168)  # #0038A8
+_INK_DENSITY_MIN = 25.0
+
+
+def _pixel_ink_density(r: int, g: int, b: int, a: int) -> float:
+    """كثافة الحبر الفعلية: تعزل الخلفية البيضاء/الشفافة 100%."""
+    return (float(a) / 255.0) * float(255 - min(r, g, b))
 
 
 def _harden_signature_ink_rgba(img: Image.Image, ink: tuple[int, int, int] = OFFICIAL_INK_RGB) -> Image.Image:
-    """حوّل أي بكسل حبر إلى أزرق رسمي صلب alpha=255 مع خلفية شفافة."""
+    """أعد تطبيق معادلة فصل الحبر بعد التصغير (بدون طلاء الخلفية البيضاء)."""
     out = img.convert("RGBA")
     px = out.load()
     w, h = out.size
-    alpha_band = out.split()[-1]
-    a_min, a_max = alpha_band.getextrema()
-    has_transparency = a_min < 250
     for y in range(h):
         for x in range(w):
             r, g, b, a = px[x, y]
-            if has_transparency:
-                is_ink = a > 20 or (a > 0 and (min(r, g, b) < 235 or (b - r) > 25))
+            density = _pixel_ink_density(r, g, b, a)
+            if density < _INK_DENSITY_MIN:
+                px[x, y] = (255, 255, 255, 0)
             else:
-                is_ink = min(r, g, b) < 235 or (b - r) > 25
-            px[x, y] = (*ink, 255) if is_ink else (0, 0, 0, 0)
+                px[x, y] = (ink[0], ink[1], ink[2], min(255, int(density * 2.0)))
     return out
 
 
 def make_ink_transparent_b64(raw_b64: str, max_w: int = 520, max_h: int = 180) -> str:
-    """توقيع حبري رسمي: قص تلقائي + تعزيز كثافة الحبر الأزرق #0038A8 (alpha=255)."""
+    """توقيع حبري رسمي: فصل آمن للحبر عن الأبيض + قص تلقائي + أزرق #0038A8."""
     payload = str(raw_b64 or "").strip()
     if not payload:
         return ""
     if payload.startswith("data:"):
         payload = payload.split(",", 1)[-1]
     try:
+        # مستطيل أزرق تالف محفوظ سابقاً — لا تُعد معالجته
+        if _signature_is_solid_blue_blob(payload):
+            return ""
         ink = OFFICIAL_INK_RGB
         img = Image.open(io.BytesIO(base64.b64decode(payload)))
         img = ImageOps.exif_transpose(img).convert("RGBA")
         w, h = img.size
         src = img.load()
-        alpha_map = Image.new("L", (w, h), 0)
-        ap = alpha_map.load()
-        a_min, a_max = img.split()[-1].getextrema()
-        has_transparency = a_min < 250
-
+        out = Image.new("RGBA", (w, h), (255, 255, 255, 0))
+        out_px = out.load()
         ink_count = 0
         for y in range(h):
             for x in range(w):
                 r, g, b, a = src[x, y]
-                if has_transparency:
-                    is_ink = a > 20 or (min(r, g, b) < 235 and a > 8) or (b - r > 25 and a > 8)
-                else:
-                    is_ink = min(r, g, b) < 235 or (b - r) > 25
-                if not is_ink:
+                density = _pixel_ink_density(r, g, b, a)
+                if density < _INK_DENSITY_MIN:
+                    out_px[x, y] = (255, 255, 255, 0)
                     continue
-                # كثافة أولية من الشفافية أو بُعد البكسل عن الأبيض
-                base = a if has_transparency and a > 20 else max(0, 255 - min(r, g, b), max(0, b - r) * 2)
-                if base < 12:
-                    base = 12
-                boosted = min(255, int(base * 3.0))
-                if boosted < 40:
-                    continue
-                ap[x, y] = 255
+                out_px[x, y] = (ink[0], ink[1], ink[2], min(255, int(density * 2.0)))
                 ink_count += 1
 
-        bbox = alpha_map.getbbox()
-        if not bbox or ink_count <= 0:
+        if ink_count <= 0:
             return ""
-
-        box_area = max(1, (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]))
-        # تقوية طفيفة لسُمك الخط إذا كانت الخطوط رفيعة
-        if (ink_count / box_area) < 0.24:
-            alpha_map = alpha_map.filter(ImageFilter.MaxFilter(3))
-            ap = alpha_map.load()
-
-        out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        out_px = out.load()
-        for y in range(h):
-            for x in range(w):
-                if ap[x, y] > 0:
-                    out_px[x, y] = (ink[0], ink[1], ink[2], 255)
-
         bbox = out.split()[-1].getbbox()
         if not bbox:
             return ""
@@ -3365,7 +3344,7 @@ def make_ink_transparent_b64(raw_b64: str, max_w: int = 520, max_h: int = 180) -
         right = min(w, bbox[2] + margin)
         bottom = min(h, bbox[3] + margin)
         out = out.crop((left, top, right, bottom))
-        if max(out.size) > max(max_w, max_h) or out.size[0] > max_w or out.size[1] > max_h:
+        if out.size[0] > max_w or out.size[1] > max_h:
             out.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
             out = _harden_signature_ink_rgba(out, ink)
 
@@ -3373,7 +3352,7 @@ def make_ink_transparent_b64(raw_b64: str, max_w: int = 520, max_h: int = 180) -
         out.save(buf, format="PNG", optimize=True)
         return base64.b64encode(buf.getvalue()).decode("utf-8")
     except Exception:
-        return payload[:250000]
+        return ""
 
 
 def compress_signature_b64(raw_b64: str) -> str:
@@ -3381,8 +3360,8 @@ def compress_signature_b64(raw_b64: str) -> str:
     return make_ink_transparent_b64(raw_b64, max_w=480, max_h=160)
 
 
-def _signature_needs_ink_repair(raw_b64: str) -> bool:
-    """يكشف التوقيع الباهت أو غير المقصوص لإعادة تعزيزه وحفظه تلقائياً."""
+def _signature_is_solid_blue_blob(raw_b64: str) -> bool:
+    """يكشف المستطيل الأزرق المصمت التالف (أكثر من 60% من المساحة حبر مصمت)."""
     payload = str(raw_b64 or "").strip()
     if not payload:
         return False
@@ -3391,9 +3370,39 @@ def _signature_needs_ink_repair(raw_b64: str) -> bool:
     try:
         img = Image.open(io.BytesIO(base64.b64decode(payload))).convert("RGBA")
         w, h = img.size
+        total = max(1, w * h)
+        px = img.load()
+        solid = 0
+        step = max(1, total // 12000)
+        sampled = 0
+        for i in range(0, total, step):
+            x, y = i % w, i // w
+            r, g, b, a = px[x, y]
+            sampled += 1
+            # بكسل أزرق غامق شبه مصمت (نتيجة تلوين الخلفية البيضاء خطأً)
+            if a >= 180 and r <= 40 and g <= 90 and b >= 120:
+                solid += 1
+            elif a >= 200 and min(r, g, b) < 40 and b >= 100:
+                solid += 1
+        return sampled > 0 and (solid / sampled) > 0.60
+    except Exception:
+        return False
+
+
+def _signature_needs_ink_repair(raw_b64: str) -> bool:
+    """يكشف التوقيع الباهت أو غير المقصوص لإعادة تعزيزه — مع استثناء المستطيل الأزرق التالف."""
+    payload = str(raw_b64 or "").strip()
+    if not payload:
+        return False
+    if payload.startswith("data:"):
+        payload = payload.split(",", 1)[-1]
+    if _signature_is_solid_blue_blob(payload):
+        return False
+    try:
+        img = Image.open(io.BytesIO(base64.b64decode(payload))).convert("RGBA")
+        w, h = img.size
         if w * h <= 0:
             return False
-        # لوحة عريضة غير مقصوصة (شائعة من شاشة الكمبيوتر)
         alpha = img.split()[-1]
         bbox = alpha.getbbox()
         if bbox:
@@ -3403,27 +3412,21 @@ def _signature_needs_ink_repair(raw_b64: str) -> bool:
         if _signature_has_dark_or_teal_bg(payload):
             return True
         px = img.load()
-        a_min, _a_max = alpha.getextrema()
-        has_transparency = a_min < 250
         inkish = 0
         faded = 0
         step = max(1, (w * h) // 9000)
         for i in range(0, w * h, step):
             x, y = i % w, i // w
             r, g, b, a = px[x, y]
-            if has_transparency:
-                is_ink = a > 20
-            else:
-                is_ink = min(r, g, b) < 235 or (b - r) > 25
-            if not is_ink:
+            density = _pixel_ink_density(r, g, b, a)
+            if density < _INK_DENSITY_MIN:
                 continue
             inkish += 1
-            # باهت: شفافية منخفضة أو مزج مع الأبيض بعيداً عن #0038A8
             if a < 220 or r > 55 or g > 110:
                 faded += 1
         return inkish > 0 and (faded / max(inkish, 1)) > 0.12
     except Exception:
-        return True
+        return False
 
 
 def strip_signature_data_url(raw: str) -> str:
@@ -3812,22 +3815,38 @@ def get_manager_signature_settings() -> dict:
         if (not out["manager_title"] or out["manager_title"] == DEFAULT_MANAGER_TITLE) and secrets_data.get("manager_title"):
             out["manager_title"] = secrets_data["manager_title"]
 
-    # تعزيز فوري للتوقيع الباهت/غير المقصوص إلى حبر أزرق صلب #0038A8
+    # تنظيف المستطيل الأزرق التالف أو تعزيز التوقيع الباهت بأمان
     raw_sig = str(out.get("manager_sig_b64") or "").strip()
-    if raw_sig:
-        cleaned_now = make_ink_transparent_b64(raw_sig, max_w=520, max_h=200) or raw_sig
-        out["manager_sig_b64"] = cleaned_now
-        if cleaned_now and _signature_needs_ink_repair(raw_sig):
-            try:
-                save_manager_signature_settings(
-                    out.get("manager_name", ""),
-                    out.get("manager_title", DEFAULT_MANAGER_TITLE),
-                    cleaned_now,
-                    bool(out.get("auto_insert", True)),
-                    write_backup=True,
-                )
-            except Exception:
-                pass
+    if raw_sig and _signature_is_solid_blue_blob(raw_sig):
+        out["manager_sig_b64"] = ""
+        try:
+            save_manager_signature_settings(
+                out.get("manager_name", ""),
+                out.get("manager_title", DEFAULT_MANAGER_TITLE),
+                "",
+                bool(out.get("auto_insert", True)),
+                write_backup=True,
+            )
+        except Exception:
+            pass
+        st.session_state.pop("manager_stamp_b64", None)
+    elif raw_sig:
+        cleaned_now = make_ink_transparent_b64(raw_sig, max_w=520, max_h=200)
+        if cleaned_now:
+            out["manager_sig_b64"] = cleaned_now
+            if _signature_needs_ink_repair(raw_sig):
+                try:
+                    save_manager_signature_settings(
+                        out.get("manager_name", ""),
+                        out.get("manager_title", DEFAULT_MANAGER_TITLE),
+                        cleaned_now,
+                        bool(out.get("auto_insert", True)),
+                        write_backup=True,
+                    )
+                except Exception:
+                    pass
+        else:
+            out["manager_sig_b64"] = ""
 
     name = (out["manager_name"] or "").strip()
     title = (out["manager_title"] or DEFAULT_MANAGER_TITLE).strip()
@@ -4085,15 +4104,17 @@ def get_device_shift(device_hash: str) -> dict:
     cleaned = _clean_shift(dict(row))
     raw_sig = str(cleaned.get(DUTY_SIG_KEY) or "").strip()
     if raw_sig:
-        boosted = compress_signature_b64(raw_sig) or raw_sig
-        cleaned[DUTY_SIG_KEY] = boosted
-        if boosted and _signature_needs_ink_repair(raw_sig):
+        wipe_corrupt = _signature_is_solid_blue_blob(raw_sig)
+        boosted = "" if wipe_corrupt else compress_signature_b64(raw_sig)
+        store_val = "" if wipe_corrupt else (boosted or "")
+        cleaned[DUTY_SIG_KEY] = store_val
+        should_persist = wipe_corrupt or (bool(boosted) and _signature_needs_ink_repair(raw_sig))
+        if should_persist:
             try:
-                # حفظ معزّز دون إعادة إطلاق get_device_shift
                 conn2 = db_connect()
                 conn2.execute(
                     "UPDATE device_shifts SET duty_sig_b64=? WHERE device_hash=?",
-                    (boosted[:250000], device_hash),
+                    (store_val[:250000] if store_val else "", device_hash),
                 )
                 conn2.commit()
                 conn2.close()
@@ -4103,6 +4124,10 @@ def get_device_shift(device_hash: str) -> dict:
                     pass
             except Exception:
                 pass
+        if wipe_corrupt or not store_val:
+            st.session_state[DUTY_SIG_KEY] = ""
+        elif store_val:
+            st.session_state[DUTY_SIG_KEY] = store_val
     return cleaned
 
 
@@ -5261,39 +5286,45 @@ def render_manager_sig_pad_html() -> str:
     var tmp = document.createElement('canvas');
     tmp.width = w; tmp.height = h;
     var tctx = tmp.getContext('2d');
-    // خلفية بيضاء صافية ثم الحبر الأزرق الرسمي
-    tctx.fillStyle = '#ffffff';
-    tctx.fillRect(0, 0, w, h);
+    tctx.clearRect(0, 0, w, h);
     tctx.drawImage(srcCanvas, 0, 0);
     var img = tctx.getImageData(0, 0, w, h);
     var d = img.data;
-    var inkR = 15, inkG = 45, inkB = 130;
+    var inkR = 0, inkG = 56, inkB = 168;
+    var minX = w, minY = h, maxX = -1, maxY = -1, anyInk = false;
     for (var i = 0; i < d.length; i += 4) {
       var r = d[i], g = d[i+1], b = d[i+2], a = d[i+3];
-      if (a < 40 || (r > 200 && g > 200 && b > 200)) {
-        d[i] = 255; d[i+1] = 255; d[i+2] = 255; d[i+3] = 255;
+      var dens = (a / 255.0) * (255 - Math.min(r, g, b));
+      if (dens < 25) {
+        d[i] = 255; d[i+1] = 255; d[i+2] = 255; d[i+3] = 0;
         continue;
       }
-      var br = (r + g + b) / 3;
-      var t = Math.max(0.15, Math.min(1, (235 - br) / 180));
-      d[i] = Math.round(255 + (inkR - 255) * t);
-      d[i+1] = Math.round(255 + (inkG - 255) * t);
-      d[i+2] = Math.round(255 + (inkB - 255) * t);
-      d[i+3] = 255;
+      anyInk = true;
+      d[i] = inkR; d[i+1] = inkG; d[i+2] = inkB;
+      d[i+3] = Math.min(255, dens * 2.0);
+      var px = (i / 4) | 0;
+      var x = px % w, y = (px / w) | 0;
+      if (x < minX) minX = x; if (y < minY) minY = y;
+      if (x > maxX) maxX = x; if (y > maxY) maxY = y;
     }
+    if (!anyInk) return '';
     tctx.putImageData(img, 0, 0);
-    if (maxW && w > maxW) {
-      var scale = maxW / w;
+    var pad = 8;
+    minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad);
+    maxX = Math.min(w - 1, maxX + pad); maxY = Math.min(h - 1, maxY + pad);
+    var cw = maxX - minX + 1, ch = maxY - minY + 1;
+    var cropped = document.createElement('canvas');
+    cropped.width = cw; cropped.height = ch;
+    cropped.getContext('2d').drawImage(tmp, minX, minY, cw, ch, 0, 0, cw, ch);
+    if (maxW && cw > maxW) {
+      var scale = maxW / cw;
       var out = document.createElement('canvas');
-      out.width = Math.round(w * scale);
-      out.height = Math.round(h * scale);
-      var octx = out.getContext('2d');
-      octx.fillStyle = '#ffffff';
-      octx.fillRect(0, 0, out.width, out.height);
-      octx.drawImage(tmp, 0, 0, out.width, out.height);
+      out.width = Math.round(cw * scale);
+      out.height = Math.round(ch * scale);
+      out.getContext('2d').drawImage(cropped, 0, 0, out.width, out.height);
       return out.toDataURL('image/png');
     }
-    return tmp.toDataURL('image/png');
+    return cropped.toDataURL('image/png');
   }
 
   document.getElementById('btnMgrClear').onclick = function(){
@@ -6221,9 +6252,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .sig-grid .sig-slot-img, .sig-multi .sig-slot-img, .sig-tbl .sig-slot-img,
     img.sig-slot-img, img[id^="slot_"], #slot_duty, #slot_officer, #slot_citizen,
     #slot_p1, #slot_p2, #slot_p3, #slot_p4, #slot_p5, #slot_guarantor, #slot_bailed {{
-        max-height: 48px !important; height: auto !important; max-width: 95% !important;
+        height: 40px !important; max-height: 42px !important; max-width: 92% !important;
         width: auto !important; object-fit: contain !important; display: block !important;
-        margin: 4px auto 0 !important;
+        margin: 2px auto !important;
         background: #ffffff !important; mix-blend-mode: normal !important;
         border: none !important; box-shadow: none !important; visibility: visible !important; opacity: 1 !important;
         filter: none;
@@ -6231,15 +6262,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     table.sig-tbl img#slot_duty, table.sig-tbl img#slot_officer,
     #slot_duty.sig-slot-img, #slot_officer.sig-slot-img,
     img#slot_duty, img#slot_officer {{
-        height: 50px !important; max-height: 54px !important; max-width: 92% !important;
+        height: 40px !important; max-height: 42px !important; max-width: 92% !important;
         width: auto !important; object-fit: contain !important; display: block !important;
-        margin: 3px auto !important; opacity: 1 !important; filter: contrast(1.2);
+        margin: 2px auto !important; opacity: 1 !important; filter: contrast(1.15);
         visibility: visible !important; background: #ffffff !important; mix-blend-mode: normal !important;
     }}
     .sig-approved-badge {{
-        margin-top: 2px !important; display: inline-block !important;
+        margin-top: 2px !important; margin-bottom: 1px !important; display: inline-block !important;
         border: 1.2px solid #000000 !important; padding: 1px 7px !important; border-radius: 4px !important;
-        font-size: 9.5px !important; font-weight: 800 !important; line-height: 1.25 !important;
+        font-size: 9.5px !important; font-weight: 800 !important; line-height: 1.2 !important;
         color: #000000 !important; background: #ffffff !important;
     }}
     td.sig-cell img.sig-slot-img, .sig-cell img.sig-slot-img, table.sig-tbl td {{
@@ -6262,8 +6293,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         table.sig-tbl img#slot_duty, table.sig-tbl img#slot_officer,
         img#slot_duty, img#slot_officer {{
-            height: 50px !important; max-height: 54px !important; max-width: 92% !important;
-            opacity: 1 !important; filter: contrast(1.2);
+            height: 40px !important; max-height: 42px !important; max-width: 92% !important;
+            margin: 2px auto !important; opacity: 1 !important; filter: contrast(1.15);
             -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
         }}
     }}
@@ -6712,9 +6743,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-tier-dense img.sig-slot-img, .a4-dense-print img.sig-slot-img {{ max-height: 40px !important; }}
     .a4-tier-dense img#slot_duty, .a4-tier-dense img#slot_officer,
     .a4-dense-print img#slot_duty, .a4-dense-print img#slot_officer,
-    .a4-tier-balanced img#slot_duty, .a4-tier-balanced img#slot_officer {{
-        height: 50px !important; max-height: 54px !important; max-width: 92% !important;
-        opacity: 1 !important; filter: contrast(1.2);
+    .a4-tier-balanced img#slot_duty, .a4-tier-balanced img#slot_officer,
+    .a4-tier-spacious img#slot_duty, .a4-tier-spacious img#slot_officer {{
+        height: 40px !important; max-height: 42px !important; max-width: 92% !important;
+        margin: 2px auto !important; opacity: 1 !important; filter: contrast(1.15);
     }}
     .a4-tier-dense .footer-qr, .a4-dense-print .footer-qr {{
         padding: 4px 7px !important; margin-top: 4px !important;
@@ -7075,7 +7107,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             canvas.dataset.dprReady = '1';
         }}
         ctx.strokeStyle = PEN_COLOR;
-        ctx.lineWidth = 3.8;
+        ctx.lineWidth = 2.8;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         let drawing = false;
@@ -8146,13 +8178,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   window.__cachedIosPdfAb = null;
   window.__cachedIosPdfName = 'Maroor_AlArdah_Official.pdf';
 
+  function inkDensityPix(r, g, b, a) {{
+    return (a / 255.0) * (255 - Math.min(r, g, b));
+  }}
   function canvasHasVisibleInk(canvas) {{
     try {{
       if (!canvas || !canvas.width || !canvas.height) return false;
       var ctx = canvas.getContext('2d');
       var data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-      for (var i = 3; i < data.length; i += 16) {{
-        if (data[i] > 18) return true;
+      for (var i = 0; i < data.length; i += 64) {{
+        if (inkDensityPix(data[i], data[i + 1], data[i + 2], data[i + 3]) >= 25) return true;
       }}
     }} catch (e) {{}}
     return false;
@@ -8195,35 +8230,27 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
           cv.width = w;
           cv.height = h;
           var cctx = cv.getContext('2d');
-          cctx.fillStyle = '#ffffff';
-          cctx.fillRect(0, 0, w, h);
+          cctx.clearRect(0, 0, w, h);
           cctx.drawImage(sourceImg, 0, 0, w, h);
           var imData = cctx.getImageData(0, 0, w, h);
           var d = imData.data;
+          var solid = 0, sampled = 0, anyInk = false;
           for (var i = 0; i < d.length; i += 4) {{
-            var a = d[i + 3];
-            if (a < 12) {{
-              d[i] = 255; d[i + 1] = 255; d[i + 2] = 255; d[i + 3] = 255;
+            sampled += 1;
+            var dens = inkDensityPix(d[i], d[i + 1], d[i + 2], d[i + 3]);
+            if (dens < 25) {{
+              d[i] = 255; d[i + 1] = 255; d[i + 2] = 255; d[i + 3] = 0;
               continue;
             }}
-            var af = a / 255;
-            var r = Math.round(d[i] * af + 255 * (1 - af));
-            var g = Math.round(d[i + 1] * af + 255 * (1 - af));
-            var b = Math.round(d[i + 2] * af + 255 * (1 - af));
-            var lum = 0.299 * r + 0.587 * g + 0.114 * b;
-            if (lum >= 238) {{
-              d[i] = 255; d[i + 1] = 255; d[i + 2] = 255; d[i + 3] = 255;
-              continue;
-            }}
-            if ((g > r + 28 && g > b + 20) || (r > b + 45 && r > g + 35)) {{
-              d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = 255;
-              continue;
-            }}
-            var strength = Math.min(1, ((255 - lum) / 220) * 1.18);
-            d[i]     = Math.round(255 * (1 - strength));
-            d[i + 1] = Math.round(255 * (1 - strength) + 68 * strength);
-            d[i + 2] = Math.round(255 * (1 - strength) + 204 * strength);
-            d[i + 3] = 255;
+            anyInk = true;
+            var oa = Math.min(255, dens * 2.0);
+            d[i] = 0; d[i + 1] = 56; d[i + 2] = 168; d[i + 3] = oa;
+            if (oa >= 180) solid += 1;
+          }}
+          if (!anyInk || (sampled > 0 && (solid / sampled) > 0.60)) {{
+            imgEl.removeAttribute('src');
+            imgEl.style.setProperty('display', 'none', 'important');
+            return;
           }}
           cctx.putImageData(imData, 0, 0);
           var blueUrl = cv.toDataURL('image/png');
@@ -8303,22 +8330,51 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       }}
       if (saved.indexOf('data:image') !== 0) saved = 'data:image/png;base64,' + saved;
       slot.setAttribute('src', saved);
-      slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; max-height:48px !important; width:auto !important; max-width:95% !important; margin:3px auto 0 auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
+      slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; height:40px !important; max-height:42px !important; width:auto !important; max-width:92% !important; margin:2px auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
       colorizeDataImgToBlue(slot);
       try {{ if (typeof setPadStatus === 'function') setPadStatus(padId, 'saved'); }} catch (eS) {{}}
       return;
     }}
 
+    var srcData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    var minX = canvas.width, minY = canvas.height, maxX = -1, maxY = -1;
+    for (var yy = 0; yy < canvas.height; yy++) {{
+      for (var xx = 0; xx < canvas.width; xx++) {{
+        var ii = (yy * canvas.width + xx) * 4;
+        if (inkDensityPix(srcData[ii], srcData[ii + 1], srcData[ii + 2], srcData[ii + 3]) < 25) continue;
+        if (xx < minX) minX = xx;
+        if (yy < minY) minY = yy;
+        if (xx > maxX) maxX = xx;
+        if (yy > maxY) maxY = yy;
+      }}
+    }}
+    if (maxX < 0) {{
+      try {{ if (typeof setPadStatus === 'function') setPadStatus(padId, 'waiting'); }} catch (eEmpty) {{}}
+      return;
+    }}
+    var padM = 8;
+    minX = Math.max(0, minX - padM); minY = Math.max(0, minY - padM);
+    maxX = Math.min(canvas.width - 1, maxX + padM); maxY = Math.min(canvas.height - 1, maxY + padM);
     var out = document.createElement('canvas');
-    out.width = canvas.width;
-    out.height = canvas.height;
+    out.width = maxX - minX + 1;
+    out.height = maxY - minY + 1;
     var octx = out.getContext('2d');
-    octx.fillStyle = '#ffffff';
-    octx.fillRect(0, 0, out.width, out.height);
-    octx.drawImage(canvas, 0, 0);
+    octx.clearRect(0, 0, out.width, out.height);
+    octx.drawImage(canvas, minX, minY, out.width, out.height, 0, 0, out.width, out.height);
+    var od = octx.getImageData(0, 0, out.width, out.height);
+    var px = od.data;
+    for (var pj = 0; pj < px.length; pj += 4) {{
+      var dens = inkDensityPix(px[pj], px[pj + 1], px[pj + 2], px[pj + 3]);
+      if (dens < 25) {{
+        px[pj] = 255; px[pj + 1] = 255; px[pj + 2] = 255; px[pj + 3] = 0;
+      }} else {{
+        px[pj] = 0; px[pj + 1] = 56; px[pj + 2] = 168; px[pj + 3] = Math.min(255, dens * 2.0);
+      }}
+    }}
+    octx.putImageData(od, 0, 0);
     var dataUrl = out.toDataURL('image/png');
     slot.setAttribute('src', dataUrl);
-    slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; max-height:48px !important; width:auto !important; max-width:95% !important; margin:3px auto 0 auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
+    slot.setAttribute('style', 'display:block !important; visibility:visible !important; opacity:1 !important; height:40px !important; max-height:42px !important; width:auto !important; max-width:92% !important; margin:2px auto !important; object-fit:contain !important; background:#ffffff !important; mix-blend-mode:normal !important; border:none !important;');
     colorizeDataImgToBlue(slot);
     try {{
       var b64 = (dataUrl.split(',')[1] || '');
@@ -8417,7 +8473,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
 
     function strokeWidth() {{
-      return Math.max(2.1, (cv.width / 340) * 2.4);
+      return Math.max(2.6, Math.min(3.0, (cv.width / 340) * 2.7));
     }}
 
     function beginDraw(pt) {{

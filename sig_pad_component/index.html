@@ -168,8 +168,8 @@
   function canvasHasInk() {
     try {
       var data = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H).data;
-      for (var i = 3; i < data.length; i += 16) {
-        if (data[i] > 18) return true;
+      for (var i = 0; i < data.length; i += 64) {
+        if (inkDensity(data[i], data[i + 1], data[i + 2], data[i + 3]) >= 25) return true;
       }
     } catch (e) {}
     return false;
@@ -200,11 +200,14 @@
   function strokeWidth() {
     var r = canvas.getBoundingClientRect();
     var scaleX = CANVAS_W / Math.max(1, r.width || CANVAS_W);
-    var screenTarget = (window.innerWidth || 800) >= 900 ? 4.2 : 3.8;
+    var screenTarget = (window.innerWidth || 800) >= 900 ? 3.0 : 2.6;
     var w = screenTarget * scaleX;
-    if (w < 3.6) w = 3.6;
-    if (w > 9.5) w = 9.5;
+    if (w < 2.6) w = 2.6;
+    if (w > 6.5) w = 6.5;
     return w;
+  }
+  function inkDensity(r, g, b, a) {
+    return (a / 255.0) * (255 - Math.min(r, g, b));
   }
   function beginDraw(pt) {
     cancelAutoSave();
@@ -215,7 +218,7 @@
     var lw = strokeWidth();
     ctx.fillStyle = INK;
     ctx.beginPath();
-    ctx.arc(pt.x, pt.y, Math.max(1.8, lw * 0.48), 0, Math.PI * 2);
+    ctx.arc(pt.x, pt.y, Math.max(1.2, lw * 0.45), 0, Math.PI * 2);
     ctx.fill();
   }
   function moveDraw(pt) {
@@ -317,22 +320,15 @@
     for (var y = 0; y < CANVAS_H; y++) {
       for (var x = 0; x < CANVAS_W; x++) {
         var i = (y * CANVAS_W + x) * 4;
-        var a = src[i + 3];
-        var r = src[i], g = src[i + 1], b = src[i + 2];
-        var isInk = a > 20 || Math.min(r, g, b) < 235 || (b - r > 25);
-        if (!isInk) continue;
+        var dens = inkDensity(src[i], src[i + 1], src[i + 2], src[i + 3]);
+        if (dens < 25) continue;
         if (x < minX) minX = x;
         if (y < minY) minY = y;
         if (x > maxX) maxX = x;
         if (y > maxY) maxY = y;
       }
     }
-    if (maxX < 0) {
-      var empty = document.createElement("canvas");
-      empty.width = 8;
-      empty.height = 8;
-      return empty.toDataURL("image/png");
-    }
+    if (maxX < 0) return "";
     minX = Math.max(0, minX - CROP_PAD);
     minY = Math.max(0, minY - CROP_PAD);
     maxX = Math.min(CANVAS_W - 1, maxX + CROP_PAD);
@@ -347,19 +343,23 @@
     octx.drawImage(canvas, minX, minY, cw, ch, 0, 0, cw, ch);
     var id = octx.getImageData(0, 0, cw, ch);
     var d = id.data;
+    var anyInk = false;
     for (var j = 0; j < d.length; j += 4) {
-      if (d[j + 3] > 20 || Math.min(d[j], d[j + 1], d[j + 2]) < 235 || (d[j + 2] - d[j] > 25)) {
+      var dens2 = inkDensity(d[j], d[j + 1], d[j + 2], d[j + 3]);
+      if (dens2 < 25) {
+        d[j] = 255;
+        d[j + 1] = 255;
+        d[j + 2] = 255;
+        d[j + 3] = 0;
+      } else {
         d[j] = INK_RGB.r;
         d[j + 1] = INK_RGB.g;
         d[j + 2] = INK_RGB.b;
-        d[j + 3] = 255;
-      } else {
-        d[j] = 0;
-        d[j + 1] = 0;
-        d[j + 2] = 0;
-        d[j + 3] = 0;
+        d[j + 3] = Math.min(255, dens2 * 2.0);
+        anyInk = true;
       }
     }
+    if (!anyInk) return "";
     octx.putImageData(id, 0, 0);
     return out.toDataURL("image/png");
   }
@@ -371,6 +371,7 @@
     var fp = inkFingerprint();
     if (fp && fp === lastSentFp) return;
     var dataUrl = exportPng();
+    if (!dataUrl) return;
     persistLocal(dataUrl);
     lastSentFp = fp;
     setStatus("saved");
