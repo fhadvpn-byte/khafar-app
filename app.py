@@ -1214,23 +1214,11 @@ div[data-testid="stHorizontalBlock"] div.stButton > button {
     color-scheme: normal !important;
     background: transparent !important;
 }
-/* mobile_uploader فقط: حرّر الإطار بالكامل — الارتفاع من setFrameHeight بعد كل streamlit:render */
+/* لا تفرض height/max-height على mobile_uploader — الارتفاع من setFrameHeight فقط */
 .stApp iframe[title*="khafar_mobile_uploader"],
-.stApp iframe[title*="mobile_uploader"],
-.stApp div[data-testid="stCustomComponentV1"]:has(iframe[title*="khafar_mobile_uploader"]) iframe,
-.stApp div[data-testid="element-container"]:has(iframe[title*="khafar_mobile_uploader"]) iframe {
+.stApp iframe[title*="mobile_uploader"] {
     min-height: 0 !important;
-    max-height: none !important;
-    height: auto !important;
-    overflow: visible !important;
-    vertical-align: top !important;
-    align-self: flex-start !important;
-}
-.stApp div[data-testid="stCustomComponentV1"]:has(iframe[title*="khafar_mobile_uploader"]),
-.stApp div[data-testid="element-container"]:has(iframe[title*="khafar_mobile_uploader"]) {
-    overflow: visible !important;
-    max-height: none !important;
-    height: auto !important;
+    overflow: hidden !important;
 }
 
 .stApp [data-testid="stAppViewContainer"],
@@ -6103,11 +6091,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     attachment_block = ""
     image_count = 0
     show_atts = rec.get("show_attachments_in_print", True)
-    att_items = resolve_record_attachments(rec)
-    form_id_for_att = str(rec.get("form_id") or "")
-    settle_parties = (
-        _count_parties(rec.get("fields") or {}) if form_id_for_att == "decl_settlement" else 0
-    )
+    att_items = parse_attachments(rec.get("attachment_b64"))
     if show_atts and att_items:
         cards = []
         for att in att_items:
@@ -6122,40 +6106,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             else:
                 image_count += 1
                 mime = html.escape(str(att.get("mime") or "image/png"))
-                b64 = str(att.get("b64") or "").strip()
-                if b64.startswith("data:") and "," in b64:
-                    b64 = b64.split(",", 1)[-1]
-                if not b64:
-                    continue
+                b64 = att.get("b64") or ""
                 cards.append(
                     f'<div class="att-card">'
                     f'<img src="data:{mime};base64,{b64}" alt="" />'
                     f"</div>"
                 )
-        att_grid_style = ""
-        if form_id_for_att == "decl_settlement" and image_count > 0:
-            # شبكة أفقية مضغوطة للتنازل — تبقى الورقة صفحة A4 واحدة مع كل الأطراف
-            party_mod = " atts-parties-hi" if settle_parties >= 4 else ""
-            if image_count == 1:
-                att_grid_cls = f"attachment-grid atts-settle-1{party_mod}"
-            elif image_count <= 5:
-                att_grid_cls = f"attachment-grid atts-settle-row{party_mod}"
-                att_grid_style = (
-                    f' style="grid-template-columns: repeat({image_count}, minmax(0, 1fr)); gap: 6px;"'
-                )
-            else:
-                cols = 4 if image_count >= 7 else 3
-                att_grid_cls = f"attachment-grid atts-settle-many{party_mod}"
-                att_grid_style = (
-                    f' style="grid-template-columns: repeat({cols}, minmax(0, 1fr)); gap: 6px;"'
-                )
-        else:
-            att_grid_cls = "attachment-grid atts-single" if image_count <= 1 else "attachment-grid atts-multi"
-        if cards:
-            attachment_block = f"""
+        att_grid_cls = "attachment-grid atts-single" if image_count <= 1 else "attachment-grid atts-multi"
+        attachment_block = f"""
         <div class="attachment-section">
             <div class="attachment-title">📎 المرفقات المصورة المعتمدة في التقرير</div>
-            <div class="{att_grid_cls}"{att_grid_style}>{"".join(cards)}</div>
+            <div class="{att_grid_cls}">{"".join(cards)}</div>
         </div>
         """
 
@@ -6380,36 +6341,20 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             border: 1.8px solid #0f3d2e !important;
             border-radius: 4px !important;
             overflow: visible !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: flex-start !important;
-            align-items: stretch !important;
+            display: table !important;
+            table-layout: fixed !important;
             box-shadow: none !important;
             transform-origin: top center !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             color-adjust: exact !important;
         }}
-        .a4-row {{ display: block !important; width: 100% !important; flex: 0 0 auto !important; height: auto !important; }}
-        .a4-cell {{ display: block !important; width: 100% !important; height: auto !important; }}
-        .a4-row-mid {{ height: auto !important; flex: 0 0 auto !important; }}
-        .a4-row-bot {{ margin-top: auto !important; flex: 0 0 auto !important; }}
-        .legal-wrap-cell {{
-            vertical-align: top !important; padding: 0 3.5mm !important;
-            flex: 0 0 auto !important; margin: 0 !important; height: auto !important;
-        }}
-        .sig-bottom-cell {{ vertical-align: bottom !important; padding: 0 3.5mm 3mm 3.5mm !important; }}
+        .a4-row {{ display: table-row !important; }}
+        .a4-cell {{ display: table-cell !important; width: 100% !important; }}
+        .a4-row-mid {{ height: auto !important; }}
+        .legal-wrap-cell {{ vertical-align: top !important; padding: 4px 0 !important; }}
+        .sig-bottom-cell {{ vertical-align: bottom !important; padding: 0 !important; }}
         .a4-fit {{ display: contents !important; }}
-        .legal-box {{
-            flex: 0 0 auto !important; justify-content: flex-start !important;
-            margin-top: 10px !important; margin-bottom: 10px !important;
-            padding: 10px 14px !important; font-size: 13.2px !important; line-height: 1.75 !important;
-            height: auto !important; min-height: 0 !important;
-        }}
-        .attachment-section {{
-            margin-top: 8px !important; flex: 0 0 auto !important; height: auto !important;
-        }}
-        .footer-qr {{ margin-top: 6px !important; flex: 0 0 auto !important; }}
         .a4-sheet, .a4-sheet p, .a4-sheet td, .a4-sheet th, .a4-sheet div, .a4-sheet span,
         .a4-paper, .a4-paper p, .a4-paper td, .a4-paper th, .a4-paper div, .a4-paper span {{
             color: #000000 !important;
@@ -6560,23 +6505,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     table.data-tbl.cols-4 td.lbl {{ width: 20%; }}
     table.data-tbl.cols-4 td.val.span3 {{ width: auto; }}
     .legal-box {{
-        display: block !important;
-        flex: 0 0 auto !important;
-        justify-content: flex-start !important;
-        align-items: stretch !important;
         background: #ffffff !important; border: 1px solid #94a3b8; border-right: 4px solid #0f3d2e !important;
-        border-radius: 4px; padding: 10px 14px !important;
-        margin-top: 10px !important; margin-bottom: 10px !important;
-        font-size: 13.2px !important; line-height: 1.75 !important;
+        border-radius: 4px; padding: 10px 12px !important; margin-bottom: 12px !important;
+        font-size: 12.5px !important; line-height: 1.75 !important;
         text-align: justify !important; text-justify: inter-word !important; text-align-last: right !important;
         direction: rtl !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important;
         overflow-wrap: break-word !important; word-break: normal !important; white-space: normal !important;
         word-spacing: normal !important; color: #000000 !important; font-weight: 700 !important;
-        height: auto !important; min-height: 0 !important; max-height: none !important;
     }}
     .legal-box > div.legal-title:first-child {{ margin-bottom: 8px !important; font-weight: 800 !important; text-align: right !important; }}
     .legal-box div {{
-        font-size: 13.2px !important; line-height: 1.75 !important; color: #000000 !important; font-weight: 700 !important;
+        font-size: 12.5px !important; line-height: 1.75 !important; color: #000000 !important; font-weight: 700 !important;
         text-align: justify !important; text-justify: inter-word !important; text-align-last: right !important;
         direction: rtl !important; overflow-wrap: break-word !important; word-break: normal !important;
         white-space: normal !important; word-spacing: normal !important;
@@ -6612,14 +6551,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .sig-head {{ color: #000000 !important; font-weight: 800 !important; border: 1.4px solid #000000 !important; }}
     .sig-cell {{ border: 1.4px solid #000000 !important; color: #000000 !important; }}
     .sig-footer {{
-        display: flex !important; flex-direction: column !important;
-        flex: 0 0 auto !important;
-        margin-top: 0 !important;
+        display: flex; flex-direction: column; flex: 1 1 auto;
         page-break-inside: avoid; break-inside: avoid;
-        width: 100% !important;
     }}
     .footer-qr {{
-        margin-top: 6px !important;
+        margin-top: 8px !important;
         background: #f4f7f6; border: 1.4px solid #000000; border-radius: 6px;
         padding: 5px 8px !important; display: flex; flex-direction: row; justify-content: space-between; align-items: center;
         direction: rtl !important;
@@ -6628,7 +6564,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         page-break-inside: avoid; break-inside: avoid;
         color: #000000 !important; font-weight: 700 !important;
         overflow: hidden !important;
-        flex: 0 0 auto !important;
     }}
     .footer-qr > div:first-child {{
         flex: 1 1 auto; min-width: 0; text-align: right !important; padding-left: 8px !important;
@@ -6639,11 +6574,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         display: block !important;
     }}
     .attachment-section {{
-        margin-top: 8px !important; margin-bottom: 0 !important;
-        flex: 0 0 auto !important;
-        border: 1px dashed #000000; border-radius: 6px; padding: 3px 6px;
+        margin-top: 4px; border: 1px dashed #000000; border-radius: 6px; padding: 3px 6px;
         background: #f8fafc; page-break-inside: avoid; break-inside: avoid;
-        height: auto !important;
     }}
     .attachment-title {{
         font-size: 12px; font-weight: 800; color: #000000; margin-bottom: 2px; text-align: right;
@@ -6666,32 +6598,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     .attachment-grid.atts-multi .att-card img {{
         max-height: 140px !important; max-width: 95% !important;
-        width: auto !important; height: auto !important; object-fit: contain !important;
-    }}
-    /* شبكة مرفقات ذكية لإقرار الصلح والتنازل فقط — مضغوطة لتبقى الورقة 1/1 */
-    .attachment-grid.atts-settle-1,
-    .attachment-grid.atts-settle-row,
-    .attachment-grid.atts-settle-many {{
-        display: grid !important; gap: 6px !important; align-items: start !important;
-        overflow: hidden !important; width: 100% !important;
-    }}
-    .attachment-grid.atts-settle-1 {{ grid-template-columns: 1fr !important; }}
-    .attachment-grid.atts-settle-1 .att-card img {{
-        max-height: 135px !important; max-width: 95% !important;
-        width: auto !important; height: auto !important; object-fit: contain !important;
-    }}
-    .attachment-grid.atts-settle-1.atts-parties-hi .att-card img {{
-        max-height: 105px !important;
-    }}
-    .attachment-grid.atts-settle-row .att-card img {{
-        max-height: 105px !important; max-width: 100% !important;
-        width: auto !important; height: auto !important; object-fit: contain !important;
-    }}
-    .attachment-grid.atts-settle-row.atts-parties-hi .att-card img {{
-        max-height: 85px !important;
-    }}
-    .attachment-grid.atts-settle-many .att-card img {{
-        max-height: 75px !important; max-width: 100% !important;
         width: auto !important; height: auto !important; object-fit: contain !important;
     }}
     /* صور المرفقات ثابتة مضغوطة — لا تُكبَّر أبداً عبر expandLegal */
@@ -6723,16 +6629,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         background: #ffffff;
         margin: 0 auto;
     }}
-    .a4-sheet, .a4-paper, .a4-page, .print-area, #a4Sheet {{
+    .a4-sheet, .a4-paper, .a4-page, .print-area {{
         width: 100% !important;
         height: 285mm !important;
         min-height: 285mm !important;
         max-height: 285mm !important;
         box-sizing: border-box !important;
-        display: flex !important;
-        flex-direction: column !important;
-        justify-content: flex-start !important;
-        align-items: stretch !important;
+        display: table !important;
+        table-layout: fixed !important;
         border: 1.8px solid #0f3d2e !important;
         border-radius: 4px !important;
         background: #ffffff !important;
@@ -6742,47 +6646,21 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         page-break-after: avoid !important;
         page-break-inside: avoid !important;
     }}
-    .a4-row {{
-        display: block !important;
-        width: 100% !important;
-        flex: 0 0 auto !important;
-        height: auto !important;
-        max-height: none !important;
-    }}
-    .a4-cell {{
-        display: block !important;
-        width: 100% !important;
-        height: auto !important;
-    }}
-    .a4-row-top {{ height: auto !important; flex: 0 0 auto !important; }}
-    .a4-row-mid {{
-        height: auto !important;
-        flex: 0 0 auto !important;
-        margin-top: 0 !important;
-        margin-bottom: 0 !important;
-    }}
-    .a4-row-bot {{
-        height: auto !important;
-        flex: 0 0 auto !important;
-        margin-top: auto !important;
-    }}
+    .a4-row {{ display: table-row !important; }}
+    .a4-cell {{ display: table-cell !important; width: 100% !important; }}
+    .a4-row-top {{ height: auto !important; }}
+    .a4-row-mid {{ height: 100% !important; }}
+    .a4-row-bot {{ height: auto !important; }}
     .a4-top-cell {{ vertical-align: top !important; padding: 3mm 3.5mm 0 3.5mm !important; }}
     .legal-wrap-cell {{
         vertical-align: top !important;
-        padding: 0 3.5mm !important;
-        display: block !important;
-        flex: 0 0 auto !important;
-        height: auto !important;
-        margin: 0 !important;
+        padding: 2mm 3.5mm !important;
     }}
     .sig-bottom-cell {{
         vertical-align: bottom !important;
         padding: 0 3.5mm 3mm 3.5mm !important;
-        display: block !important;
-        flex: 0 0 auto !important;
-        margin-top: 0 !important;
     }}
-    .sig-footer {{ width: 100% !important; flex: 0 0 auto !important; }}
+    .sig-footer {{ width: 100% !important; }}
 
     /* spacious */
     .a4-tier-spacious .hdr-center, .a4-tier-spacious .hdr-center img, .a4-tier-spacious .hdr-logo {{
@@ -6799,11 +6677,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         font-size: 13.5px !important; line-height: 1.65 !important; padding: 10px 12px !important;
     }}
     .a4-tier-spacious .legal-box, .a4-tier-spacious .legal-box .legal-body, .a4-tier-spacious .legal-box .legal-title {{
-        font-size: 13.5px !important; line-height: 1.75 !important;
+        font-size: 15px !important; line-height: 2.1 !important;
     }}
     .a4-tier-spacious .legal-box {{
-        padding: 10px 14px !important; margin-top: 10px !important; margin-bottom: 10px !important;
-        flex: 0 0 auto !important; height: auto !important; justify-content: flex-start !important;
+        padding: 18px !important; margin: 4px 0 10px !important;
     }}
     .a4-tier-spacious .legal-title {{ margin-bottom: 10px !important; }}
     .a4-tier-spacious table.sig-tbl td, .a4-tier-spacious .sig-cell {{
@@ -6960,25 +6837,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             height: 1035px !important;
             max-height: 1035px !important;
         }}
-        .a4-sheet, .a4-paper, #a4Sheet {{
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: flex-start !important;
-            align-items: stretch !important;
-        }}
-        .a4-row {{ display: block !important; width: 100% !important; flex: 0 0 auto !important; height: auto !important; }}
-        .a4-cell {{ display: block !important; width: 100% !important; height: auto !important; }}
-        .a4-row-mid {{ height: auto !important; flex: 0 0 auto !important; }}
-        .a4-row-bot {{ margin-top: auto !important; flex: 0 0 auto !important; }}
-        .legal-wrap-cell {{ vertical-align: top !important; flex: 0 0 auto !important; height: auto !important; }}
-        .sig-bottom-cell {{ vertical-align: bottom !important; flex: 0 0 auto !important; }}
-        .legal-box {{
-            flex: 0 0 auto !important; justify-content: flex-start !important;
-            margin-top: 10px !important; margin-bottom: 10px !important;
-            height: auto !important; min-height: 0 !important;
-        }}
-        .attachment-section {{ margin-top: 8px !important; flex: 0 0 auto !important; }}
-        .footer-qr {{ margin-top: 6px !important; }}
+        .a4-row {{ display: table-row !important; }}
+        .a4-cell {{ display: table-cell !important; width: 100% !important; }}
+        .a4-row-mid {{ height: 100% !important; }}
+        .legal-wrap-cell {{ vertical-align: top !important; }}
+        .sig-bottom-cell {{ vertical-align: bottom !important; }}
         .a4-paper, .a4-paper *, .a4-sheet, .a4-sheet * {{
             color: #000000 !important; opacity: 1 !important;
             -webkit-print-color-adjust: exact !important;
@@ -7697,10 +7560,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     function balanceA4Page(rootDoc) {{
         const doc = rootDoc || document;
         applyPrintPhysicalSize(doc, true);
-        // تصغير الخطوط فقط عند تجاوز سعة A4 — لا نوسّع مربع النص حتى لا يعود الفراغ فوق/تحت الإقرار
         const down = stepDownFitA4(doc);
+        const up = expandLegalToFillSpace(doc);
         applyPrintPhysicalSize(doc, true);
-        return {{ down: down, up: 0 }};
+        return {{ down: down, up: up }};
     }}
     try {{ window.getPrintHeightTargets = getPrintHeightTargets; }} catch (e) {{}}
     try {{ window.applyPrintPhysicalSize = applyPrintPhysicalSize; }} catch (e) {{}}
@@ -7901,14 +7764,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + 'html.a4-print-desktop .a4-sheet,html.a4-print-desktop .a4-paper,'
             + 'body.a4-print-desktop .a4-sheet,body.a4-print-desktop .a4-paper{{height:1035px !important;max-height:1035px !important;}}'
             + '.a4-row{{display:table-row !important;}}.a4-cell{{display:table-cell !important;width:100% !important;}}'
-            + '.a4-sheet,#a4Sheet{{display:flex !important;flex-direction:column !important;justify-content:flex-start !important;}}'
-            + '.a4-row{{display:block !important;flex:0 0 auto !important;height:auto !important;}}'
-            + '.a4-row-mid{{height:auto !important;flex:0 0 auto !important;}}.legal-wrap-cell{{vertical-align:top !important;flex:0 0 auto !important;}}'
-            + '.a4-row-bot{{margin-top:auto !important;flex:0 0 auto !important;}}'
+            + '.a4-row-mid{{height:100% !important;}}.legal-wrap-cell{{vertical-align:top !important;}}'
             + '.sig-bottom-cell{{vertical-align:bottom !important;}}'
-            + '.legal-box{{flex:0 0 auto !important;justify-content:flex-start !important;margin-top:10px !important;margin-bottom:10px !important;height:auto !important;}}'
-            + '.attachment-section{{margin-top:8px !important;flex:0 0 auto !important;}}'
-            + '.footer-qr{{margin-top:6px !important;}}'
             + '@media screen{{'
             + 'html,body{{margin:0 !important;padding:12px !important;background:#0f172a !important;'
             + 'display:flex !important;flex-direction:column !important;align-items:center !important;'
@@ -8040,7 +7897,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + 'free=newFree;steps+=1;if(atCap(next)&&dataFs>=13.49)break;}}'
             + 'applyPrintPhysicalSize(doc);return steps;}}'
             + 'function balanceA4Page(rootDoc){{var doc=rootDoc||document;applyPrintPhysicalSize(doc);'
-            + 'stepDownFitA4(doc);applyPrintPhysicalSize(doc);}}'
+            + 'stepDownFitA4(doc);expandLegalToFillSpace(doc);applyPrintPhysicalSize(doc);}}'
             + 'window.stepDownFitA4=stepDownFitA4;window.expandLegalToFillSpace=expandLegalToFillSpace;window.balanceA4Page=balanceA4Page;'
             + 'function go(){{try{{balanceA4Page(document);}}catch(e){{}}try{{window.focus();}}catch(e2){{}}try{{window.print();}}catch(e3){{}}}}'
             + 'if(document.fonts&&document.fonts.ready){{document.fonts.ready.then(function(){{setTimeout(go,450);}});}}'
@@ -8151,41 +8008,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   .live-sig-dock {{ position: relative !important; z-index: 25 !important; pointer-events: auto !important; }}
   canvas[id^="pad_"], .live-sig-dock canvas {{ touch-action: none !important; -ms-touch-action: none !important; -webkit-user-select: none !important; user-select: none !important; -webkit-touch-callout: none !important; pointer-events: auto !important; cursor: crosshair !important; display: block !important; }}
   .legal-box {{
-    display: block !important;
+    display: flex !important;
     flex-direction: column !important;
-    justify-content: flex-start !important;
-    flex: 0 0 auto !important;
-    margin-top: 10px !important;
-    margin-bottom: 10px !important;
-    padding: 10px 14px !important;
-    font-size: 13.2px !important;
-    line-height: 1.75 !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
+    justify-content: center !important;
+    flex: 1 1 auto !important;
     background: #f8fafc !important;
     border: 1.4px solid #cbd5e1 !important;
     border-right: 5px solid #0f3d2e !important;
     border-radius: 6px !important;
     width: 100% !important;
     box-sizing: border-box !important;
-  }}
-  .a4-row-mid, .legal-wrap-cell {{
-    flex: 0 0 auto !important;
-    height: auto !important;
-    justify-content: flex-start !important;
-  }}
-  .a4-row-bot {{
-    margin-top: auto !important;
-    flex: 0 0 auto !important;
-  }}
-  .attachment-section {{
-    margin-top: 8px !important;
-    flex: 0 0 auto !important;
-  }}
-  .footer-qr {{
-    margin-top: 6px !important;
-    flex: 0 0 auto !important;
   }}
   .legal-box .legal-box-title {{
     font-weight: 800 !important;
@@ -8376,8 +8208,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     #a4Sheet {{
       display: flex !important;
       flex-direction: column !important;
-      justify-content: flex-start !important;
-      align-items: stretch !important;
+      justify-content: space-between !important;
       width: 100% !important;
       min-width: 0 !important;
       max-width: none !important;
@@ -8390,23 +8221,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       page-break-after: avoid !important;
       page-break-inside: avoid !important;
       break-inside: avoid !important;
-    }}
-    #a4Sheet .a4-row-mid, #a4Sheet .legal-wrap-cell, #a4Sheet .legal-box {{
-      flex: 0 0 auto !important;
-      height: auto !important;
-      margin-top: 0 !important;
-      justify-content: flex-start !important;
-    }}
-    #a4Sheet .legal-box {{
-      margin-top: 10px !important;
-      margin-bottom: 10px !important;
-    }}
-    #a4Sheet .a4-row-bot {{
-      margin-top: auto !important;
-      flex: 0 0 auto !important;
-    }}
-    #a4Sheet .footer-qr {{
-      margin-top: 6px !important;
     }}
   }}
 </style>
@@ -9919,45 +9733,6 @@ def sync_attachments_to_session():
     st.session_state.attachment_b64 = serialize_attachments(items)
 
 
-def resolve_record_attachments(rec: dict | None) -> list:
-    """استخراج المرفقات من سجل الوثيقة (attachment_b64 أو قائمة attachments)."""
-    rec = rec or {}
-    items = parse_attachments(rec.get("attachment_b64"))
-    if items:
-        return items
-    return parse_attachments(rec.get("attachments"))
-
-
-def merge_uploader_files_into_session(uploaded_files) -> int:
-    """تطبيع مخرجات khafar_file_uploader ودمجها في session attachments. يعيد عدد المضاف."""
-    if not uploaded_files:
-        return 0
-    raw_list = uploaded_files if isinstance(uploaded_files, (list, tuple)) else [uploaded_files]
-    existing = list(st.session_state.get("attachments") or [])
-    if not existing and st.session_state.get("attachment_b64"):
-        existing = parse_attachments(st.session_state.attachment_b64)
-    known = {attachment_fingerprint(a) for a in existing}
-    added = 0
-    for uf in raw_list:
-        item, err = process_uploaded_attachment_with_status(uf, purpose="attachment")
-        if not item:
-            if err:
-                st.warning(err)
-            else:
-                st.warning("⚠️ نوع الملف غير مدعوم، يرجى إرفاق صورة أو ملف PDF.")
-            continue
-        fp = attachment_fingerprint(item)
-        if fp in known:
-            continue
-        existing.append(item)
-        known.add(fp)
-        added += 1
-    if added:
-        st.session_state.attachments = existing
-        sync_attachments_to_session()
-    return added
-
-
 def reset_doc_state():
     t_now = datetime.now(KSA_TZ)
     auto_no = f"KH-{t_now.strftime('%y%m%d-%H%M%S')}"
@@ -10917,7 +10692,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 if form_def["require_image"]
                 else "📎 إرفاق صورة الهوية / التقرير الأولي أو مرفق داعم (اختياري)"
             )
-            # رافع جوال ثنائي الاتجاه — نفس المسار الموحد لكل النماذج بما فيها إقرار الصلح والتنازل
+            # رافع جوال ثنائي الاتجاه — accept=image/* نقي يفتح المعرض الأصلي
             uploaded_files = khafar_file_uploader(
                 att_label,
                 key=f"att_mu_{st.session_state.doc_no}",
@@ -10928,8 +10703,23 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 help=UPLOAD_HELP_CAPTION,
             )
             if uploaded_files and not st.session_state.citizen_locked:
-                added = merge_uploader_files_into_session(uploaded_files)
+                existing = list(st.session_state.get("attachments") or [])
+                known = {attachment_fingerprint(a) for a in existing}
+                added = 0
+                for uf in uploaded_files:
+                    item, err = process_uploaded_attachment_with_status(uf, purpose="attachment")
+                    if not item:
+                        st.warning(err or "⚠️ نوع الملف غير مدعوم، يرجى إرفاق صورة أو ملف PDF.")
+                        continue
+                    fp = attachment_fingerprint(item)
+                    if fp in known:
+                        continue
+                    existing.append(item)
+                    known.add(fp)
+                    added += 1
                 if added:
+                    st.session_state.attachments = existing
+                    sync_attachments_to_session()
                     st.success("✅ تم إرفاق المرفق بنجاح وجاهز للظهور في التقرير المطبوع")
                     st.toast(f"تم حفظ {added} مرفق في الجلسة", icon="📎")
                     # لا نغيّر مفتاح المكوّن — البصمة تمنع التكرار بعد rerun
@@ -10941,12 +10731,10 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 help="عند التفعيل تُدرج الصور المرفوعة داخل ورقة A4 ونسخة الطباعة/PDF.",
             )
 
-            sync_attachments_to_session()
             persisted_atts = list(st.session_state.get("attachments") or [])
             if not persisted_atts and st.session_state.get("attachment_b64"):
                 persisted_atts = parse_attachments(st.session_state.attachment_b64)
                 st.session_state.attachments = persisted_atts
-                sync_attachments_to_session()
 
             if persisted_atts:
                 st.markdown("##### 🖼️ معاينة المرفقات المحفوظة في الجلسة")
@@ -11315,12 +11103,6 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 officer_full_final = (st.session_state.officer_full_override or "").strip() or unit_display
 
                 sync_attachments_to_session()
-                # ضمان وصول مرفقات الجلسة (بما فيها إقرار الصلح والتنازل) إلى A4 والأرشيف
-                _atts_now = list(st.session_state.get("attachments") or [])
-                if not _atts_now and st.session_state.get("attachment_b64"):
-                    _atts_now = parse_attachments(st.session_state.attachment_b64)
-                    st.session_state.attachments = _atts_now
-                    sync_attachments_to_session()
                 _consume_live_sig_bridge()
 
                 # التقاط التواقيع عبر sig_pad ثنائي الاتجاه قبل بناء A4 والحفظ
@@ -11392,8 +11174,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     "citizen_auth_mode": st.session_state.citizen_auth_mode,
                     "officer_stamp_b64": officer_b64,
                     "saved_officer_sig_b64": saved_officer_sig,
-                    "attachment_b64": st.session_state.attachment_b64 or serialize_attachments(_atts_now),
-                    "attachments": list(_atts_now),
+                    "attachment_b64": st.session_state.attachment_b64,
                     "show_attachments_in_print": bool(st.session_state.get("show_attachments_in_print", True)),
                     "officer_full": officer_full_final,
                     "duty_full": (mgr_cfg.get("display_name") if mgr_active else duty_display),
@@ -11461,7 +11242,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 _sig_map_now = _sigs_for_html or {}
                 _pad_count = sum(1 for _k, _v in _sig_map_now.items() if _v)
                 preview_h += min(900, max(0, _pad_count) * 260)
-                if ready_record.get("show_attachments_in_print") and resolve_record_attachments(ready_record):
+                if ready_record.get("show_attachments_in_print") and parse_attachments(ready_record.get("attachment_b64")):
                     preview_h += 260
                 if str(form_def.get("category") or "") == "إقرار" or "كفالة" in str(form_def.get("title") or ""):
                     preview_h += 220

@@ -11,35 +11,18 @@
       padding: 0 !important;
       height: auto !important;
       min-height: 0 !important;
-      display: block !important;
-      overflow-x: hidden !important;
-      overflow-y: visible !important;
+      overflow: hidden !important;
       background: transparent !important;
       font-family: Cairo, Tahoma, sans-serif;
       color: var(--text);
-      box-sizing: border-box !important;
-    }
-    #uploaderRoot {
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-start;
-      align-items: stretch;
-      gap: 8px;
-      padding: 8px 6px 12px 6px;
-      box-sizing: border-box;
-      width: 100%;
-      position: relative;
-      top: 0;
     }
     #uploaderCard {
       background: var(--bg);
       border: 1.5px solid rgba(212,175,55,0.45);
       border-radius: 14px;
       padding: 10px;
-      margin: 0;
+      margin: 2px;
       box-sizing: border-box;
-      width: 100%;
-      flex: 0 0 auto;
     }
     .sub {
       font-size: 12px;
@@ -54,14 +37,9 @@
       flex-wrap: wrap;
       gap: 8px;
       justify-content: stretch;
-      align-items: stretch;
-      margin: 0 0 8px 0;
-      flex: 0 0 auto;
-      position: relative;
-      z-index: 3;
+      margin-bottom: 8px;
     }
-    .actions label.btn,
-    .actions button.btn {
+    .actions label.btn {
       flex: 1 1 120px;
       display: flex;
       align-items: center;
@@ -81,21 +59,11 @@
       user-select: none;
       -webkit-user-select: none;
     }
-    .actions button.btn.clear-all {
-      flex: 0 0 auto;
-      min-width: 96px;
-      background: #7f1d1d;
-      border-color: #fca5a5;
-      font-size: 12px;
-      padding: 8px 10px;
-      min-height: 40px;
-    }
     .actions label.btn.secondary {
       background: var(--card);
       border-color: rgba(212,175,55,0.35);
     }
-    .actions label.btn.disabled,
-    .actions button.btn.disabled {
+    .actions label.btn.disabled {
       opacity: .45;
       pointer-events: none;
       cursor: not-allowed;
@@ -111,48 +79,38 @@
       color: var(--muted);
       cursor: pointer;
       transition: border-color .15s, background .15s;
-      flex: 0 0 auto;
     }
     .drop.over { border-color: var(--gold); background: rgba(20,108,78,0.25); color: var(--text); }
     .thumbs {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
-      gap: 10px;
-      margin-top: 4px;
-      padding-top: 6px;
-      width: 100%;
-      box-sizing: border-box;
-      flex: 0 0 auto;
-      align-items: start;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
     }
     .thumb {
       position: relative;
-      width: 100%;
-      max-width: 100%;
+      width: 86px;
       background: #0A211A;
       border: 1px solid rgba(212,175,55,0.35);
       border-radius: 10px;
-      overflow: visible;
+      overflow: hidden;
       padding-bottom: 4px;
-      box-sizing: border-box;
     }
     .thumb img {
-      width: 100%;
+      width: 86px;
       height: 72px;
       object-fit: cover;
       display: block;
       background: #fff;
-      border-radius: 10px 10px 0 0;
     }
     .thumb .pdf {
-      width: 100%;
+      width: 86px;
       height: 72px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 28px;
       background: #0A211A;
-      border-radius: 10px 10px 0 0;
     }
     .thumb .name {
       font-size: 10px;
@@ -167,23 +125,23 @@
     }
     .thumb .rm {
       position: absolute;
-      top: 4px;
-      left: 4px;
-      width: 24px;
-      height: 24px;
+      top: 3px;
+      left: 3px;
+      width: 22px;
+      height: 22px;
       border: none;
       border-radius: 999px;
-      background: rgba(127,29,29,0.95);
+      background: rgba(127,29,29,0.92);
       color: #fff;
       font-weight: 900;
       cursor: pointer;
-      line-height: 24px;
+      line-height: 22px;
       padding: 0;
-      font-size: 13px;
-      z-index: 2;
+      font-size: 12px;
     }
     .ok { margin-top: 6px; font-size: 12px; font-weight: 800; color: #86efac; min-height: 14px; text-align: right; }
     .err { color: #fca5a5; }
+    /* إخفاء المدخلات بدون display:none حتى يعمل label for على الجوال */
     .file-inputs input[type="file"] {
       position: absolute !important;
       width: 1px !important;
@@ -198,19 +156,16 @@
   </style>
 </head>
 <body>
-  <div id="uploaderRoot">
-    <div id="uploaderCard">
-      <div class="sub" id="subtitle">المعرض أو الكاميرا — متوافق مع أندرويد والآيفون</div>
-      <div class="actions" id="actionsBar">
-        <label class="btn" id="lblGallery" for="inp_gallery">🖼️ معرض الصور</label>
-        <label class="btn" id="lblCamera" for="inp_cam">📷 الكاميرا</label>
-        <label class="btn secondary" id="lblPdf" for="inp_pdf" hidden>📄 ملف PDF</label>
-        <button type="button" class="btn clear-all" id="btnClearAll" hidden>🗑️ مسح الكل</button>
-      </div>
-      <div class="drop" id="dropZone" role="button" tabindex="0">أسقط الملفات هنا أو اضغط لفتح المعرض</div>
-      <div class="thumbs" id="thumbs"></div>
-      <div class="ok" id="status"></div>
+  <div id="uploaderCard">
+    <div class="sub" id="subtitle">المعرض أو الكاميرا — متوافق مع أندرويد والآيفون</div>
+    <div class="actions">
+      <label class="btn" id="lblGallery" for="inp_gallery">🖼️ معرض الصور</label>
+      <label class="btn" id="lblCamera" for="inp_cam">📷 الكاميرا</label>
+      <label class="btn secondary" id="lblPdf" for="inp_pdf" hidden>📄 ملف PDF</label>
     </div>
+    <div class="drop" id="dropZone" role="button" tabindex="0">أسقط الملفات هنا أو اضغط لفتح المعرض</div>
+    <div class="thumbs" id="thumbs"></div>
+    <div class="ok" id="status"></div>
   </div>
 
   <div class="file-inputs" aria-hidden="true">
@@ -237,10 +192,7 @@
   var lastHeight = 0;
   var lastWidth = window.innerWidth || 0;
   var renderSeen = false;
-  var renderCycle = 0;
-  var jitterOn = false;
 
-  var rootEl = document.getElementById("uploaderRoot") || document.body;
   var cardEl = document.getElementById("uploaderCard");
   var subEl = document.getElementById("subtitle");
   var dropZone = document.getElementById("dropZone");
@@ -249,7 +201,6 @@
   var lblGallery = document.getElementById("lblGallery");
   var lblCamera = document.getElementById("lblCamera");
   var lblPdf = document.getElementById("lblPdf");
-  var btnClearAll = document.getElementById("btnClearAll");
   var inpGallery = document.getElementById("inp_gallery");
   var inpCamera = document.getElementById("inp_cam");
   var inpPdf = document.getElementById("inp_pdf");
@@ -261,47 +212,15 @@
   function setReady() {
     send("streamlit:componentReady", { apiVersion: 1 });
   }
-
-  function measureRootHeight() {
-    var root = rootEl || cardEl || document.body;
-    var rect = root.getBoundingClientRect();
-    var hRect = rect && rect.height ? rect.height : 0;
-    var hScroll = Math.max(
-      root.scrollHeight || 0,
-      (cardEl && cardEl.scrollHeight) || 0,
-      document.body.scrollHeight || 0,
-      document.documentElement.scrollHeight || 0
-    );
-    return Math.max(hRect, hScroll, 0);
-  }
-
-  function syncUploaderHeight(forceJitter) {
-    var base = Math.max(125, Math.ceil(measureRootHeight() + 22));
-    var h = base;
-    if (forceJitter) {
-      jitterOn = !jitterOn;
-      h = base + (jitterOn ? 1 : 0);
-    } else if (lastHeight && Math.abs(base - lastHeight) <= 1) {
-      return lastHeight;
-    }
+  function syncHeight() {
+    if (!cardEl) return;
+    var rect = cardEl.getBoundingClientRect();
+    var h = Math.ceil((rect && rect.height ? rect.height : cardEl.offsetHeight || 0) + 16);
+    h = Math.min(Math.max(h, 165), 560);
+    if (lastHeight && Math.abs(h - lastHeight) <= 3) return;
     lastHeight = h;
     send("streamlit:setFrameHeight", { height: h });
-    return h;
   }
-
-  function bumpHeightAfterRender() {
-    syncUploaderHeight(true);
-    if (typeof requestAnimationFrame === "function") {
-      requestAnimationFrame(function () {
-        syncUploaderHeight(true);
-        requestAnimationFrame(function () { syncUploaderHeight(true); });
-      });
-    }
-    setTimeout(function () { syncUploaderHeight(true); }, 80);
-    setTimeout(function () { syncUploaderHeight(true); }, 250);
-    setTimeout(function () { syncUploaderHeight(true); }, 500);
-  }
-
   function setValue(value) {
     send("streamlit:setComponentValue", { value: value, dataType: "json" });
   }
@@ -320,13 +239,6 @@
     return btoa(binary);
   }
 
-  function updateClearBtn() {
-    if (!btnClearAll) return;
-    btnClearAll.hidden = !files.length;
-    btnClearAll.classList.toggle("disabled", !!cfg.disabled);
-    btnClearAll.disabled = !!cfg.disabled;
-  }
-
   function emit() {
     var payload = files.map(function (f) {
       return {
@@ -343,12 +255,12 @@
       ts: Date.now()
     });
     renderThumbs();
-    updateClearBtn();
     statusEl.className = "ok";
     statusEl.textContent = files.length
       ? ("✅ تم تجهيز " + files.length + " مرفق")
       : "";
-    bumpHeightAfterRender();
+    setTimeout(syncHeight, 30);
+    setTimeout(syncHeight, 80);
   }
 
   function renderThumbs() {
@@ -364,8 +276,7 @@
       } else {
         var img = document.createElement("img");
         img.alt = f.name || "صورة";
-        img.onload = function () { bumpHeightAfterRender(); };
-        img.onerror = function () { syncUploaderHeight(true); };
+        img.onload = function () { syncHeight(); };
         if (f.preview) img.src = f.preview;
         else img.src = "data:" + (f.type || "image/jpeg") + ";base64," + f.data_b64;
         card.appendChild(img);
@@ -386,7 +297,6 @@
       card.appendChild(rm);
       thumbsEl.appendChild(card);
     });
-    syncUploaderHeight(true);
   }
 
   function loadImageBitmap(file) {
@@ -528,7 +438,6 @@
     if (!arr.length) return;
     statusEl.className = "ok";
     statusEl.textContent = "⏳ جارِ تجهيز الملفات...";
-    syncUploaderHeight(true);
     var chain = Promise.resolve();
     arr.forEach(function (file) {
       chain = chain.then(function () {
@@ -559,15 +468,6 @@
   bindInput(inpGallery);
   bindInput(inpCamera);
   bindInput(inpPdf);
-
-  if (btnClearAll) {
-    btnClearAll.addEventListener("click", function (ev) {
-      if (ev) { ev.preventDefault(); ev.stopPropagation(); }
-      if (cfg.disabled) return;
-      files = [];
-      emit();
-    });
-  }
 
   function openGallery() {
     if (cfg.disabled) return;
@@ -623,12 +523,12 @@
     cfg.preserve_alpha = !!args.preserve_alpha;
     cfg.disabled = !!args.disabled;
 
+    // عنوان الحقل يظهر مسبقاً من Streamlit — نكتفي بسطر إرشاد مدمج
     subEl.textContent = cfg.subtitle;
     lblPdf.hidden = !cfg.allow_pdf;
     lblGallery.classList.toggle("disabled", cfg.disabled);
     lblCamera.classList.toggle("disabled", cfg.disabled);
     lblPdf.classList.toggle("disabled", cfg.disabled || !cfg.allow_pdf);
-    updateClearBtn();
     inpGallery.multiple = !!cfg.multiple;
     inpPdf.multiple = !!cfg.multiple;
     inpGallery.disabled = !!cfg.disabled;
@@ -641,30 +541,19 @@
     var data = ev.data || {};
     if (!data || data.type !== "streamlit:render") return;
     renderSeen = true;
-    renderCycle += 1;
     applyArgs(data.args || {});
-    // حاسم: Streamlit يعيد ضبط ارتفاع iframe عند كل render — نفرض الارتفاع الكامل فوراً مع jitter
-    bumpHeightAfterRender();
+    syncHeight();
+    setTimeout(syncHeight, 80);
   });
 
   window.addEventListener("resize", function () {
     var w = window.innerWidth || 0;
     if (w === lastWidth) return;
     lastWidth = w;
-    if (renderSeen) bumpHeightAfterRender();
+    if (renderSeen) setTimeout(syncHeight, 20);
   });
 
-  if (typeof ResizeObserver !== "undefined") {
-    try {
-      var ro = new ResizeObserver(function () { syncUploaderHeight(true); });
-      if (rootEl) ro.observe(rootEl);
-      if (cardEl) ro.observe(cardEl);
-      if (thumbsEl) ro.observe(thumbsEl);
-    } catch (e) {}
-  }
-
   setReady();
-  bumpHeightAfterRender();
 })();
   </script>
 </body>

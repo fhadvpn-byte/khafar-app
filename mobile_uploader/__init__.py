@@ -142,7 +142,6 @@ def khafar_file_uploader(
     رافع ملفات جوال ثنائي الاتجاه.
     - accept_multiple_files=False → يعيد KhafarUploadedFile | None
     - accept_multiple_files=True → يعيد list[KhafarUploadedFile]
-    الارتفاع ديناميكي حصراً من index.html عبر setFrameHeight — ممنوع تمرير height= ثابت.
     """
     store_key = f"_khafar_mu_files_{key}"
     token_key = f"_khafar_mu_token_{key}"
@@ -152,7 +151,6 @@ def khafar_file_uploader(
     if subtitle is None:
         subtitle = "المعرض أو الكاميرا — متوافق مع أندرويد والآيفون"
 
-    # لا height= هنا إطلاقاً — أي ارتفاع ثابت يمنع استعادة الإطار بعد streamlit:render
     result = _mobile_uploader(
         title=label or "إرفاق ملفات",
         subtitle=subtitle or "",
@@ -171,11 +169,8 @@ def khafar_file_uploader(
         ).hexdigest()
         st.session_state[store_key] = files
         st.session_state[token_key] = token
-    elif store_key in st.session_state and isinstance(result, dict) and result.get("action") in (
-        "update",
-        "clear",
-    ):
-        # قائمة فارغة صريحة أو مسح الكل من المكوّن
+    elif store_key in st.session_state and isinstance(result, dict) and result.get("action") == "update":
+        # قائمة فارغة صريحة من المكوّن = مسح
         if not (result.get("files") or []):
             st.session_state[store_key] = []
             st.session_state[token_key] = ""
