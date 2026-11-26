@@ -17,11 +17,18 @@ import streamlit.components.v1 as components
 
 KSA_TZ = timezone(timedelta(hours=3))
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
-# قاعدة مستقلة تماماً عن khafar_system.db لتفادي التعارض/القفل
-_STATS_PRIMARY = os.path.join(_APP_DIR, "khafar_stats_independent.db")
+# مسار موحّد مع الأرشيف (الخزنة السحابية) — مع بديل محلي آمن
+try:
+    import khafar_cloud_vault as _vault
+    _STATS_PRIMARY = _vault.get_unified_db_path()
+except Exception:
+    _STATS_PRIMARY = os.path.join(
+        os.environ.get("TMPDIR") or os.environ.get("TEMP") or "/tmp",
+        "khafar_unified.db",
+    )
 _STATS_FALLBACK = os.path.join(
     os.environ.get("TMPDIR") or os.environ.get("TEMP") or "/tmp",
-    "khafar_stats_independent.db",
+    "khafar_unified_writable.db",
 )
 _STATS_DB = _STATS_PRIMARY
 _ADMIN_PIN = "2030"
@@ -36,12 +43,17 @@ _CAT_ORDER = ["إقرار", "محضر", "إحالة طبية", "تكميل"]
 
 
 def configure(db_path: str | None = None) -> None:
-    """الإحصائيات تبقى على ملف مستقل — يُتجاهل مسار قاعدة التطبيق الرئيسية عمداً."""
-    global _STATS_DB
-    # لا نربط الإحصائيات بـ khafar_system.db حتى لا تتزاحم الكتابة
-    if db_path and "khafar_stats" in str(db_path).replace("\\", "/"):
+    """توجيه الإحصائيات إلى قاعدة الخزنة الموحدة."""
+    global _STATS_DB, _STATS_PRIMARY
+    if db_path:
         _STATS_DB = str(db_path)
+        _STATS_PRIMARY = str(db_path)
     else:
+        try:
+            import khafar_cloud_vault as _vault
+            _STATS_PRIMARY = _vault.get_unified_db_path()
+        except Exception:
+            pass
         _STATS_DB = _STATS_PRIMARY
 
 
@@ -87,7 +99,7 @@ def init_stats_db(db_path: str | None = None) -> None:
     """تهيئة جداول الإحصائيات مع درع استعادة — لا توقف التطبيق أبداً."""
     global _STATS_DB
     try:
-        if db_path and "khafar_stats" in str(db_path).replace("\\", "/"):
+        if db_path:
             configure(db_path)
         targets = [_STATS_DB, _STATS_PRIMARY, _STATS_FALLBACK]
         last_err = None
@@ -195,6 +207,11 @@ def log_session_visit() -> None:
         c.commit()
         c.close()
         st.session_state["_khafar_visit_counted"] = True
+        try:
+            import khafar_cloud_vault as _vault
+            _vault.trigger_vault_backup(immediate=False, from_visit=True)
+        except Exception:
+            pass
     except Exception:
         try:
             st.session_state["_khafar_visit_counted"] = True
@@ -614,6 +631,11 @@ def restore_stats_backup(raw: bytes | str) -> tuple[bool, str]:
                 )
         c.commit()
         c.close()
+        try:
+            import khafar_cloud_vault as _vault
+            _vault.trigger_vault_backup(immediate=True)
+        except Exception:
+            pass
         return True, "تمت استعادة النسخة الاحتياطية بنجاح."
     except Exception as exc:
         return False, f"تعذرت الاستعادة: {exc}"
@@ -631,6 +653,11 @@ def reset_visits_counter(pin: str) -> tuple[bool, str]:
         )
         c.commit()
         c.close()
+        try:
+            import khafar_cloud_vault as _vault
+            _vault.trigger_vault_backup(immediate=True)
+        except Exception:
+            pass
         return True, "تم تصفير عداد الزيارات."
     except Exception as exc:
         return False, f"تعذر التصفير: {exc}"
@@ -763,13 +790,21 @@ def render_stats_dashboard(archive_records: list | None = None, current_officer_
         unsafe_allow_html=True,
     )
 
-    period = st.radio(
-        "الفترة الزمنية",
-        options=["الكل", "اليوم", "آخر 7 أيام", "هذا الشهر"],
-        horizontal=True,
-        key="khafar_stats_period",
-        label_visibility="collapsed",
-    )
+    period_opts = ["الكل", "اليوم", "آخر 7 أيام", "هذا الشهر"]
+    if "khafar_stats_period" not in st.session_state:
+        st.session_state.khafar_stats_period = "الكل"
+    pcols = st.columns(4)
+    for i, opt in enumerate(period_opts):
+        with pcols[i]:
+            if st.button(
+                opt,
+                key=f"khafar_stats_period_btn_{i}",
+                type="primary" if st.session_state.khafar_stats_period == opt else "secondary",
+                use_container_width=True,
+            ):
+                st.session_state.khafar_stats_period = opt
+                st.rerun()
+    period = st.session_state.khafar_stats_period
     start, end = _period_bounds(period)
 
     all_visits = _load_visits()

@@ -46,6 +46,7 @@ st.set_page_config(
 from sig_pad_component import sig_pad
 from mobile_uploader import khafar_file_uploader
 import khafar_stats
+import khafar_cloud_vault
 
 
 def safe_rerun():
@@ -2892,8 +2893,8 @@ def generate_qr_png_b64(data_text: str) -> str:
 # =====================================================================
 # 4. قاعدة البيانات المحلية SQLite
 # =====================================================================
-_DB_PRIMARY = os.path.join(_APP_DIR, "khafar_system.db")
-_DB_FALLBACK = os.path.join(tempfile.gettempdir(), "khafar_system_writable.db")
+_DB_PRIMARY = khafar_cloud_vault.get_unified_db_path()
+_DB_FALLBACK = os.path.join(tempfile.gettempdir(), "khafar_unified_writable.db")
 DB_PATH = _DB_PRIMARY
 
 
@@ -3137,6 +3138,17 @@ def _init_db_at(path: str) -> str:
                 conn.close()
             except Exception:
                 pass
+
+
+
+@st.cache_resource
+def _boot_cloud_vault() -> dict:
+    """استرجاع الخزنة السحابية مرة واحدة عند إقلاع حاوية السيرفر."""
+    try:
+        khafar_cloud_vault.merge_legacy_databases_into(DB_PATH)
+        return khafar_cloud_vault.restore_vault_if_needed(DB_PATH)
+    except Exception as exc:
+        return {"restored": False, "reason": f"boot_error:{exc}", "configured": False}
 
 
 @st.cache_resource
@@ -3812,6 +3824,10 @@ def save_manager_signature_settings(
             _write_manager_sig_backup(data)
         except Exception:
             pass
+    try:
+        khafar_cloud_vault.trigger_vault_backup(immediate=True)
+    except Exception:
+        pass
     data["display_name"] = f"{name} — {title}".strip(" —") if name.strip() else title
     return data
 
@@ -3998,6 +4014,10 @@ def save_device_shift(device_hash: str, data: dict) -> dict:
     ))
     conn.commit()
     conn.close()
+    try:
+        khafar_cloud_vault.trigger_vault_backup(immediate=True)
+    except Exception:
+        pass
     return cleaned
 
 
@@ -4294,6 +4314,10 @@ def save_record_to_db(rec: dict, device_hash: str) -> bool:
     conn.close()
     try:
         khafar_stats.log_document_certified(rec)
+    except Exception:
+        pass
+    try:
+        khafar_cloud_vault.trigger_vault_backup(immediate=True)
     except Exception:
         pass
     return True
@@ -4631,6 +4655,10 @@ def delete_record_db(rec_id: int, device_hash: str = "", *, force: bool = False)
         conn.execute("DELETE FROM records WHERE id=? AND device_hash=?", (rec_id, device_hash))
     conn.commit()
     conn.close()
+    try:
+        khafar_cloud_vault.trigger_vault_backup(immediate=True)
+    except Exception:
+        pass
 
 
 def render_device_bootstrap(
@@ -9270,9 +9298,14 @@ import khafar_bail; khafar_bail.bind_functions(globals())
 # 6. إدارة حالة الجلسة والتنقل
 # =====================================================================
 init_db()
+try:
+    khafar_cloud_vault.merge_legacy_databases_into(DB_PATH)
+    _boot_cloud_vault()
+except Exception:
+    pass
 init_takmeel_db()
 try:
-    khafar_stats.configure()
+    khafar_stats.configure(DB_PATH)
     khafar_stats.log_session_visit()
 except Exception:
     pass
@@ -10865,7 +10898,11 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
 # =====================================================================
 elif st.session_state.nav_tab == "الإحصائيات":
     try:
-        khafar_stats.configure()
+        khafar_stats.configure(DB_PATH)
+        try:
+            khafar_cloud_vault.render_vault_status_badge(key_prefix="stats_vault")
+        except Exception:
+            pass
         khafar_stats.render_stats_dashboard(
             archive_records=all_archived,
             current_officer_name=unit_display,
@@ -10882,6 +10919,10 @@ elif st.session_state.nav_tab == "الإعدادات والبصمة":
         <span style="font-size:16px; font-weight:800; color:#ffffff;">⚙️ الإعدادات والبصمة</span>
     </div>
     """, unsafe_allow_html=True)
+    try:
+        khafar_cloud_vault.render_vault_status_badge(key_prefix="settings_vault")
+    except Exception:
+        pass
 
     sett_tab, mgr_tab, otg_tab = st.tabs([
         "👮 مناوبة الخفر",
