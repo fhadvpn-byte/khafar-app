@@ -6,6 +6,7 @@ import base64
 import io
 import html
 import os
+import tempfile
 import random
 import hashlib
 import re
@@ -2891,7 +2892,9 @@ def generate_qr_png_b64(data_text: str) -> str:
 # =====================================================================
 # 4. قاعدة البيانات المحلية SQLite
 # =====================================================================
-DB_PATH = "khafar_system.db"
+_DB_PRIMARY = os.path.join(_APP_DIR, "khafar_system.db")
+_DB_FALLBACK = os.path.join(tempfile.gettempdir(), "khafar_system_writable.db")
+DB_PATH = _DB_PRIMARY
 
 
 BLANK_SHIFT = {
@@ -2926,107 +2929,253 @@ def _manager_pin() -> str:
     return str(pin or "4411").strip() or "4411"
 
 
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS shift_settings (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            dept_name TEXT,
-            officer_rank TEXT,
-            officer_name TEXT,
-            duty_rank TEXT,
-            duty_name TEXT,
-            default_gps TEXT
-        )
-    """)
-    if c.execute("SELECT COUNT(*) FROM shift_settings").fetchone()[0] == 0:
-        c.execute("""
-            INSERT INTO shift_settings (id, dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps)
-            VALUES (1, 'قسم مرور العارضة', 'مستلم الخفر المناوب', '', 'وحدة الحوادث', '', 'بانتظار رصد الموقع')
-        """)
-    # السجل العام لم يعد مصدراً للبيانات الشخصية: تُمسح الأسماء والإحداثيات منه دائماً.
-    c.execute("""
-        UPDATE shift_settings
-        SET dept_name=?, officer_rank=?, officer_name='', duty_rank=?, duty_name='', default_gps=?
-        WHERE id=1
-    """, ("قسم مرور العارضة", "مستلم الخفر المناوب", "وحدة الحوادث", "بانتظار رصد الموقع"))
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS device_shifts (
-            device_hash TEXT PRIMARY KEY,
-            dept_name TEXT,
-            officer_rank TEXT,
-            officer_name TEXT,
-            duty_rank TEXT,
-            duty_name TEXT,
-            default_gps TEXT
-        )
-    """)
-    device_shift_cols = {row[1] for row in c.execute("PRAGMA table_info(device_shifts)").fetchall()}
-    if "duty_sig_b64" not in device_shift_cols:
-        c.execute("ALTER TABLE device_shifts ADD COLUMN duty_sig_b64 TEXT")
+def db_connect(db_path: str | None = None):
+    """اتصال SQLite موحّد وآمن مع مهلة انتظار ومنع تعارض الخيوط."""
+    path = str(db_path or DB_PATH)
+    conn = sqlite3.connect(path, timeout=30.0, check_same_thread=False)
+    try:
+        conn.execute("PRAGMA busy_timeout = 30000")
+    except Exception:
+        pass
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+    except Exception:
+        pass
+    try:
+        conn.execute("PRAGMA synchronous=NORMAL")
+    except Exception:
+        pass
+    return conn
 
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS manager_settings (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            manager_name TEXT,
-            manager_title TEXT,
-            manager_sig_b64 TEXT,
-            auto_insert INTEGER DEFAULT 1,
-            updated_at TEXT
-        )
-    """)
-    if c.execute("SELECT COUNT(*) FROM manager_settings").fetchone()[0] == 0:
+
+def _ensure_table_columns(cursor, table_name: str, columns: dict[str, str]) -> None:
+    """إضافة الأعمدة الناقصة تلقائياً عبر PRAGMA table_info."""
+    try:
+        existing = {row[1] for row in cursor.execute(f"PRAGMA table_info({table_name})").fetchall()}
+    except Exception:
+        existing = set()
+    for col_name, col_type in columns.items():
+        if col_name in existing:
+            continue
+        try:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}")
+            existing.add(col_name)
+        except Exception:
+            pass
+
+
+def _clear_stale_sqlite_sidecars(db_path: str) -> None:
+    for suffix in ("-wal", "-shm", "-journal"):
+        side = f"{db_path}{suffix}"
+        try:
+            if os.path.exists(side):
+                os.remove(side)
+        except Exception:
+            pass
+
+
+def _init_db_at(path: str) -> str:
+    conn = None
+    try:
+        parent = os.path.dirname(path) or "."
+        os.makedirs(parent, exist_ok=True)
+        conn = db_connect(path)
+        c = conn.cursor()
         c.execute(
             """
-            INSERT INTO manager_settings (id, manager_name, manager_title, manager_sig_b64, auto_insert, updated_at)
-            VALUES (1, ?, ?, '', 1, ?)
-            """,
-            ("", DEFAULT_MANAGER_TITLE, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+            CREATE TABLE IF NOT EXISTS shift_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                dept_name TEXT,
+                officer_rank TEXT,
+                officer_name TEXT,
+                duty_rank TEXT,
+                duty_name TEXT,
+                default_gps TEXT
+            )
+            """
+        )
+        _ensure_table_columns(
+            c,
+            "shift_settings",
+            {
+                "dept_name": "TEXT",
+                "officer_rank": "TEXT",
+                "officer_name": "TEXT",
+                "duty_rank": "TEXT",
+                "duty_name": "TEXT",
+                "default_gps": "TEXT",
+            },
+        )
+        row_count = c.execute("SELECT COUNT(*) FROM shift_settings").fetchone()[0]
+        if int(row_count or 0) == 0:
+            c.execute(
+                """
+                INSERT INTO shift_settings (id, dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps)
+                VALUES (1, 'قسم مرور العارضة', 'مستلم الخفر المناوب', '', 'وحدة الحوادث', '', 'بانتظار رصد الموقع')
+                """
+            )
+        else:
+            # حدّث العناوين العامة فقط دون مسح الأسماء المحفوظة بعد التهيئة الأولى
+            c.execute(
+                """
+                UPDATE shift_settings
+                SET dept_name=COALESCE(NULLIF(TRIM(dept_name), ''), ?),
+                    officer_rank=COALESCE(NULLIF(TRIM(officer_rank), ''), ?),
+                    duty_rank=COALESCE(NULLIF(TRIM(duty_rank), ''), ?)
+                WHERE id=1
+                """,
+                ("قسم مرور العارضة", "مستلم الخفر المناوب", "وحدة الحوادث"),
+            )
+
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS device_shifts (
+                device_hash TEXT PRIMARY KEY,
+                dept_name TEXT,
+                officer_rank TEXT,
+                officer_name TEXT,
+                duty_rank TEXT,
+                duty_name TEXT,
+                default_gps TEXT
+            )
+            """
+        )
+        _ensure_table_columns(
+            c,
+            "device_shifts",
+            {
+                "dept_name": "TEXT",
+                "officer_rank": "TEXT",
+                "officer_name": "TEXT",
+                "duty_rank": "TEXT",
+                "duty_name": "TEXT",
+                "default_gps": "TEXT",
+                "duty_sig_b64": "TEXT",
+            },
         )
 
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS records (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            doc_no TEXT,
-            form_id TEXT,
-            form_title TEXT,
-            category TEXT,
-            party_name TEXT,
-            party_id TEXT,
-            plate_no TEXT,
-            gps_coords TEXT,
-            created_at TEXT,
-            fields_json TEXT,
-            legal_text TEXT,
-            citizen_stamp_b64 TEXT,
-            citizen_auth_mode TEXT,
-            officer_stamp_b64 TEXT,
-            attachment_b64 TEXT,
-            officer_full TEXT,
-            duty_full TEXT,
-            dept_name TEXT,
-            verify_hash TEXT,
-            officer_auth_mode TEXT,
-            duty_auth_mode TEXT,
-            duty_stamp_b64 TEXT
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS manager_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                manager_name TEXT,
+                manager_title TEXT,
+                manager_sig_b64 TEXT,
+                auto_insert INTEGER DEFAULT 1,
+                updated_at TEXT
+            )
+            """
         )
-    """)
-    existing_cols = {row[1] for row in c.execute("PRAGMA table_info(records)").fetchall()}
-    for col_name, col_type in (
-        ("officer_auth_mode", "TEXT"),
-        ("duty_auth_mode", "TEXT"),
-        ("duty_stamp_b64", "TEXT"),
-        ("receiver_name", "TEXT"),
-        ("receiver_role", "TEXT"),
-        ("device_hash", "TEXT"),
-        ("signatures_json", "TEXT"),
-        ("archived_html", "TEXT"),
-    ):
-        if col_name not in existing_cols:
-            c.execute(f"ALTER TABLE records ADD COLUMN {col_name} {col_type}")
-    conn.commit()
-    conn.close()
+        _ensure_table_columns(
+            c,
+            "manager_settings",
+            {
+                "manager_name": "TEXT",
+                "manager_title": "TEXT",
+                "manager_sig_b64": "TEXT",
+                "auto_insert": "INTEGER DEFAULT 1",
+                "updated_at": "TEXT",
+            },
+        )
+        if c.execute("SELECT COUNT(*) FROM manager_settings").fetchone()[0] == 0:
+            c.execute(
+                """
+                INSERT INTO manager_settings (id, manager_name, manager_title, manager_sig_b64, auto_insert, updated_at)
+                VALUES (1, ?, ?, '', 1, ?)
+                """,
+                ("", DEFAULT_MANAGER_TITLE, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+            )
+
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                doc_no TEXT,
+                form_id TEXT,
+                form_title TEXT,
+                category TEXT,
+                party_name TEXT,
+                party_id TEXT,
+                plate_no TEXT,
+                gps_coords TEXT,
+                created_at TEXT,
+                fields_json TEXT,
+                legal_text TEXT,
+                citizen_stamp_b64 TEXT,
+                citizen_auth_mode TEXT,
+                officer_stamp_b64 TEXT,
+                attachment_b64 TEXT,
+                officer_full TEXT,
+                duty_full TEXT,
+                dept_name TEXT,
+                verify_hash TEXT,
+                officer_auth_mode TEXT,
+                duty_auth_mode TEXT,
+                duty_stamp_b64 TEXT
+            )
+            """
+        )
+        _ensure_table_columns(
+            c,
+            "records",
+            {
+                "officer_auth_mode": "TEXT",
+                "duty_auth_mode": "TEXT",
+                "duty_stamp_b64": "TEXT",
+                "receiver_name": "TEXT",
+                "receiver_role": "TEXT",
+                "device_hash": "TEXT",
+                "signatures_json": "TEXT",
+                "archived_html": "TEXT",
+            },
+        )
+        conn.commit()
+        return path
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+@st.cache_resource
+def _cached_init_db() -> str:
+    """تهيئة القاعدة مرة واحدة لكل عملية سيرفر — لا تعاد مع كل rerun."""
+    primary = _DB_PRIMARY
+    try:
+        return _init_db_at(primary)
+    except sqlite3.Error:
+        _clear_stale_sqlite_sidecars(primary)
+        try:
+            return _init_db_at(primary)
+        except sqlite3.Error:
+            _clear_stale_sqlite_sidecars(_DB_FALLBACK)
+            return _init_db_at(_DB_FALLBACK)
+
+
+def init_db():
+    """درع استعادة: يهيّئ القاعدة مرة واحدة ويحوّل إلى /tmp عند تعذّر الكتابة."""
+    global DB_PATH
+    try:
+        DB_PATH = _cached_init_db()
+        return
+    except Exception:
+        pass
+    try:
+        _clear_stale_sqlite_sidecars(_DB_PRIMARY)
+        DB_PATH = _init_db_at(_DB_PRIMARY)
+        return
+    except sqlite3.Error:
+        pass
+    except Exception:
+        pass
+    try:
+        _clear_stale_sqlite_sidecars(_DB_FALLBACK)
+        DB_PATH = _init_db_at(_DB_FALLBACK)
+    except Exception:
+        # لا نوقف التطبيق — تُترك DB_PATH قابلة للكتابة قدر الإمكان
+        DB_PATH = _DB_FALLBACK
 
 
 RECEIVER_ROLE_OPTIONS = [
@@ -3473,7 +3622,7 @@ def get_manager_signature_settings() -> dict:
     """اقرأ توقيع المدير: SQLite → ملف JSON/PNG → st.secrets (دائم)."""
     out = _default_manager_settings()
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = db_connect()
         row = conn.execute(
             "SELECT manager_name, manager_title, manager_sig_b64, auto_insert, updated_at "
             "FROM manager_settings WHERE id=1"
@@ -3635,7 +3784,7 @@ def save_manager_signature_settings(
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     name = str(manager_name or "")[:180]
     title = str(manager_title or DEFAULT_MANAGER_TITLE)[:180] or DEFAULT_MANAGER_TITLE
-    conn = sqlite3.connect(DB_PATH)
+    conn = db_connect()
     conn.execute(
         """
         INSERT INTO manager_settings (id, manager_name, manager_title, manager_sig_b64, auto_insert, updated_at)
@@ -3803,7 +3952,7 @@ def ensure_device_identity() -> tuple[str, str]:
 def get_device_shift(device_hash: str) -> dict:
     if not device_hash:
         return _blank_shift()
-    conn = sqlite3.connect(DB_PATH)
+    conn = db_connect()
     conn.row_factory = sqlite3.Row
     row = conn.execute(
         "SELECT dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps, duty_sig_b64 "
@@ -3819,7 +3968,7 @@ def get_device_shift(device_hash: str) -> dict:
 def device_shift_exists(device_hash: str) -> bool:
     if not device_hash:
         return False
-    conn = sqlite3.connect(DB_PATH)
+    conn = db_connect()
     found = conn.execute("SELECT 1 FROM device_shifts WHERE device_hash=?", (device_hash,)).fetchone()
     conn.close()
     return bool(found)
@@ -3829,7 +3978,7 @@ def save_device_shift(device_hash: str, data: dict) -> dict:
     cleaned = _clean_shift(data)
     if not device_hash:
         return cleaned
-    conn = sqlite3.connect(DB_PATH)
+    conn = db_connect()
     conn.execute("""
         INSERT INTO device_shifts (
             device_hash, dept_name, officer_rank, officer_name, duty_rank, duty_name, default_gps, duty_sig_b64
@@ -3855,7 +4004,7 @@ def save_device_shift(device_hash: str, data: dict) -> dict:
 def clear_device_shift(device_hash: str) -> None:
     if not device_hash:
         return
-    conn = sqlite3.connect(DB_PATH)
+    conn = db_connect()
     conn.execute("DELETE FROM device_shifts WHERE device_hash=?", (device_hash,))
     conn.commit()
     conn.close()
@@ -4026,7 +4175,7 @@ def doc_exists_in_archive(doc_no: str, device_hash: str) -> bool:
     ref = str(doc_no or "").strip()
     if not ref or not device_hash:
         return False
-    conn = sqlite3.connect(DB_PATH)
+    conn = db_connect()
     row = conn.execute(
         "SELECT 1 FROM records WHERE device_hash=? AND doc_no=? LIMIT 1",
         (device_hash, ref),
@@ -4074,7 +4223,7 @@ def save_record_to_db(rec: dict, device_hash: str) -> bool:
     rec["archived_html"] = archived_html
 
     doc_no = str(rec.get("doc_no") or "").strip()
-    conn = sqlite3.connect(DB_PATH)
+    conn = db_connect()
     existing_id = None
     if doc_no:
         row = conn.execute(
@@ -4433,7 +4582,7 @@ auto_save_to_archive = _khafar_wrap_manual_archive(auto_save_to_archive, 'auto_s
 
 def search_records_db(q: str = "", device_hash: str = "", *, all_devices: bool = False) -> list:
     """جلب السجلات. عند all_devices=True تُعرض كل سجلات القسم دون فلتر device_hash (مهم للآيفون)."""
-    conn = sqlite3.connect(DB_PATH)
+    conn = db_connect()
     conn.row_factory = sqlite3.Row
     q = (q or "").strip()
     if all_devices or not device_hash:
@@ -4475,7 +4624,7 @@ def search_records_db(q: str = "", device_hash: str = "", *, all_devices: bool =
 
 
 def delete_record_db(rec_id: int, device_hash: str = "", *, force: bool = False):
-    conn = sqlite3.connect(DB_PATH)
+    conn = db_connect()
     if force or not device_hash:
         conn.execute("DELETE FROM records WHERE id=?", (rec_id,))
     else:
@@ -9123,7 +9272,7 @@ import khafar_bail; khafar_bail.bind_functions(globals())
 init_db()
 init_takmeel_db()
 try:
-    khafar_stats.configure(DB_PATH)
+    khafar_stats.configure()
     khafar_stats.log_session_visit()
 except Exception:
     pass
@@ -10716,7 +10865,7 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
 # =====================================================================
 elif st.session_state.nav_tab == "الإحصائيات":
     try:
-        khafar_stats.configure(DB_PATH)
+        khafar_stats.configure()
         khafar_stats.render_stats_dashboard(
             archive_records=all_archived,
             current_officer_name=unit_display,

@@ -17,7 +17,13 @@ import streamlit.components.v1 as components
 
 KSA_TZ = timezone(timedelta(hours=3))
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
-_STATS_DB = os.path.join(_APP_DIR, "khafar_system.db")
+# قاعدة مستقلة تماماً عن khafar_system.db لتفادي التعارض/القفل
+_STATS_PRIMARY = os.path.join(_APP_DIR, "khafar_stats_independent.db")
+_STATS_FALLBACK = os.path.join(
+    os.environ.get("TMPDIR") or os.environ.get("TEMP") or "/tmp",
+    "khafar_stats_independent.db",
+)
+_STATS_DB = _STATS_PRIMARY
 _ADMIN_PIN = "2030"
 
 _CAT_LABELS = {
@@ -30,62 +36,114 @@ _CAT_ORDER = ["إقرار", "محضر", "إحالة طبية", "تكميل"]
 
 
 def configure(db_path: str | None = None) -> None:
+    """الإحصائيات تبقى على ملف مستقل — يُتجاهل مسار قاعدة التطبيق الرئيسية عمداً."""
     global _STATS_DB
-    if db_path:
+    # لا نربط الإحصائيات بـ khafar_system.db حتى لا تتزاحم الكتابة
+    if db_path and "khafar_stats" in str(db_path).replace("\\", "/"):
         _STATS_DB = str(db_path)
+    else:
+        _STATS_DB = _STATS_PRIMARY
+
+
+def _clear_stats_sidecars(path: str) -> None:
+    for suffix in ("-wal", "-shm", "-journal"):
+        side = f"{path}{suffix}"
+        try:
+            if os.path.exists(side):
+                os.remove(side)
+        except Exception:
+            pass
+
+
+def _stats_connect(path: str | None = None) -> sqlite3.Connection:
+    db = str(path or _STATS_DB)
+    parent = os.path.dirname(db) or "."
+    try:
+        os.makedirs(parent, exist_ok=True)
+    except Exception:
+        pass
+    conn = sqlite3.connect(db, timeout=30.0, check_same_thread=False)
+    try:
+        conn.execute("PRAGMA busy_timeout = 30000")
+    except Exception:
+        pass
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+    except Exception:
+        pass
+    try:
+        conn.execute("PRAGMA synchronous=NORMAL")
+    except Exception:
+        pass
+    return conn
 
 
 def _conn() -> sqlite3.Connection:
     init_stats_db()
-    c = sqlite3.connect(_STATS_DB, timeout=30)
-    try:
-        c.execute("PRAGMA journal_mode=WAL")
-        c.execute("PRAGMA synchronous=NORMAL")
-    except Exception:
-        pass
-    return c
+    return _stats_connect(_STATS_DB)
 
 
 def init_stats_db(db_path: str | None = None) -> None:
-    if db_path:
-        configure(db_path)
-    c = sqlite3.connect(_STATS_DB, timeout=30)
+    """تهيئة جداول الإحصائيات مع درع استعادة — لا توقف التطبيق أبداً."""
+    global _STATS_DB
     try:
-        c.execute("PRAGMA journal_mode=WAL")
+        if db_path and "khafar_stats" in str(db_path).replace("\\", "/"):
+            configure(db_path)
+        targets = [_STATS_DB, _STATS_PRIMARY, _STATS_FALLBACK]
+        last_err = None
+        for target in targets:
+            conn = None
+            try:
+                conn = _stats_connect(target)
+                conn.executescript(
+                    """
+                    CREATE TABLE IF NOT EXISTS khafar_visits (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        visited_at TEXT NOT NULL,
+                        device_type TEXT NOT NULL,
+                        user_agent TEXT,
+                        session_token TEXT
+                    );
+                    CREATE TABLE IF NOT EXISTS khafar_doc_events (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        doc_no TEXT NOT NULL,
+                        form_id TEXT,
+                        form_title TEXT,
+                        category TEXT,
+                        officer_name TEXT,
+                        created_at TEXT NOT NULL,
+                        has_signature INTEGER DEFAULT 0,
+                        has_stamp INTEGER DEFAULT 0,
+                        has_gps INTEGER DEFAULT 0,
+                        has_attachment INTEGER DEFAULT 0,
+                        is_complete INTEGER DEFAULT 0,
+                        UNIQUE(doc_no)
+                    );
+                    CREATE TABLE IF NOT EXISTS khafar_stats_meta (
+                        key TEXT PRIMARY KEY,
+                        value TEXT
+                    );
+                    """
+                )
+                conn.commit()
+                _STATS_DB = target
+                return
+            except Exception as exc:
+                last_err = exc
+                _clear_stats_sidecars(target)
+            finally:
+                if conn is not None:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+        if last_err:
+            _STATS_DB = _STATS_FALLBACK
     except Exception:
-        pass
-    c.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS khafar_visits (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            visited_at TEXT NOT NULL,
-            device_type TEXT NOT NULL,
-            user_agent TEXT,
-            session_token TEXT
-        );
-        CREATE TABLE IF NOT EXISTS khafar_doc_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            doc_no TEXT NOT NULL,
-            form_id TEXT,
-            form_title TEXT,
-            category TEXT,
-            officer_name TEXT,
-            created_at TEXT NOT NULL,
-            has_signature INTEGER DEFAULT 0,
-            has_stamp INTEGER DEFAULT 0,
-            has_gps INTEGER DEFAULT 0,
-            has_attachment INTEGER DEFAULT 0,
-            is_complete INTEGER DEFAULT 0,
-            UNIQUE(doc_no)
-        );
-        CREATE TABLE IF NOT EXISTS khafar_stats_meta (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        );
-        """
-    )
-    c.commit()
-    c.close()
+        try:
+            _STATS_DB = _STATS_FALLBACK
+        except Exception:
+            pass
 
 
 def _now_ksa() -> datetime:
