@@ -71,7 +71,7 @@ def get_traffic_logo_b64() -> str:
     base_dir = Path(__file__).resolve().parent
     for fname in (
         "traffic_logo.png", "traffic_logo.PNG", "traffic_logo.jpg", "traffic_logo.jpeg",
-        "logo.png", "logo.PNG", "passer_logo.png", "moi_logo.png",
+        "logo.png", "logo.PNG", "logo.jpeg", "logo.jpg", "passer_logo.png", "moi_logo.png",
     ):
         fpath = base_dir / fname
         if fpath.exists():
@@ -401,8 +401,17 @@ st.markdown("""
     .stButton, [data-testid="stHorizontalBlock"], [data-testid="stVerticalBlockBorderWrapper"],
     .stTabs, header, footer, [data-testid="stHeader"], [data-testid="stToolbar"],
     [data-testid="stSidebar"], [data-testid="stDecoration"],
-    .khafar-top-header, .compact-status-bar, .khafar-nav-capsule {
+    .khafar-top-header, .compact-status-bar, .khafar-nav-capsule,
+    .khafar-welcome-splash, .khafar-welcome-splash *,
+    .khafar-splash-scan, .khafar-splash-glow, .khafar-splash-bar,
+    .khafar-top-header::before, .khafar-top-header::after,
+    .status-chip.status-ready .status-dot, .status-chip.status-ready::before {
         display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        animation: none !important;
+        background: none !important;
+        box-shadow: none !important;
     }
 }
 
@@ -512,7 +521,16 @@ img[src*="avatars.githubusercontent.com"] {
 }
 
 .stApp .khafar-top-header {
-    background: linear-gradient(135deg, #146C4E 0%, #0D4A35 55%, #0A211A 100%);
+    position: relative;
+    overflow: hidden;
+    background-color: #0A211A;
+    background-image:
+        linear-gradient(135deg, rgba(20, 108, 78, 0.94) 0%, rgba(13, 74, 53, 0.95) 55%, rgba(10, 33, 26, 0.97) 100%),
+        linear-gradient(rgba(212, 175, 55, 0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(212, 175, 55, 0.07) 1px, transparent 1px),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: auto, 24px 24px, 24px 24px, 48px 48px;
+    background-position: 0 0, 0 0, 0 0, 0 0;
     border: 1.5px solid #D4AF37;
     border-radius: 14px 14px 0 0;
     padding: 12px 14px 10px 14px;
@@ -520,6 +538,10 @@ img[src*="avatars.githubusercontent.com"] {
     height: auto !important;
     min-height: 0 !important;
     max-height: none;
+}
+.stApp .khafar-top-header > * {
+    position: relative;
+    z-index: 1;
 }
 .stApp .header-brand-row {
     display: flex;
@@ -672,6 +694,127 @@ img[src*="avatars.githubusercontent.com"] {
     font-size: 11px;
     font-weight: 700;
     line-height: 1.35;
+}
+.stApp .compact-status-bar .status-chip.status-ready .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55);
+    animation: khafarStatusPulse 2.2s ease-out infinite;
+    flex-shrink: 0;
+}
+@keyframes khafarStatusPulse {
+    0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); }
+    70% { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+/* ===== شاشة ترحيب تقنية لمرة واحدة (CSS خالص — بدون sleep/rerun) ===== */
+.khafar-welcome-splash {
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    text-align: center;
+    color: #f8fafc;
+    font-family: 'Cairo', 'Tajawal', Tahoma, sans-serif;
+    pointer-events: none !important;
+    overflow: hidden;
+    background-color: #022c22;
+    background-image:
+        linear-gradient(165deg, #022c22 0%, #064e3b 58%, #022c22 100%),
+        linear-gradient(rgba(212, 175, 55, 0.09) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(212, 175, 55, 0.09) 1px, transparent 1px),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: auto, 32px 32px, 32px 32px, 64px 64px;
+    animation: khafarWelcomeSplash 2s ease forwards;
+}
+.khafar-splash-scan {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.55), transparent);
+    box-shadow: 0 0 12px rgba(212, 175, 55, 0.35);
+    animation: khafarSplashScan 1.6s linear infinite;
+    pointer-events: none;
+}
+.khafar-splash-glow {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.96);
+    border: 2px solid rgba(212, 175, 55, 0.85);
+    box-shadow:
+        0 0 0 6px rgba(212, 175, 55, 0.12),
+        0 0 28px rgba(212, 175, 55, 0.35);
+    animation: khafarSplashGlow 1.6s ease-in-out infinite;
+    overflow: hidden;
+}
+.khafar-splash-glow img {
+    width: 78%;
+    height: 78%;
+    object-fit: contain;
+    display: block;
+}
+.khafar-splash-title {
+    margin: 0;
+    padding: 0 18px;
+    font-size: clamp(15px, 3.6vw, 20px);
+    font-weight: 800;
+    line-height: 1.45;
+    color: #f8fafc;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+    max-width: 92vw;
+}
+.khafar-splash-sub {
+    margin: 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: rgba(229, 193, 88, 0.92);
+    letter-spacing: 0.02em;
+}
+.khafar-splash-bar {
+    width: min(220px, 56vw);
+    height: 3px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+    margin-top: 2px;
+}
+.khafar-splash-bar > span {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #a37a2c, #d4af37, #f5e6a8);
+    animation: khafarSplashBar 1.55s ease-out forwards;
+}
+@keyframes khafarWelcomeSplash {
+    0%, 80% { opacity: 1; visibility: visible; }
+    100% { opacity: 0; visibility: hidden; pointer-events: none; }
+}
+@keyframes khafarSplashScan {
+    0% { top: 8%; opacity: 0; }
+    15% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { top: 92%; opacity: 0; }
+}
+@keyframes khafarSplashGlow {
+    0%, 100% { box-shadow: 0 0 0 6px rgba(212, 175, 55, 0.10), 0 0 22px rgba(212, 175, 55, 0.28); }
+    50% { box-shadow: 0 0 0 10px rgba(212, 175, 55, 0.16), 0 0 34px rgba(212, 175, 55, 0.42); }
+}
+@keyframes khafarSplashBar {
+    from { width: 0%; }
+    to { width: 100%; }
 }
 .stApp .compact-status-bar .status-chip.gold {
     background: #13382B;
@@ -10928,6 +11071,31 @@ consume_pending_archive_recall()
 # =====================================================================
 # 7. الترويسة المدمجة + شريط الحالة الأفقي
 # =====================================================================
+# شاشة ترحيب تقنية لمرة واحدة في الجلسة — CSS خالص (بدون sleep / rerun)
+if "welcome_splash_shown" not in st.session_state:
+    st.session_state["welcome_splash_shown"] = True
+    _splash_logo = (logo_b64_global or "").strip() or get_traffic_logo_b64()
+    _splash_mime = (
+        "image/png" if str(_splash_logo).startswith("iVBOR") else "image/jpeg"
+    )
+    _splash_img = (
+        f"<img src='data:{_splash_mime};base64,{_splash_logo}' alt='شعار المرور' />"
+        if _splash_logo
+        else "<span style='font-size:34px;line-height:1;'>🛡️</span>"
+    )
+    st.markdown(
+        f"""
+<div class="khafar-welcome-splash" aria-hidden="true">
+  <div class="khafar-splash-scan"></div>
+  <div class="khafar-splash-glow">{_splash_img}</div>
+  <p class="khafar-splash-title">منظومة ميدان الخفر الرقمية — قسم مرور العارضة</p>
+  <p class="khafar-splash-sub">توثيق الجلسة الميدانية المشفرة...</p>
+  <div class="khafar-splash-bar"><span></span></div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
 gps_now = str(shift["default_gps"])
 if st.session_state.get("gps_live_value") and not signed_gps_pair(gps_now):
     gps_now = str(st.session_state.get("gps_live_value"))
@@ -10955,7 +11123,7 @@ st.markdown(
 st.html(
     f"""
 <div class="compact-status-bar">
-    <span class="status-chip">🟢 متصل وجاهز</span>
+    <span class="status-chip status-ready"><span class="status-dot" aria-hidden="true"></span> متصل وجاهز</span>
     <span class="status-chip gold">👮 {html.escape(unit_display or "مستلم الخفر المناوب")}</span>
     <span class="status-chip gold">🧬 {html.escape(scanner_short)}</span>
     <span class="status-chip gps" id="khafar-gps-chip">{html.escape(gps_chip_text)}</span>
