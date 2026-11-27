@@ -724,6 +724,51 @@ img[src*="avatars.githubusercontent.com"] {
     font-size: 12px;
 }
 
+/* بطاقات أطراف إقرار الصلح والتنازل — تمييز بصري فقط */
+.stApp div[data-testid="stVerticalBlockBorderWrapper"]:has(.settlement-party-banner) {
+    border: 1.5px solid rgba(251, 191, 36, 0.65) !important;
+    background: rgba(0, 0, 0, 0.14) !important;
+    border-radius: 12px !important;
+    padding: 12px 14px 14px 14px !important;
+    margin: 0 0 20px 0 !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+.stApp .settlement-party-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    background: linear-gradient(90deg, #0b1f18 0%, #123528 55%, #0b1f18 100%);
+    border: 1px solid rgba(212, 175, 55, 0.55);
+    border-right: 5px solid #D4AF37;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin: 0 0 12px 0;
+    color: #FFFFFF;
+    font-weight: 800;
+    font-size: 15px;
+    line-height: 1.45;
+    direction: rtl;
+}
+.stApp .settlement-party-banner .party-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: #D4AF37;
+    color: #0b1f18;
+    font-weight: 900;
+    font-size: 14px;
+}
+.stApp .settlement-party-banner .party-role {
+    color: #F3E0A8;
+    font-size: 13px;
+    font-weight: 700;
+}
+
 .stApp .hero-shift-card {
     background: linear-gradient(135deg, #146C4E 0%, #0E2920 65%, #0A211A 100%);
     border: 1px solid rgba(212, 175, 55, 0.25);
@@ -11131,7 +11176,71 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     current_values[k] = render_field(fld)
                 current_values = _sync_med_injury_aliases(current_values)
                 st.caption("بيانات كل مصاب منظمة في صف مستقل، وتظهر مجمّعة في جدول رسمي داخل ورقة A4 عند الطباعة.")
-            elif fid in {"decl_settlement", "decl_flee_waiver", "decl_animal_hit"}:
+            elif fid == "decl_settlement":
+                def _render_settlement_pair_fields(fields_list: list) -> None:
+                    pair_slot = 0
+                    pair_cols = None
+                    for fld in fields_list:
+                        if _is_unified_ref_field(fld):
+                            continue
+                        if not _field_is_visible(fld, current_values):
+                            continue
+                        if fld["type"] == "textarea" or fld.get("stack_under"):
+                            current_values[fld["key"]] = render_field(fld)
+                            pair_slot = 0
+                            continue
+                        if pair_slot % 2 == 0:
+                            pair_cols = st.columns(2)
+                        with pair_cols[pair_slot % 2]:
+                            current_values[fld["key"]] = render_field(fld)
+                        pair_slot += 1
+
+                header_fields = []
+                party_fields_map = {1: [], 2: [], 3: [], 4: [], 5: []}
+                trailer_fields = []
+                for fld in form_def["fields"]:
+                    key_now = str(fld.get("key") or "")
+                    party_m = re.match(r"^p([1-5])_", key_now)
+                    if party_m:
+                        party_fields_map[int(party_m.group(1))].append(fld)
+                    elif key_now in ("settlement_basis", "compensation", "injury_statement"):
+                        trailer_fields.append(fld)
+                    else:
+                        header_fields.append(fld)
+
+                _render_settlement_pair_fields(header_fields)
+
+                for party_idx in range(1, 6):
+                    block_fields = party_fields_map[party_idx]
+                    if not any(_field_is_visible(fld, current_values) for fld in block_fields):
+                        continue
+                    ordinal = _PARTY_ORDINALS[party_idx]
+                    role_now = str(
+                        st.session_state.get(f"inp_{fid}_p{party_idx}_role")
+                        or current_values.get(f"p{party_idx}_role")
+                        or ""
+                    ).strip()
+                    role_html = (
+                        f'<span class="party-role">الصفة: {html.escape(role_now)}</span>'
+                        if role_now
+                        else ""
+                    )
+                    with st.container(border=True):
+                        st.markdown(
+                            (
+                                f'<div class="settlement-party-banner">'
+                                f'<span>👤 بيانات الطرف {html.escape(ordinal)} '
+                                f'<span class="party-num">{party_idx}</span></span>'
+                                f"{role_html}"
+                                f"</div>"
+                            ),
+                            unsafe_allow_html=True,
+                        )
+                        _render_settlement_pair_fields(block_fields)
+
+                _render_settlement_pair_fields(trailer_fields)
+                st.caption("بعد اعتماد الوثيقة تظهر لوحة توقيع حي مستقلة لكل طرف مشمول، مع مستلم الخفر المناوب ووحدة الحوادث، داخل صفحة A4 واحدة.")
+            elif fid in {"decl_flee_waiver", "decl_animal_hit"}:
                 pair_slot = 0
                 pair_cols = None
                 for fld in form_def["fields"]:
@@ -11139,11 +11248,6 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         continue
                     if not _field_is_visible(fld, current_values):
                         continue
-                    party_match = fld["key"][:2] if fld["key"].startswith("p") else ""
-                    if fid == "decl_settlement" and fld["key"].endswith("_name") and party_match[1:2].isdigit():
-                        ordinal = _PARTY_ORDINALS[int(fld["key"][1])]
-                        st.markdown(f"**الطرف {ordinal}**")
-                        pair_slot = 0
                     if fid == "decl_animal_hit" and fld["key"] == "owner_name":
                         st.markdown("**بيانات مالك الحيوان والتسوية**")
                         pair_slot = 0
@@ -11156,9 +11260,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     with pair_cols[pair_slot % 2]:
                         current_values[fld["key"]] = render_field(fld)
                     pair_slot += 1
-                if fid == "decl_settlement":
-                    st.caption("بعد اعتماد الوثيقة تظهر لوحة توقيع حي مستقلة لكل طرف مشمول، مع مستلم الخفر المناوب ووحدة الحوادث، داخل صفحة A4 واحدة.")
-                elif fid == "decl_animal_hit":
+                if fid == "decl_animal_hit":
                     st.caption("مجهول المالك: 3 خانات توقيع (السائق + مستلم الخفر المناوب + وحدة الحوادث). حضور المالك: 4 خانات بإضافة مالك الحيوان ولوحة توقيع حي.")
                 else:
                     st.caption("بعد الاعتماد تُفتح لوحة توقيع المُبلّغ المتنازل، ولوحة الطرف المتسبب عند حضوره، بجانب مستلم الخفر المناوب ووحدة الحوادث.")
