@@ -6112,7 +6112,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                     f'<img src="data:{mime};base64,{b64}" alt="" />'
                     f"</div>"
                 )
-        att_grid_cls = "attachment-grid atts-single" if image_count <= 1 else "attachment-grid atts-multi"
+        if image_count <= 1:
+            att_grid_cls = "attachment-grid atts-single"
+        elif image_count == 2:
+            att_grid_cls = "attachment-grid atts-multi atts-cols-2"
+        else:
+            att_grid_cls = "attachment-grid atts-multi atts-cols-3"
         attachment_block = f"""
         <div class="attachment-section">
             <div class="attachment-title">📎 المرفقات المصورة المعتمدة في التقرير</div>
@@ -6583,24 +6588,22 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         font-size: 12px; font-weight: 800; color: #000000; margin-bottom: 2px; text-align: right;
     }}
     .attachment-grid {{
-        display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; overflow: hidden;
+        display: grid !important; grid-template-columns: 1fr !important; gap: 8px !important;
+        align-items: stretch !important; width: 100% !important; overflow: hidden !important;
     }}
-    .att-card {{ flex: 1 1 0; text-align: center; min-width: 0; }}
+    .attachment-grid.atts-cols-2 {{ grid-template-columns: 1fr 1fr !important; }}
+    .attachment-grid.atts-cols-3 {{ grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }}
+    .att-card {{ min-width: 0; text-align: center; width: 100%; }}
     .att-card img {{
-        max-width: 100%; width: auto; height: auto; object-fit: contain;
-        border: 1.4px solid #000000; border-radius: 4px; background: #fff; display: block; margin: 0 auto;
+        width: 100% !important; max-width: 100% !important; height: 140px !important; max-height: 140px !important;
+        object-fit: contain !important; border: 1.4px solid #000000; border-radius: 4px;
+        background: #fff; display: block; margin: 0 auto;
     }}
     .attachment-grid.atts-single .att-card img {{
-        max-height: 185px !important; max-width: 95% !important;
-        width: auto !important; height: auto !important; object-fit: contain !important;
-    }}
-    .attachment-grid.atts-multi {{
-        display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 8px !important;
-        align-items: start !important; overflow: hidden !important;
+        height: 155px !important; max-height: 155px !important;
     }}
     .attachment-grid.atts-multi .att-card img {{
-        max-height: 140px !important; max-width: 95% !important;
-        width: auto !important; height: auto !important; object-fit: contain !important;
+        height: 130px !important; max-height: 130px !important;
     }}
     /* صور المرفقات ثابتة مضغوطة — لا تُكبَّر أبداً عبر expandLegal */
     .att-caption, .att-pdf-name {{ display: none !important; }}
@@ -9045,8 +9048,13 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         attSec.style.setProperty('margin', '2px 0', 'important');
         attSec.style.setProperty('padding', '2px 5px', 'important');
       }}
+      // لا تهبط الصور إلى أيقونات غير مقروءة (خصوصاً إقرار التنازل dense) — حد أدنى مقروء مع الحفاظ على 1/1
       attImgs.forEach(function(im) {{
-        im.style.setProperty('max-height', (step > 5 ? '44px' : '54px'), 'important');
+        var attCap = (step > 5 ? '110px' : '130px');
+        im.style.setProperty('width', '100%', 'important');
+        im.style.setProperty('height', attCap, 'important');
+        im.style.setProperty('max-height', attCap, 'important');
+        im.style.setProperty('object-fit', 'contain', 'important');
       }});
       sigHeads.forEach(function(th) {{
         th.style.setProperty('font-size', '9.2px', 'important');
