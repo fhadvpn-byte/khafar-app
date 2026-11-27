@@ -4976,10 +4976,12 @@ def _query_gps_pair() -> tuple[float, float] | None:
 def consume_live_gps_query(device_hash: str) -> None:
     pair = _query_gps_pair()
     hash_now = device_hash or str(st.session_state.get("device_hash") or "").strip()
+    auto_done_flag = str(st.query_params.get("gps_auto_done") or "").strip() in ("1", "true", "yes")
     if pair:
         formatted = format_live_gps(*pair)
         st.session_state["gps_live_ok"] = True
         st.session_state["gps_live_value"] = formatted
+        st.session_state["auto_gps_done"] = True
         if hash_now:
             update_default_gps(hash_now, formatted)
             st.session_state.pop("pending_live_gps", None)
@@ -4988,7 +4990,11 @@ def consume_live_gps_query(device_hash: str) -> None:
         st.session_state["gps_toast"] = formatted
     elif any(k in st.query_params for k in ("gps_lat", "gps_lon", "live_gps")):
         st.session_state["gps_toast_err"] = "تعذر قراءة إحداثي الموقع."
-    for key in ("gps_lat", "gps_lon", "gps_ts", "live_gps"):
+        st.session_state["auto_gps_done"] = True
+    elif auto_done_flag:
+        # رفض الصلاحية / انتهاء المهلة من المحاولة التلقائية — قفل بدون إحداثيات
+        st.session_state["auto_gps_done"] = True
+    for key in ("gps_lat", "gps_lon", "gps_ts", "live_gps", "gps_auto_done"):
         st.query_params.pop(key, None)
 
 
@@ -11124,16 +11130,21 @@ gps_now = str(shift["default_gps"])
 if st.session_state.get("gps_live_value") and not signed_gps_pair(gps_now):
     gps_now = str(st.session_state.get("gps_live_value"))
 gps_is_live = bool(signed_gps_pair(gps_now)) or bool(st.session_state.get("gps_live_ok"))
-gps_chip_text = (
-    f"✅ موقع فعلي معتمد {gps_now}"
-    if gps_is_live
-    else f"GPS {gps_now}"
-)
+# جلب تلقائي لمرة واحدة فقط إن لم يُرصد موقع بعد ولم تُقفل المحاولة
+gps_need_auto = (not gps_is_live) and (st.session_state.get("auto_gps_done") != True)
+if gps_is_live:
+    gps_chip_text = f"✅ موقع فعلي معتمد {gps_now}"
+elif gps_need_auto:
+    gps_chip_text = "⏳ جارٍ رصد الموقع تلقائياً..."
+else:
+    gps_chip_text = f"GPS {gps_now}"
 gps_maps = google_maps_url(gps_now)
 gps_maps_html = (
     f"<a class='gps-map-link' href='{html.escape(gps_maps, quote=True)}' target='_blank' rel='noopener noreferrer'>خرائط</a>"
     if gps_maps else ""
 )
+_gps_need_auto_js = "1" if gps_need_auto else "0"
+_gps_has_live_js = "1" if gps_is_live else "0"
 st.markdown(
     f'<div class="khafar-top-header"><div class="header-brand-row">'
     f'<div class="header-brand-inline">{header_logo_widget}'
@@ -11146,76 +11157,180 @@ st.markdown(
 )
 st.html(
     f"""
-<div class="compact-status-bar">
+<div class="compact-status-bar" data-gps-need-auto="{_gps_need_auto_js}" data-gps-has-live="{_gps_has_live_js}">
     <span class="status-chip status-ready"><span class="status-dot" aria-hidden="true"></span> متصل وجاهز</span>
     <span class="status-chip gold">👮 {html.escape(unit_display or "مستلم الخفر المناوب")}</span>
     <span class="status-chip gold">🧬 {html.escape(scanner_short)}</span>
     <span class="status-chip gps" id="khafar-gps-chip">{html.escape(gps_chip_text)}</span>
     {gps_maps_html}
-    <button type="button" class="gps-locate-btn" id="khafar-gps-btn">📍 تحديد موقعي الفعلي</button>
+    <button type="button" class="gps-locate-btn" id="khafar-gps-btn">📍 تحديث موقعي</button>
     <span class="status-chip time">{now_ksa.strftime('%Y/%m/%d %H:%M')}</span>
 </div>
 <script>
 (function () {{
   var root = window.top || window.parent || window;
   var doc = (root && root.document) ? root.document : document;
+  var NEED_AUTO = "{_gps_need_auto_js}" === "1";
+  var HAS_LIVE = "{_gps_has_live_js}" === "1";
+  var AUTO_KEY = "khafar_auto_gps_attempted";
+  var FAIL_KEY = "khafar_auto_gps_fail_signaled";
+
   function geoApi() {{
     return (root && root.navigator && root.navigator.geolocation)
       || (window.parent && window.parent.navigator && window.parent.navigator.geolocation)
       || navigator.geolocation;
   }}
+  function isIOS() {{
+    try {{
+      var ua = String((root.navigator && root.navigator.userAgent) || navigator.userAgent || "");
+      if (/iPad|iPhone|iPod/i.test(ua)) return true;
+      return !!(navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    }} catch (e) {{ return false; }}
+  }}
+  function setChip(text) {{
+    try {{
+      var chip = doc.getElementById("khafar-gps-chip") || document.getElementById("khafar-gps-chip");
+      if (chip) chip.textContent = text;
+    }} catch (e) {{}}
+  }}
+  function markAttempted() {{
+    try {{ sessionStorage.setItem(AUTO_KEY, "1"); }} catch (e) {{}}
+  }}
+  function wasAttempted() {{
+    try {{ return sessionStorage.getItem(AUTO_KEY) === "1"; }} catch (e) {{ return false; }}
+  }}
   function applyCoords(lat, lon) {{
+    markAttempted();
     try {{
       var u = new URL(root.location.href);
       u.searchParams.set("gps_lat", String(lat));
       u.searchParams.set("gps_lon", String(lon));
       u.searchParams.set("gps_ts", String(Date.now()));
+      u.searchParams.delete("gps_auto_done");
       root.location.assign(u.toString());
     }} catch (err) {{
       var u2 = new URL(window.location.href);
       u2.searchParams.set("gps_lat", String(lat));
       u2.searchParams.set("gps_lon", String(lon));
       u2.searchParams.set("gps_ts", String(Date.now()));
+      u2.searchParams.delete("gps_auto_done");
       window.location.assign(u2.toString());
     }}
   }}
-  function locate(btn) {{
+  function signalAutoDoneFail() {{
+    try {{
+      if (sessionStorage.getItem(FAIL_KEY) === "1") return;
+      sessionStorage.setItem(FAIL_KEY, "1");
+    }} catch (e) {{}}
+    markAttempted();
+    try {{
+      var u = new URL(root.location.href);
+      if (u.searchParams.get("gps_auto_done") === "1") return;
+      u.searchParams.set("gps_auto_done", "1");
+      u.searchParams.delete("gps_lat");
+      u.searchParams.delete("gps_lon");
+      root.location.assign(u.toString());
+    }} catch (err) {{
+      try {{
+        var u2 = new URL(window.location.href);
+        u2.searchParams.set("gps_auto_done", "1");
+        window.location.assign(u2.toString());
+      }} catch (e2) {{}}
+    }}
+  }}
+  function locate(btn, opts) {{
+    opts = opts || {{}};
+    var isAuto = !!opts.isAuto;
+    var fromGesture = !!opts.fromGesture;
     var geo = geoApi();
     var secure = false;
     try {{ secure = !!(root.isSecureContext || window.isSecureContext); }} catch (e) {{ secure = !!window.isSecureContext; }}
     if (!secure) {{
-      btn.textContent = "يلزم HTTPS أو localhost لرصد الموقع";
+      if (btn && !isAuto) btn.textContent = "يلزم HTTPS أو localhost لرصد الموقع";
+      if (isAuto) signalAutoDoneFail();
       return;
     }}
     if (!geo) {{
-      btn.textContent = "المتصفح لا يدعم تحديد الموقع";
+      if (btn && !isAuto) btn.textContent = "المتصفح لا يدعم تحديد الموقع";
+      if (isAuto) signalAutoDoneFail();
       return;
     }}
-    btn.disabled = true;
-    btn.textContent = "⏳ جارِ رصد الموقع...";
+    if (btn && !isAuto) {{
+      btn.disabled = true;
+      btn.textContent = "⏳ جارِ رصد الموقع...";
+    }}
+    if (isAuto) setChip("⏳ جارٍ رصد الموقع تلقائياً...");
     var onOk = function (pos) {{
       var lat = Number(pos.coords.latitude).toFixed(5);
       var lon = Number(pos.coords.longitude).toFixed(5);
       applyCoords(lat, lon);
     }};
+    var onFailFinal = function () {{
+      if (btn && !isAuto) {{
+        btn.disabled = false;
+        btn.textContent = "📍 تحديث موقعي";
+      }}
+      if (isAuto && !fromGesture && isIOS()) {{
+        setChip("⏳ المس الشاشة لتأكيد الموقع...");
+        armFirstGestureOnce();
+        return;
+      }}
+      if (isAuto) {{
+        setChip("GPS بانتظار رصد الموقع");
+        signalAutoDoneFail();
+        return;
+      }}
+      if (btn) btn.textContent = "📍 تعذر الرصد — اسمح بالموقع أو الصق رابط الخرائط";
+    }};
     var onFailNetwork = function () {{
-      btn.disabled = false;
-      btn.textContent = "📍 تعذر الرصد — الصق رابط الخرائط من الإعدادات";
+      if (btn && !isAuto) {{
+        btn.disabled = false;
+        btn.textContent = "📍 تعذر الرصد — الصق رابط الخرائط من الإعدادات";
+      }}
+      if (isAuto) onFailFinal();
     }};
     var onFailFirst = function (err) {{
       var code = err && err.code;
       if (code === 2 || code === 3) {{
-        btn.textContent = "⏳ محاولة ثانية عبر الشبكة...";
+        if (btn && !isAuto) btn.textContent = "⏳ محاولة ثانية عبر الشبكة...";
+        if (isAuto) setChip("⏳ جارٍ رصد الموقع تلقائياً...");
         geo.getCurrentPosition(onOk, onFailNetwork, {{
           enableHighAccuracy: false, timeout: 8000, maximumAge: 60000
         }});
         return;
       }}
-      btn.disabled = false;
-      btn.textContent = "📍 تعذر الرصد — اسمح بالموقع أو الصق رابط الخرائط";
+      onFailFinal();
     }};
     geo.getCurrentPosition(onOk, onFailFirst, {{
-      enableHighAccuracy: true, timeout: 6000, maximumAge: 0
+      enableHighAccuracy: true, timeout: isAuto ? 8000 : 6000, maximumAge: isAuto ? 30000 : 0
+    }});
+  }}
+  function armFirstGestureOnce() {{
+    if (root.__khafarGpsGestureArmed) return;
+    root.__khafarGpsGestureArmed = 1;
+    var fire = function () {{
+      if (HAS_LIVE) return;
+      locate(doc.getElementById("khafar-gps-btn") || document.getElementById("khafar-gps-btn"), {{
+        isAuto: true, fromGesture: true
+      }});
+    }};
+    try {{ doc.addEventListener("touchend", fire, {{ once: true, passive: true }}); }} catch (e) {{}}
+    try {{ doc.addEventListener("click", fire, {{ once: true }}); }} catch (e) {{}}
+    try {{
+      document.addEventListener("touchend", fire, {{ once: true, passive: true }});
+      document.addEventListener("click", fire, {{ once: true }});
+    }} catch (e2) {{}}
+  }}
+  function tryAutoLocate() {{
+    if (!NEED_AUTO || HAS_LIVE) return;
+    if (wasAttempted()) {{
+      /* محاولة سابقة في هذه الجلسة التبويب: على iOS ننتظر أول لمسة فقط، بلا تكرار صامت */
+      if (isIOS()) armFirstGestureOnce();
+      return;
+    }}
+    markAttempted();
+    locate(doc.getElementById("khafar-gps-btn") || document.getElementById("khafar-gps-btn"), {{
+      isAuto: true, fromGesture: false
     }});
   }}
   function bind(btn) {{
@@ -11223,7 +11338,7 @@ st.html(
     btn.dataset.khafarGpsBound = "1";
     btn.addEventListener("click", function (ev) {{
       if (ev && ev.preventDefault) ev.preventDefault();
-      locate(btn);
+      locate(btn, {{ isAuto: false }});
     }});
   }}
   function scan() {{
@@ -11231,6 +11346,7 @@ st.html(
     try {{ bind(document.getElementById("khafar-gps-btn")); }} catch (e) {{}}
   }}
   scan();
+  tryAutoLocate();
   if (!root.__khafarGpsObserver) {{
     try {{
       root.__khafarGpsObserver = new MutationObserver(function () {{ scan(); }});
@@ -11238,7 +11354,7 @@ st.html(
     }} catch (e) {{}}
   }}
   setTimeout(scan, 300);
-  setTimeout(scan, 1200);
+  setTimeout(function () {{ scan(); tryAutoLocate(); }}, 1200);
 }})();
 </script>
 """,
