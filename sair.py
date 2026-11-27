@@ -562,6 +562,58 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
       page-break-inside: avoid !important; break-inside: avoid !important;
     }}
     .no-print, .toolbar {{ display: none !important; }}
+
+    /* iOS Safari فقط — ضغط عمودي ليستقر المحضر 1/1 رغم الهامش السفلي الإجباري */
+    @supports (-webkit-touch-callout: none) {{
+      #khafar-print-portal .a4-sheet,
+      .a4-sheet {{
+        zoom: 0.88 !important;
+        width: 100% !important;
+        padding: 0 4px !important;
+        margin: 0 auto !important;
+        border: none !important;
+      }}
+      .top-header {{ margin-bottom: 4px !important; }}
+      .top-header td {{ font-size: 11px !important; line-height: 1.35 !important; }}
+      .top-header .hdr-logo img {{ height: 52px !important; }}
+      .case-num-line {{ font-size: 11.5px !important; margin-top: 1px !important; }}
+      .report-frame {{
+        padding: 6px 8px 8px 8px !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }}
+      .report-main-title {{
+        font-size: 16px !important;
+        margin: 0 0 4px 0 !important;
+      }}
+      .main-grid td, .main-grid th, .footer-grid td, .footer-grid th {{
+        padding: 3.5px 4px !important;
+        font-size: 11.5px !important;
+        line-height: 1.35 !important;
+        min-height: 0 !important;
+      }}
+      .shaded {{ font-size: 11px !important; }}
+      .desc-val {{
+        min-height: 0 !important;
+        padding: 5px 8px !important;
+        font-size: 11.5px !important;
+        line-height: 1.5 !important;
+      }}
+      .photo-cell {{
+        height: auto !important;
+        min-height: 0 !important;
+        padding: 5px !important;
+      }}
+      .photo-cell img {{
+        max-height: 155px !important;
+        max-width: 96% !important;
+        width: auto !important;
+        height: auto !important;
+        margin: 0 auto !important;
+      }}
+      .sig-cell {{ height: 46px !important; padding: 2px !important; }}
+      .sig-cell img {{ max-height: 40px !important; }}
+    }}
   }}
 """
 
@@ -696,7 +748,8 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
       document.body.style.zoom = "1";
       var contentH = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
       var zoom = 1;
-      if (isIOS) {{ if (contentH > 900) zoom = Math.min(1, 900 / contentH); }}
+      // iOS: الاعتماد على CSS @supports (zoom:0.88) دون تضاعف JS
+      if (isIOS) {{ zoom = 1; }}
       else if (contentH > 1120) {{ zoom = 1120 / contentH; }}
       document.body.style.zoom = String(zoom);
     }} catch (e0) {{}}
@@ -815,8 +868,9 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
         try {{ contentH = ctx.doc.documentElement.scrollHeight || ctx.doc.body.scrollHeight || 0; }} catch (eZ2) {{ contentH = 0; }}
       }}
       var zoom = 1;
+      // iOS: التصغير عبر CSS @supports (zoom:0.88) فقط — لا تضاعف هنا
       if (isIOS) {{
-        if (contentH > 900) zoom = Math.min(1, 900 / contentH);
+        zoom = 1;
       }} else if (contentH > 1120) {{
         zoom = 1120 / contentH;
       }}
@@ -1513,10 +1567,12 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
             on_click=_regen_sair_description,
         )
 
-    # —— صورة الحالة (واحدة فقط) ——
+    # —— صورة الحالة (رافع واحد فقط — بلا يمين/يسار وبلا تكرار) ——
     st.markdown("##### 3) صورة الحالة")
     st.caption("ارفع أو التقط صورة واحدة فقط للمحضر (معرض / كاميرا / PDF).")
-    if khafar_file_uploader:
+    # مسار واحد فقط: مكوّن الجوال إن وُجد، وإلا file_uploader الأصلي — لا يُعرضان معاً أبداً
+    photo_up = None
+    if khafar_file_uploader is not None:
         photo_up = khafar_file_uploader(
             "رفع / التقاط صورة الحالة",
             key="sair_photo_single_mu",
@@ -1528,6 +1584,7 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
             "صورة الحالة",
             type=["jpg", "jpeg", "png", "webp", "pdf"],
             key="sair_photo_single_up",
+            accept_multiple_files=False,
         )
     if photo_up is not None:
         files = photo_up if isinstance(photo_up, list) else [photo_up]
@@ -1535,6 +1592,7 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
             b64 = _ingest_upload_to_b64(files[0], purpose="photo")
             if b64:
                 st.session_state["sair_photo_b64"] = b64
+                # مفاتيح قديمة للتوافق فقط — لا واجهة رفع منفصلة لها
                 st.session_state["sair_photo_right_b64"] = b64
                 st.session_state["sair_photo_left_b64"] = ""
     if st.session_state.get("sair_photo_b64"):
