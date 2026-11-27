@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import html
 import io
 import json
@@ -15,6 +16,8 @@ import streamlit.components.v1 as components
 import khafar_box_fix
 
 TAKMEEL_DB = Path(__file__).resolve().parent / "takmeel_records.db"
+# يُحقن من app.py لربط لقطات التكميل بأرشيف records الموحّد
+_ARCHIVE_SAVER = None  # callable(rec: dict) -> bool
 BACKUP_DIR = Path(__file__).resolve().parent
 KSA_TZ = timezone(timedelta(hours=3))
 
@@ -109,6 +112,116 @@ TAKMEEL_FORMS = {
         "legal_fn": lambda m: "",
     },
 }
+
+
+def register_archive_saver(fn) -> None:
+    """تسجيل دالة الحفظ في أرشيف app.py الموحّد (بدون استيراد دائري)."""
+    global _ARCHIVE_SAVER
+    _ARCHIVE_SAVER = fn
+
+
+def _tak_dash(value, fallback: str = "-") -> str:
+    text = str(value if value is not None else "").strip()
+    if not text or text.lower() == "none":
+        return fallback
+    return text
+
+
+def push_takmeel_to_main_archive(
+    *,
+    form_id: str,
+    html_doc: str,
+    period_key: str,
+    prepared_by: str = "",
+    phone: str = "",
+    fields: dict | None = None,
+    shift: dict | None = None,
+) -> bool:
+    """
+    حفظ/تحديث لقطة A4 لنموذج تكميل في أرشيف records الموحّد.
+    يمنع التكرار عبر UPSERT على نفس doc_no (TAK-form-period).
+    """
+    if not callable(_ARCHIVE_SAVER):
+        return False
+    meta = TAKMEEL_FORMS.get(form_id) or {}
+    shift = shift or {}
+    period = _tak_dash(period_key, datetime.now(KSA_TZ).strftime("%Y%m%d"))
+    period_slug = re.sub(r"[^0-9A-Za-z\-]", "", period.replace("/", "-"))[:32] or "period"
+    doc_no = f"TAK-{form_id}-{period_slug}"
+    raw_seal = f"{doc_no}|{form_id}|{period_slug}"
+    verify_hash = "KHF-" + hashlib.sha256(raw_seal.encode("utf-8")).hexdigest()[:16].upper()
+    payload_fields = dict(fields or {})
+    payload_fields["prepared_by"] = _tak_dash(prepared_by, "")
+    payload_fields["phone"] = _tak_dash(phone, "")
+    payload_fields["period_key"] = period
+    rec = {
+        "doc_no": doc_no,
+        "auto_doc_no": doc_no,
+        "form_id": form_id,
+        "form_title": meta.get("title") or form_id,
+        "category": "تكميل",
+        "party_name": _tak_dash(prepared_by, "تكميل إحصائي"),
+        "party_id": _tak_dash(phone),
+        "plate_no": "-",
+        "gps_coords": _tak_dash((shift or {}).get("default_gps"), "بانتظار رصد الموقع"),
+        "created_at": datetime.now(KSA_TZ).strftime("%Y/%m/%d - %H:%M"),
+        "fields": payload_fields,
+        "legal_text": "",
+        "citizen_stamp_b64": "",
+        "citizen_auth_mode": "تكميل إحصائي",
+        "officer_stamp_b64": "",
+        "attachment_b64": "",
+        "attachments": [],
+        "show_attachments_in_print": False,
+        "officer_full": _tak_dash((shift or {}).get("officer_name"), ""),
+        "duty_full": _tak_dash((shift or {}).get("duty_name"), ""),
+        "dept_name": _tak_dash((shift or {}).get("dept_name"), "قسم مرور العارضة"),
+        "verify_hash": verify_hash,
+        "officer_auth_mode": "",
+        "duty_auth_mode": "",
+        "duty_stamp_b64": "",
+        "receiver_name": "",
+        "receiver_role": "",
+        "party_stamps": {},
+        "live_sig_pads": {},
+        "signatures_json": "{}",
+        "archived_html": str(html_doc or ""),
+    }
+    try:
+        return bool(_ARCHIVE_SAVER(rec))
+    except Exception:
+        return False
+
+
+def render_archive_to_main_button(
+    *,
+    form_id: str,
+    html_doc: str,
+    period_key: str,
+    prepared_by: str = "",
+    phone: str = "",
+    fields: dict | None = None,
+    shift: dict | None = None,
+    button_key: str = "",
+) -> None:
+    """زر يدوي لحفظ لقطة الطباعة في أرشيف التطبيق الرسمي."""
+    if not callable(_ARCHIVE_SAVER):
+        return
+    key = button_key or f"tak_arch_{form_id}_{period_key}"
+    if st.button("📁 حفظ نسخة A4 في الأرشيف الرسمي", key=key, use_container_width=True):
+        ok = push_takmeel_to_main_archive(
+            form_id=form_id,
+            html_doc=html_doc,
+            period_key=period_key,
+            prepared_by=prepared_by,
+            phone=phone,
+            fields=fields,
+            shift=shift,
+        )
+        if ok:
+            st.success("تم حفظ/تحديث لقطة التكميل في الأرشيف الرسمي (بدون تكرار لنفس الفترة).")
+        else:
+            st.warning("تعذّر الحفظ في الأرشيف الرسمي — تأكد من تسجيل الجهاز ثم أعد المحاولة.")
 
 
 # ---------- تواريخ ----------
@@ -1822,14 +1935,37 @@ def render_daily_incidents(logo_b64: str, shift: dict) -> None:
     for alert in _mismatch_alerts(payload):
         st.warning(alert)
 
+    a4_daily = build_daily_incidents_a4(payload, logo_b64)
     if st.button("💾 حفظ الوقوعات اليومية وترحيل المصابين للشهر", type="primary", use_container_width=True):
         save_daily_summary(g_date, _preserve_day_meta(g_date, {**payload, "hijri_inc": hijri_manual}))
         upsert_injured_from_daily(dates["month_key"], g_date, injured)
         _inject_local_backup_js(dates["month_key"], export_month_backup(dates["month_key"]))
-        st.success("تم الحفظ التراكمي وترحيل المصابين إلى التكميل الشهري.")
+        archived = push_takmeel_to_main_archive(
+            form_id="tak_daily_incidents",
+            html_doc=a4_daily,
+            period_key=g_date,
+            prepared_by=prepared_by,
+            phone=phone,
+            fields=payload,
+            shift=shift,
+        )
+        if archived:
+            st.success("تم الحفظ التراكمي وترحيل المصابين، وحُفظت لقطة A4 في الأرشيف الرسمي.")
+        else:
+            st.success("تم الحفظ التراكمي وترحيل المصابين إلى التكميل الشهري.")
 
     st.markdown("#### معاينة وطباعة A4")
-    components.html(build_daily_incidents_a4(payload, logo_b64), height=1380, scrolling=True)
+    components.html(a4_daily, height=1380, scrolling=True)
+    render_archive_to_main_button(
+        form_id="tak_daily_incidents",
+        html_doc=a4_daily,
+        period_key=g_date,
+        prepared_by=prepared_by,
+        phone=phone,
+        fields=payload,
+        shift=shift,
+        button_key=f"tak_arch_daily_{g_date}",
+    )
     render_backup_controls(dates["month_key"])
 
 
@@ -1965,7 +2101,18 @@ def render_accidents_daily(logo_b64: str, shift: dict) -> None:
         acc_phone=phone,
         hijri_acc=hijri_manual,
     )
-    components.html(build_accidents_a4(rows, dates, prepared_by, phone, logo_b64), height=1000, scrolling=True)
+    a4_acc = build_accidents_a4(rows, dates, prepared_by, phone, logo_b64)
+    components.html(a4_acc, height=1000, scrolling=True)
+    render_archive_to_main_button(
+        form_id="tak_accidents_daily",
+        html_doc=a4_acc,
+        period_key=g_date,
+        prepared_by=prepared_by,
+        phone=phone,
+        fields={"rows": rows, "dates": dates},
+        shift=shift,
+        button_key=f"tak_arch_acc_{g_date}",
+    )
     render_backup_controls(dates["month_key"])
 
 
@@ -2077,7 +2224,18 @@ def render_violations_daily(logo_b64: str, shift: dict) -> None:
         viol_phone=phone,
         hijri_viol=hijri_manual,
     )
-    components.html(build_violations_a4(rows, dates, prepared_by, phone, logo_b64), height=1000, scrolling=True)
+    a4_viol = build_violations_a4(rows, dates, prepared_by, phone, logo_b64)
+    components.html(a4_viol, height=1000, scrolling=True)
+    render_archive_to_main_button(
+        form_id="tak_violations_daily",
+        html_doc=a4_viol,
+        period_key=g_date,
+        prepared_by=prepared_by,
+        phone=phone,
+        fields={"rows": rows, "dates": dates},
+        shift=shift,
+        button_key=f"tak_arch_viol_{g_date}",
+    )
     render_backup_controls(dates["month_key"])
 
 
@@ -2236,15 +2394,34 @@ def render_injured_monthly(logo_b64: str, shift: dict) -> None:
         key=f"prep_mon_{mk}",
     )
     phone = st.text_input("رقم الجوال", value=meta.get("phone") or "", key=f"phone_mon_{mk}")
+    a4_mon = build_monthly_injured_a4(stats, AR_MONTHS[int(month)], int(year), prepared_by, phone, logo_b64)
     if st.button("💾 حفظ إجماليات الشهر", type="primary", use_container_width=True):
         save_monthly_meta(month_key, {**stats, "prepared_by": prepared_by, "phone": phone})
         _inject_local_backup_js(month_key, export_month_backup(month_key))
-        st.success("تم حفظ إجماليات الشهر.")
+        archived = push_takmeel_to_main_archive(
+            form_id="tak_injured_monthly",
+            html_doc=a4_mon,
+            period_key=month_key,
+            prepared_by=prepared_by,
+            phone=phone,
+            fields=stats,
+            shift=shift,
+        )
+        if archived:
+            st.success("تم حفظ إجماليات الشهر ولقطة A4 في الأرشيف الرسمي.")
+        else:
+            st.success("تم حفظ إجماليات الشهر.")
 
-    components.html(
-        build_monthly_injured_a4(stats, AR_MONTHS[int(month)], int(year), prepared_by, phone, logo_b64),
-        height=980,
-        scrolling=True,
+    components.html(a4_mon, height=980, scrolling=True)
+    render_archive_to_main_button(
+        form_id="tak_injured_monthly",
+        html_doc=a4_mon,
+        period_key=month_key,
+        prepared_by=prepared_by,
+        phone=phone,
+        fields=stats,
+        shift=shift,
+        button_key=f"tak_arch_mon_{month_key}",
     )
     render_backup_controls(month_key)
 

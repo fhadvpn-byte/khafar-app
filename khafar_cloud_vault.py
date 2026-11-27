@@ -205,11 +205,11 @@ def merge_legacy_databases_into(unified_path: str) -> None:
         visit_n = conn.execute("SELECT COUNT(*) FROM khafar_visits").fetchone()[0]
         need_records = int(rec_n or 0) == 0
         need_visits = int(visit_n or 0) == 0
-        if not need_records and not need_visits:
-            # قد نحتاج device_shifts فقط
-            ds_n = conn.execute("SELECT COUNT(*) FROM device_shifts").fetchone()[0]
-            if int(ds_n or 0) > 0:
-                return
+        ds_n = conn.execute("SELECT COUNT(*) FROM device_shifts").fetchone()[0]
+        need_shifts = int(ds_n or 0) == 0
+        # لا تتخطّ دمج السجلات أبداً إذا كانت records فارغة — حتى لو وُجدت زيارات/ورديات
+        if not need_records and not need_visits and not need_shifts:
+            return
         for legacy in _legacy_db_candidates():
             if not legacy or not os.path.exists(legacy):
                 continue

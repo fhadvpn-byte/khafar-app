@@ -16,7 +16,7 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from PIL import Image, ImageDraw, ImageOps
 from abu_arish_impound import ABU_ARISH_IMPOUND_TEMPLATE
-from takmeel import TAKMEEL_FORMS, init_takmeel_db, render_takmeel_form
+from takmeel import TAKMEEL_FORMS, init_takmeel_db, register_archive_saver, render_takmeel_form
 import importlib, khafar_bail; khafar_bail = importlib.reload(khafar_bail) if getattr(khafar_bail, "_KHAFAR_BAIL_VER", "") != "v5" else khafar_bail; khafar_bail.reset_run_state()
 import importlib, khafar_med_age; khafar_med_age = importlib.reload(khafar_med_age) if getattr(khafar_med_age, "_KHAFAR_MED_AGE_VER", "") != "v3" else khafar_med_age; khafar_med_age.reset_run_state()
 
@@ -4591,10 +4591,71 @@ def doc_exists_in_archive(doc_no: str, device_hash: str) -> bool:
     return bool(row)
 
 
+def _archive_safe_text(value, fallback: str = "-") -> str:
+    """قيمة نصية آمنة للأرشيف/البحث — لا None ولا سلسلة 'None'."""
+    text = str(value if value is not None else "").strip()
+    if not text or text.lower() == "none":
+        return fallback
+    return text
+
+
+def _prepare_archive_record(rec: dict) -> dict:
+    """توحيد حقول السجل قبل الحفظ (بحث الأرشيف + منع KeyError)."""
+    out = dict(rec or {})
+    fid = str(out.get("form_id") or "").strip()
+    fields = out.get("fields") if isinstance(out.get("fields"), dict) else {}
+    # كفالة: املأ حقول البحث من بيانات الكفيل/المكفول
+    if fid in ("decl_accident_bail", "decl_bail") or "كفالة" in str(out.get("form_title") or ""):
+        out["party_name"] = _archive_safe_text(
+            out.get("party_name") or fields.get("guarantor_name") or fields.get("bailed_name"),
+            "غير محدد",
+        )
+        out["party_id"] = _archive_safe_text(
+            out.get("party_id") or fields.get("guarantor_id") or fields.get("bailed_id_nat"),
+        )
+        out["plate_no"] = _archive_safe_text(
+            out.get("plate_no") or fields.get("bailed_vehicle") or fields.get("plate_no"),
+        )
+    # نماذج التكميل الإحصائية
+    if str(out.get("category") or "") == "تكميل":
+        out["party_name"] = _archive_safe_text(out.get("party_name") or fields.get("prepared_by"), "تكميل إحصائي")
+        out["party_id"] = _archive_safe_text(out.get("party_id") or fields.get("phone"))
+        out["plate_no"] = _archive_safe_text(out.get("plate_no"))
+    out["doc_no"] = _archive_safe_text(out.get("doc_no"), "")
+    out["form_id"] = fid
+    out["form_title"] = _archive_safe_text(out.get("form_title"), fid or "وثيقة")
+    out["category"] = _archive_safe_text(out.get("category"), "إقرار")
+    out["party_name"] = _archive_safe_text(out.get("party_name"), "غير محدد")
+    out["party_id"] = _archive_safe_text(out.get("party_id"))
+    out["plate_no"] = _archive_safe_text(out.get("plate_no"))
+    out["gps_coords"] = _archive_safe_text(out.get("gps_coords"), "بانتظار رصد الموقع")
+    out["created_at"] = _archive_safe_text(out.get("created_at"), datetime.now(KSA_TZ).strftime("%Y/%m/%d - %H:%M"))
+    out["legal_text"] = str(out.get("legal_text") or "")
+    out["citizen_auth_mode"] = _archive_safe_text(out.get("citizen_auth_mode"), "")
+    out["officer_full"] = _archive_safe_text(out.get("officer_full"), "")
+    out["duty_full"] = _archive_safe_text(out.get("duty_full"), "")
+    out["dept_name"] = _archive_safe_text(out.get("dept_name"), "قسم مرور العارضة")
+    out["verify_hash"] = _archive_safe_text(out.get("verify_hash"), "")
+    out["attachment_b64"] = out.get("attachment_b64") if out.get("attachment_b64") is not None else ""
+    out["citizen_stamp_b64"] = out.get("citizen_stamp_b64") or ""
+    out["officer_stamp_b64"] = out.get("officer_stamp_b64") or ""
+    out["duty_stamp_b64"] = out.get("duty_stamp_b64") or ""
+    out["officer_auth_mode"] = out.get("officer_auth_mode") or ""
+    out["duty_auth_mode"] = out.get("duty_auth_mode") or ""
+    out["receiver_name"] = out.get("receiver_name") or ""
+    out["receiver_role"] = out.get("receiver_role") or ""
+    out["signatures_json"] = out.get("signatures_json") or "{}"
+    out["archived_html"] = out.get("archived_html") or ""
+    if not isinstance(out.get("fields"), dict):
+        out["fields"] = fields if isinstance(fields, dict) else {}
+    return out
+
+
 def save_record_to_db(rec: dict, device_hash: str) -> bool:
     if not device_hash:
         return False
     init_db()
+    rec = _prepare_archive_record(rec)
     signatures = collect_signatures_map(rec)
     # مزامنة أعمدة التواقيع الفردية من القاموس الشامل
     if signatures.get("citizen") or signatures.get("p1"):
@@ -9932,6 +9993,15 @@ if DEVICE_HASH and not _wipe_shift and not device_shift_exists(DEVICE_HASH):
     if _cookie_shift:
         save_device_shift(DEVICE_HASH, _cookie_shift)
 consume_live_gps_query(DEVICE_HASH)
+
+# ربط نماذج التكميل الأربعة بأرشيف records الموحّد (UPSERT بنفس الرقم المرجعي)
+def _takmeel_archive_bridge(rec: dict) -> bool:
+    if not DEVICE_HASH:
+        return False
+    return bool(save_record_to_db(rec, DEVICE_HASH))
+
+
+register_archive_saver(_takmeel_archive_bridge)
 if DEVICE_HASH and st.session_state.get("pending_live_gps"):
     update_default_gps(DEVICE_HASH, str(st.session_state.pop("pending_live_gps")))
     st.session_state["gps_live_ok"] = True
@@ -11482,10 +11552,31 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     party_name_final = current_values.get("inj1_name") or current_values.get("party_name") or "غير محدد"
                     party_id_final = current_values.get("inj1_id") or current_values.get("party_id") or "-"
                     plate_final = current_values.get("inj1_role") or current_values.get("plate_no") or "-"
+                elif fid in ("decl_accident_bail", "decl_bail") or "كفالة" in str(form_def.get("title") or ""):
+                    party_name_final = (
+                        current_values.get("guarantor_name")
+                        or current_values.get("bailed_name")
+                        or current_values.get("party_name")
+                        or "غير محدد"
+                    )
+                    party_id_final = (
+                        current_values.get("guarantor_id")
+                        or current_values.get("bailed_id_nat")
+                        or current_values.get("party_id")
+                        or "-"
+                    )
+                    plate_final = (
+                        current_values.get("bailed_vehicle")
+                        or current_values.get("plate_no")
+                        or "-"
+                    )
                 else:
                     party_name_final = current_values.get("party_name") or current_values.get("driver_name") or "غير محدد"
                     party_id_final = current_values.get("party_id") or current_values.get("driver_id_nat") or "-"
                     plate_final = current_values.get("plate_no") or current_values.get("vehicle_plate_type") or "-"
+                party_name_final = _archive_safe_text(party_name_final, "غير محدد")
+                party_id_final = _archive_safe_text(party_id_final)
+                plate_final = _archive_safe_text(plate_final)
                 raw_seal = f"{st.session_state.doc_no}|{party_id_final}|{st.session_state.doc_time}"
                 verify_hash = "KHF-" + hashlib.sha256(raw_seal.encode("utf-8")).hexdigest()[:16].upper()
                 officer_full_final = (st.session_state.officer_full_override or "").strip() or unit_display
@@ -11670,12 +11761,22 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
         st.info("لا توجد سجلات محفوظة" + (" على السيرفر." if show_all_dept else " على هذا الجهاز."))
     else:
         for r in records:
-            with st.expander(f"📌 {r['form_title']}  —  {r['party_name']}  |  اللوحة: {r['plate_no']}  |  ({r['doc_no']})"):
+            with st.expander(
+                f"📌 {_archive_safe_text(r.get('form_title'), r.get('form_id') or 'وثيقة')}  —  "
+                f"{_archive_safe_text(r.get('party_name'), 'غير محدد')}  |  "
+                f"اللوحة: {_archive_safe_text(r.get('plate_no'))}  |  "
+                f"({_archive_safe_text(r.get('doc_no'), '-')})"
+            ):
                 c_info, c_edit, c_dl, c_del = st.columns([2.4, 1.2, 1, 1])
                 with c_info:
-                    st.write(f"**رقم الهوية:** `{r['party_id']}`  |  **الوقت:** `{r['created_at']}`  |  **التوثيق:** {r['citizen_auth_mode']}")
-                    st.write(f"**ختم التحقق الرقمي:** `{r['verify_hash']}`")
-                f_def = TRAFFIC_FORMS.get(r["form_id"])
+                    st.write(
+                        f"**رقم الهوية:** `{_archive_safe_text(r.get('party_id'))}`  |  "
+                        f"**الوقت:** `{_archive_safe_text(r.get('created_at'))}`  |  "
+                        f"**التوثيق:** {_archive_safe_text(r.get('citizen_auth_mode'), '-')}"
+                    )
+                    st.write(f"**ختم التحقق الرقمي:** `{_archive_safe_text(r.get('verify_hash'), '-')}`")
+                    st.caption(f"التصنيف: {_archive_safe_text(r.get('category'), '-')}")
+                f_def = TRAFFIC_FORMS.get(r.get("form_id") or "")
                 arch_fields = r.get("fields")
                 if not isinstance(arch_fields, dict):
                     try:
@@ -11719,8 +11820,11 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
                     }
                 arch_sigs_only = collect_signatures_map(r, include_session=False)
                 saved_html = str(r.get("archived_html") or "").strip()
+                _arch_fid = str(r.get("form_id") or "")
+                _arch_cat = str(r.get("category") or "")
                 # سجلات التنازل القديمة: أعد البناء بلا مرفقات حتى لو وُجدت في archived_html
-                _is_settlement_arch = str(r.get("form_id") or "") == "decl_settlement"
+                _is_settlement_arch = _arch_fid == "decl_settlement"
+                _is_takmeel_arch = _arch_cat == "تكميل" or _arch_fid.startswith("tak_")
                 if _is_settlement_arch:
                     r = {
                         **r,
@@ -11730,6 +11834,9 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
                     }
                     arch_html = build_official_a4_html(r, f_def, logo_b64_global, interactive_sig=False)
                     arch_html = embed_signatures_in_html(arch_html, arch_sigs_only)
+                elif _is_takmeel_arch and saved_html:
+                    # لقطات التكميل تُعرض كما حُفظت (ليست قوالب الإقرار)
+                    arch_html = saved_html
                 elif saved_html and "slot_" in saved_html:
                     arch_html = embed_signatures_in_html(saved_html, arch_sigs_only)
                 else:
