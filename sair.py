@@ -105,9 +105,57 @@ def default_time_24() -> str:
     return _now_ksa().strftime("%H:%M")
 
 
+def _mime_for_logo_suffix(suffix: str) -> str:
+    ext = str(suffix or "").lower().lstrip(".")
+    if ext == "png":
+        return "image/png"
+    if ext in ("jpg", "jpeg"):
+        return "image/jpeg"
+    if ext == "webp":
+        return "image/webp"
+    return "image/png"
+
+
+@st.cache_data(show_spinner=False)
+def get_sair_special_logo() -> tuple[str, str]:
+    """
+    شعار محضر إثبات حالة الخاص (`loooo.*`) — لقسم السير فقط.
+    يعيد (base64_خام, mime) بدون بادئة data: حتى لا تتكرر في <img src>.
+    """
+    base = Path(__file__).resolve().parent
+    preferred = ("loooo.png", "loooo.jpg", "loooo.jpeg", "loooo.webp")
+    candidates: list[Path] = []
+    for fname in preferred:
+        p = base / fname
+        if p.is_file():
+            candidates.append(p)
+    # تغطية حالة الأحرف على Linux (Streamlit Cloud) وأي امتداد إضافي
+    try:
+        for p in sorted(base.glob("loooo.*")):
+            if p.is_file() and p not in candidates:
+                candidates.append(p)
+        for p in sorted(base.glob("LOOOO.*")):
+            if p.is_file() and p not in candidates:
+                candidates.append(p)
+    except Exception:
+        pass
+    for fpath in candidates:
+        mime = _mime_for_logo_suffix(fpath.suffix)
+        if mime not in ("image/png", "image/jpeg", "image/webp"):
+            continue
+        try:
+            return base64.b64encode(fpath.read_bytes()).decode("utf-8"), mime
+        except Exception:
+            continue
+    return "", "image/png"
+
+
 @st.cache_data(show_spinner=False)
 def get_sair_header_logo_b64() -> tuple[str, str]:
-    """شعار الأمن العام إن وُجد، وإلا شعار المرور الرسمي للمطبوعات."""
+    """شعار الأمن العام إن وُجد، وإلا شعار المرور الرسمي للمطبوعات (احتياطي إن غاب loooo)."""
+    special_b64, special_mime = get_sair_special_logo()
+    if special_b64:
+        return special_b64, special_mime
     base = Path(__file__).resolve().parent
     for fname, mime in (
         ("amn_logo.png", "image/png"),
@@ -127,6 +175,26 @@ def get_sair_header_logo_b64() -> tuple[str, str]:
             except Exception:
                 continue
     return "", "image/png"
+
+
+def resolve_sair_print_logo(logo_b64: str = "", logo_mime: str = "image/png") -> tuple[str, str]:
+    """
+    شعار الطباعة لقسم السير:
+    - إن وُجد loooo.* يُستخدم حصراً ويتجاهل logo_b64_global.
+    - وإلا الاحتياطي الداخلي ثم الممرَّر من المستدعي.
+    """
+    special_b64, special_mime = get_sair_special_logo()
+    if special_b64:
+        return strip_data_url(special_b64), special_mime
+    raw = strip_data_url(logo_b64)
+    if raw:
+        mime = logo_mime or "image/png"
+        if raw.startswith("iVBOR"):
+            mime = "image/png"
+        elif raw.startswith("/9j/"):
+            mime = "image/jpeg"
+        return raw, mime
+    return get_sair_header_logo_b64()
 
 
 def compress_photo_bytes(raw: bytes, *, max_px: int = 1400, quality: int = 86) -> str:
@@ -209,15 +277,15 @@ def _img_html(b64: str, alt: str) -> str:
 
 def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/png") -> str:
     """قالب محضر إثبات حالة مطابق للنموذج الرسمي — بدون QR."""
-    if not logo_b64:
-        logo_b64, logo_mime = get_sair_header_logo_b64()
+    logo_b64, logo_mime = resolve_sair_print_logo(logo_b64, logo_mime)
+    logo_b64 = strip_data_url(logo_b64)
     logo_uri = (
         f"data:{logo_mime};base64,{logo_b64}"
         if logo_b64
         else ""
     )
     logo_html = (
-        f'<img src="{logo_uri}" alt="شعار الأمن العام">'
+        f'<img src="{logo_uri}" alt="شعار محضر إثبات حالة">'
         if logo_uri
         else '<div style="font-size:28px;font-weight:800;">المرور</div>'
     )
@@ -787,9 +855,8 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
     if st.session_state.pop("_sair_gps_sync_fail", None):
         st.warning("لا يوجد موقع فعلي معتمد في الجلسة بعد.")
 
-    logo_hdr, logo_mime = get_sair_header_logo_b64()
-    if not logo_hdr and logo_b64:
-        logo_hdr, logo_mime = logo_b64, "image/png"
+    # loooo.* إن وُجد يتجاهل logo_b64_global بالكامل (قسم السير فقط)
+    logo_hdr, logo_mime = resolve_sair_print_logo(logo_b64, "image/png")
 
     st.markdown(
         """
