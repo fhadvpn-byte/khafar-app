@@ -1629,34 +1629,8 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
         st.text_input("الرقم العام", key="sair_officer_id")
         st.text_input("الجهة", key="sair_unit_name", help="تظهر في الترويسة اليسرى وفي خانة الجهة أسفل الجدول")
 
+    # التوقيع: لوحة الرسم الحي + مسح فقط — بلا رفع/معرض/كاميرا/PDF تحت التوقيع
     _handle_sig_pad(shift)
-    if khafar_file_uploader:
-        sig_up = khafar_file_uploader(
-            "أو ارفع صورة توقيع جاهزة (شفافة/بيضاء)",
-            key="sair_sig_upload_mu",
-            accept_multiple_files=False,
-            allow_pdf=False,
-            preserve_alpha=True,
-        )
-    else:
-        sig_up = st.file_uploader(
-            "رفع صورة توقيع",
-            type=["png", "jpg", "jpeg", "webp"],
-            key="sair_sig_upload",
-        )
-    if sig_up is not None:
-        files = sig_up if isinstance(sig_up, list) else [sig_up]
-        if files:
-            b64 = _ingest_upload_to_b64(files[0], purpose="signature")
-            if b64:
-                st.session_state["sair_officer_sig_b64"] = b64
-                st.success("تم اعتماد صورة التوقيع في الجلسة.")
-
-    if st.session_state.get("sair_officer_sig_b64"):
-        st.image(
-            f"data:image/png;base64,{strip_data_url(st.session_state['sair_officer_sig_b64'])}",
-            width=220,
-        )
 
     data = collect_sair_data()
     a4_html = build_sair_a4_html(data=data, logo_b64=logo_hdr, logo_mime=logo_mime)
