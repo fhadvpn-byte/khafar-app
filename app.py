@@ -239,6 +239,71 @@ def serialize_attachments(items: list) -> str:
     return json.dumps(items or [], ensure_ascii=False)
 
 
+def resolve_record_attachments(rec: dict | None) -> list:
+    """استخراج المرفقات من أي مصدر متاح في السجل (موحّد لكل النماذج بما فيها التنازل)."""
+    rec = rec or {}
+    items = parse_attachments(rec.get("attachment_b64"))
+    if items:
+        return items
+    items = parse_attachments(rec.get("attachments"))
+    if items:
+        return items
+    fields = rec.get("fields") if isinstance(rec.get("fields"), dict) else {}
+    return parse_attachments(fields.get("attachment_b64") or fields.get("attachments"))
+
+
+def build_attachment_section_html(att_items: list | None, *, show: bool = True) -> tuple[str, int]:
+    """
+    مولّد HTML موحّد لقسم «المرفقات المصورة المعتمدة في التقرير» لكل النماذج.
+    يعيد (html, image_count).
+    """
+    if not show or not att_items:
+        return "", 0
+    cards: list[str] = []
+    image_count = 0
+    for att in att_items:
+        if not isinstance(att, dict):
+            continue
+        kind = (att.get("kind") or "image").lower()
+        if kind == "pdf":
+            cards.append(
+                '<div class="att-card att-pdf-card">'
+                '<div class="att-pdf-icon">📄</div>'
+                '<div class="att-pdf-note">مرفق PDF</div>'
+                "</div>"
+            )
+            continue
+        b64 = str(att.get("b64") or "").strip()
+        if b64.startswith("data:") and "," in b64:
+            b64 = b64.split(",", 1)[-1]
+        if not b64:
+            continue
+        image_count += 1
+        mime = html.escape(str(att.get("mime") or "image/png"))
+        cards.append(
+            f'<div class="att-card page-keep">'
+            f'<img class="att-img" src="data:{mime};base64,{b64}" alt="" />'
+            f"</div>"
+        )
+    if not cards:
+        return "", 0
+    if image_count <= 1:
+        grid_cls = "attachment-grid atts-n1"
+    elif image_count == 2:
+        grid_cls = "attachment-grid atts-n2"
+    elif image_count == 3:
+        grid_cls = "attachment-grid atts-n3"
+    else:
+        grid_cls = "attachment-grid atts-n4"
+    block = (
+        '<div class="attachment-section page-keep">'
+        '<div class="attachment-title">📎 المرفقات المصورة المعتمدة في التقرير</div>'
+        f'<div class="{grid_cls}">{"".join(cards)}</div>'
+        "</div>"
+    )
+    return block, image_count
+
+
 def process_uploaded_attachment(uploaded_file, *, purpose: str = "attachment") -> dict | None:
     """معالجة مرفق جوال بعد التطبيع: PDF كما هو أو صورة JPEG مضغوطة."""
     if uploaded_file is None:
@@ -1214,11 +1279,13 @@ div[data-testid="stHorizontalBlock"] div.stButton > button {
     color-scheme: normal !important;
     background: transparent !important;
 }
-/* لا تفرض height/max-height على mobile_uploader — الارتفاع من setFrameHeight فقط */
+/* mobile_uploader: ارتفاع ديناميكي من setFrameHeight — بلا قص للأزرار العلوية */
 .stApp iframe[title*="khafar_mobile_uploader"],
 .stApp iframe[title*="mobile_uploader"] {
     min-height: 0 !important;
-    overflow: hidden !important;
+    max-height: none !important;
+    overflow: visible !important;
+    vertical-align: top !important;
 }
 
 .stApp [data-testid="stAppViewContainer"],
@@ -6088,42 +6155,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + "</div></div>"
         )
 
-    attachment_block = ""
-    image_count = 0
-    show_atts = rec.get("show_attachments_in_print", True)
-    att_items = parse_attachments(rec.get("attachment_b64"))
-    if show_atts and att_items:
-        cards = []
-        for att in att_items:
-            kind = (att.get("kind") or "image").lower()
-            if kind == "pdf":
-                cards.append(
-                    '<div class="att-card att-pdf-card">'
-                    '<div class="att-pdf-icon">📄</div>'
-                    '<div class="att-pdf-note">مرفق PDF</div>'
-                    "</div>"
-                )
-            else:
-                image_count += 1
-                mime = html.escape(str(att.get("mime") or "image/png"))
-                b64 = att.get("b64") or ""
-                cards.append(
-                    f'<div class="att-card">'
-                    f'<img src="data:{mime};base64,{b64}" alt="" />'
-                    f"</div>"
-                )
-        if image_count <= 1:
-            att_grid_cls = "attachment-grid atts-single"
-        elif image_count == 2:
-            att_grid_cls = "attachment-grid atts-multi atts-cols-2"
-        else:
-            att_grid_cls = "attachment-grid atts-multi atts-cols-3"
-        attachment_block = f"""
-        <div class="attachment-section">
-            <div class="attachment-title">📎 المرفقات المصورة المعتمدة في التقرير</div>
-            <div class="{att_grid_cls}">{"".join(cards)}</div>
-        </div>
-        """
+    show_atts = bool(rec.get("show_attachments_in_print", True))
+    att_items = resolve_record_attachments(rec)
+    attachment_block, image_count = build_attachment_section_html(att_items, show=show_atts)
 
     if is_letter:
         legal_box_title = "صيغة الخطاب الرسمي الموجه لحجز مرور محافظة أبو عريش:"
@@ -6581,38 +6615,74 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         display: block !important;
     }}
     .attachment-section {{
-        margin-top: 4px; border: 1px dashed #000000; border-radius: 6px; padding: 3px 6px;
+        margin-top: 6px; margin-bottom: 4px; border: 1px dashed #94a3b8; border-radius: 6px; padding: 6px 8px;
         background: #f8fafc; page-break-inside: avoid; break-inside: avoid;
+        flex: 0 0 auto !important; width: 100% !important; box-sizing: border-box !important;
     }}
     .attachment-title {{
-        font-size: 12px; font-weight: 800; color: #000000; margin-bottom: 2px; text-align: right;
+        font-size: 12px; font-weight: 800; color: #000000; margin-bottom: 6px; text-align: right;
     }}
     .attachment-grid {{
-        display: grid !important; grid-template-columns: 1fr !important; gap: 8px !important;
-        align-items: stretch !important; width: 100% !important; overflow: hidden !important;
+        display: grid !important; width: 100% !important; align-items: stretch !important;
+        overflow: hidden !important; box-sizing: border-box !important;
     }}
-    .attachment-grid.atts-cols-2 {{ grid-template-columns: 1fr 1fr !important; }}
-    .attachment-grid.atts-cols-3 {{ grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }}
-    .att-card {{ min-width: 0; text-align: center; width: 100%; }}
-    .att-card img {{
-        width: 100% !important; max-width: 100% !important; height: 140px !important; max-height: 140px !important;
-        object-fit: contain !important; border: 1.4px solid #000000; border-radius: 4px;
-        background: #fff; display: block; margin: 0 auto;
+    .attachment-grid.atts-n1 {{
+        grid-template-columns: 1fr !important; justify-items: center !important; gap: 10px !important;
     }}
-    .attachment-grid.atts-single .att-card img {{
-        height: 155px !important; max-height: 155px !important;
+    .attachment-grid.atts-n2 {{
+        grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important;
     }}
-    .attachment-grid.atts-multi .att-card img {{
-        height: 130px !important; max-height: 130px !important;
+    .attachment-grid.atts-n3 {{
+        grid-template-columns: repeat(3, 1fr) !important; gap: 8px !important;
     }}
-    /* صور المرفقات ثابتة مضغوطة — لا تُكبَّر أبداً عبر expandLegal */
+    .attachment-grid.atts-n4 {{
+        grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important;
+    }}
+    .att-card, .att-card.page-keep {{
+        min-width: 0; text-align: center; width: 100%;
+        page-break-inside: avoid !important; break-inside: avoid !important;
+    }}
+    .att-card img, img.att-img {{
+        width: 100% !important; max-width: 100% !important; display: block !important; margin: 0 auto !important;
+        border: 1px solid #cbd5e1 !important; border-radius: 6px !important; background: #fff !important;
+        page-break-inside: avoid !important; break-inside: avoid !important;
+    }}
+    .attachment-grid.atts-n1 .att-card img, .attachment-grid.atts-n1 img.att-img {{
+        width: 70% !important; height: 200px !important; max-height: 200px !important; object-fit: contain !important;
+    }}
+    .attachment-grid.atts-n2 .att-card img, .attachment-grid.atts-n2 img.att-img {{
+        width: 100% !important; height: 180px !important; max-height: 180px !important; object-fit: cover !important;
+    }}
+    .attachment-grid.atts-n3 .att-card img, .attachment-grid.atts-n3 img.att-img {{
+        width: 100% !important; height: 165px !important; max-height: 165px !important; object-fit: cover !important;
+    }}
+    .attachment-grid.atts-n4 .att-card img, .attachment-grid.atts-n4 img.att-img {{
+        width: 100% !important; height: 145px !important; max-height: 145px !important; object-fit: cover !important;
+    }}
     .att-caption, .att-pdf-name {{ display: none !important; }}
     .att-pdf-card {{
-        border: 1.4px solid #000000; border-radius: 4px; padding: 2px 6px; background: #fff;
+        border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; background: #fff;
         max-height: 75px; display: flex; align-items: center; justify-content: center; gap: 4px;
     }}
     .att-pdf-icon {{ font-size: 16px; line-height: 1; }}
     .att-pdf-note {{ font-size: 10px; color: #000000; font-weight: 700; }}
+    @media print {{
+        .attachment-section, .att-card, .att-card img, img.att-img, table.sig-tbl {{
+            page-break-inside: avoid !important; break-inside: avoid !important;
+        }}
+        .attachment-grid.atts-n1 .att-card img, .attachment-grid.atts-n1 img.att-img {{
+            width: 70% !important; height: 200px !important; max-height: 200px !important; object-fit: contain !important;
+        }}
+        .attachment-grid.atts-n2 .att-card img, .attachment-grid.atts-n2 img.att-img {{
+            width: 100% !important; height: 180px !important; max-height: 180px !important; object-fit: cover !important;
+        }}
+        .attachment-grid.atts-n3 .att-card img, .attachment-grid.atts-n3 img.att-img {{
+            width: 100% !important; height: 165px !important; max-height: 165px !important; object-fit: cover !important;
+        }}
+        .attachment-grid.atts-n4 .att-card img, .attachment-grid.atts-n4 img.att-img {{
+            width: 100% !important; height: 145px !important; max-height: 145px !important; object-fit: cover !important;
+        }}
+    }}
     .a4-sheet table a, .a4-sheet .legal-box a, a[href^="tel"] {{
         color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
     }}
@@ -9045,17 +9115,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         td.style.setProperty('line-height', '1.2', 'important');
       }});
       if (attSec) {{
-        attSec.style.setProperty('margin', '2px 0', 'important');
-        attSec.style.setProperty('padding', '2px 5px', 'important');
+        attSec.style.setProperty('margin', '4px 0', 'important');
+        attSec.style.setProperty('padding', '4px 6px', 'important');
+        attSec.style.setProperty('flex', '0 0 auto', 'important');
       }}
-      // لا تهبط الصور إلى أيقونات غير مقروءة (خصوصاً إقرار التنازل dense) — حد أدنى مقروء مع الحفاظ على 1/1
-      attImgs.forEach(function(im) {{
-        var attCap = (step > 5 ? '110px' : '130px');
-        im.style.setProperty('width', '100%', 'important');
-        im.style.setProperty('height', attCap, 'important');
-        im.style.setProperty('max-height', attCap, 'important');
-        im.style.setProperty('object-fit', 'contain', 'important');
-      }});
+      // لا تُصغَّر صور المرفقات هنا — المقاسات الموحّدة من CSS (.atts-n1..n4) تبقى كما هي
       sigHeads.forEach(function(th) {{
         th.style.setProperty('font-size', '9.2px', 'important');
         th.style.setProperty('padding', '2px 4px', 'important');
@@ -10681,7 +10745,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 if form_def["require_image"]
                 else "📎 إرفاق صورة الهوية / التقرير الأولي أو مرفق داعم (اختياري)"
             )
-            # رافع جوال ثنائي الاتجاه — accept=image/* نقي يفتح المعرض الأصلي
+            # رافع جوال موحّد لكل النماذج (بما فيها إقرار صلح وتنازل)
             uploaded_files = khafar_file_uploader(
                 att_label,
                 key=f"att_mu_{st.session_state.doc_no}",
@@ -10693,6 +10757,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             )
             if uploaded_files and not st.session_state.citizen_locked:
                 existing = list(st.session_state.get("attachments") or [])
+                if not existing and st.session_state.get("attachment_b64"):
+                    existing = parse_attachments(st.session_state.attachment_b64)
                 known = {attachment_fingerprint(a) for a in existing}
                 added = 0
                 for uf in uploaded_files:
@@ -10711,8 +10777,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     sync_attachments_to_session()
                     st.success("✅ تم إرفاق المرفق بنجاح وجاهز للظهور في التقرير المطبوع")
                     st.toast(f"تم حفظ {added} مرفق في الجلسة", icon="📎")
-                    # لا نغيّر مفتاح المكوّن — البصمة تمنع التكرار بعد rerun
-                    st.rerun()
+                    # لا نعيد rerun يدوياً — قيمة المكوّن تُحدّث الصفحة؛ rerun إضافي يضيع النقرة الأولى
 
             st.checkbox(
                 "إظهار المرفق المصور في التقرير المطبوع",
@@ -10720,10 +10785,12 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 help="عند التفعيل تُدرج الصور المرفوعة داخل ورقة A4 ونسخة الطباعة/PDF.",
             )
 
+            sync_attachments_to_session()
             persisted_atts = list(st.session_state.get("attachments") or [])
             if not persisted_atts and st.session_state.get("attachment_b64"):
                 persisted_atts = parse_attachments(st.session_state.attachment_b64)
                 st.session_state.attachments = persisted_atts
+                sync_attachments_to_session()
 
             if persisted_atts:
                 st.markdown("##### 🖼️ معاينة المرفقات المحفوظة في الجلسة")
@@ -11092,6 +11159,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 officer_full_final = (st.session_state.officer_full_override or "").strip() or unit_display
 
                 sync_attachments_to_session()
+                _atts_now = list(st.session_state.get("attachments") or [])
+                if not _atts_now and st.session_state.get("attachment_b64"):
+                    _atts_now = parse_attachments(st.session_state.attachment_b64)
+                    st.session_state.attachments = _atts_now
+                    sync_attachments_to_session()
                 _consume_live_sig_bridge()
 
                 # التقاط التواقيع عبر sig_pad ثنائي الاتجاه قبل بناء A4 والحفظ
@@ -11163,7 +11235,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     "citizen_auth_mode": st.session_state.citizen_auth_mode,
                     "officer_stamp_b64": officer_b64,
                     "saved_officer_sig_b64": saved_officer_sig,
-                    "attachment_b64": st.session_state.attachment_b64,
+                    "attachment_b64": st.session_state.attachment_b64 or serialize_attachments(_atts_now),
+                    "attachments": list(_atts_now),
                     "show_attachments_in_print": bool(st.session_state.get("show_attachments_in_print", True)),
                     "officer_full": officer_full_final,
                     "duty_full": (mgr_cfg.get("display_name") if mgr_active else duty_display),
