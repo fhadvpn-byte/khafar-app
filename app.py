@@ -17,6 +17,12 @@ from datetime import datetime, timezone, timedelta
 from PIL import Image, ImageDraw, ImageOps
 from abu_arish_impound import ABU_ARISH_IMPOUND_TEMPLATE
 from takmeel import TAKMEEL_FORMS, init_takmeel_db, register_archive_saver, render_takmeel_form
+from sair import (
+    SAIR_FORM_ID,
+    apply_sair_archive_recall,
+    register_archive_saver as register_sair_archive_saver,
+    render_sair_section,
+)
 import importlib, khafar_bail; khafar_bail = importlib.reload(khafar_bail) if getattr(khafar_bail, "_KHAFAR_BAIL_VER", "") != "v5" else khafar_bail; khafar_bail.reset_run_state()
 import importlib, khafar_med_age; khafar_med_age = importlib.reload(khafar_med_age) if getattr(khafar_med_age, "_KHAFAR_MED_AGE_VER", "") != "v3" else khafar_med_age; khafar_med_age.reset_run_state()
 
@@ -5117,11 +5123,22 @@ def save_record_to_db(rec: dict, device_hash: str) -> bool:
         logo = get_traffic_logo_b64() if "get_traffic_logo_b64" in globals() else ""
     except Exception:
         logo = ""
-    try:
-        archived_html = build_official_a4_html(rec, form_def, logo, interactive_sig=False)
-        archived_html = embed_signatures_in_html(archived_html, signatures)
-    except Exception:
+    _fid_arch = str(rec.get("form_id") or "")
+    _cat_arch = str(rec.get("category") or "")
+    # قوالب مستقلة (تكملة / سير): الإبقاء على archived_html الجاهز دون إعادة بناء A4 العام
+    if (
+        _cat_arch in ("تكميل", "السير")
+        or _fid_arch.startswith("tak_")
+        or _fid_arch.startswith("sair_")
+        or _fid_arch == SAIR_FORM_ID
+    ):
         archived_html = str(rec.get("archived_html") or "")
+    else:
+        try:
+            archived_html = build_official_a4_html(rec, form_def, logo, interactive_sig=False)
+            archived_html = embed_signatures_in_html(archived_html, signatures)
+        except Exception:
+            archived_html = str(rec.get("archived_html") or "")
     rec["archived_html"] = archived_html
 
     doc_no = str(rec.get("doc_no") or "").strip()
@@ -10542,6 +10559,7 @@ def _takmeel_archive_bridge(rec: dict) -> bool:
 
 
 register_archive_saver(_takmeel_archive_bridge)
+register_sair_archive_saver(_takmeel_archive_bridge)
 if DEVICE_HASH and st.session_state.get("pending_live_gps"):
     update_default_gps(DEVICE_HASH, str(st.session_state.pop("pending_live_gps")))
     st.session_state["gps_live_ok"] = True
@@ -10581,6 +10599,7 @@ CATEGORY_TAB_MAP = {
     "🚓 المحاضر النظامية (5)": "محضر",
     "🚑 الطبية والجنائية (3)": "إحالة طبية",
     "📊 التكميل (4)": "تكميل",
+    "🛣️ السير": "السير",
 }
 CATEGORY_TAB_ALIASES = {
     "✍️ الإقرارات الميدانية (6)": _DECL_TAB_LABEL,
@@ -10947,6 +10966,12 @@ def consume_pending_archive_recall() -> None:
         return
 
     fid = _resolve_form_id_from_archive_rec(rec)
+    _rec_fid = str(rec.get("form_id") or fid or "")
+    _rec_cat = str(rec.get("category") or "")
+    if _rec_fid.startswith("sair_") or _rec_fid == SAIR_FORM_ID or _rec_cat == "السير":
+        apply_sair_archive_recall(rec)
+        return
+
     if not fid or fid not in TRAFFIC_FORMS:
         st.session_state["_recall_flash_err"] = True
         st.session_state.nav_tab = "النماذج الميدانية"
@@ -11404,7 +11429,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             st.caption("نتائج البحث عبر جميع الأقسام")
             render_compact_form_buttons(None, primary=False, search_q=forms_quick_q)
         else:
-            tab_decl, tab_min, tab_med, tab_tak = st.tabs(list(CATEGORY_TAB_MAP.keys()))
+            tab_decl, tab_min, tab_med, tab_tak, tab_sair = st.tabs(list(CATEGORY_TAB_MAP.keys()))
             with tab_decl:
                 render_compact_form_buttons("إقرار", primary=False)
             with tab_min:
@@ -11413,6 +11438,8 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 render_compact_form_buttons("إحالة طبية", primary=False)
             with tab_tak:
                 render_compact_form_buttons("تكميل", primary=False)
+            with tab_sair:
+                render_sair_section(logo_b64_global, shift, DEVICE_HASH)
 
     else:
         fid = st.session_state.opened_form_id
@@ -12577,6 +12604,11 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
                 # سجلات التنازل القديمة: أعد البناء بلا مرفقات حتى لو وُجدت في archived_html
                 _is_settlement_arch = _arch_fid == "decl_settlement"
                 _is_takmeel_arch = _arch_cat == "تكميل" or _arch_fid.startswith("tak_")
+                _is_sair_arch = (
+                    _arch_cat == "السير"
+                    or _arch_fid.startswith("sair_")
+                    or _arch_fid == SAIR_FORM_ID
+                )
                 if _is_settlement_arch:
                     r = {
                         **r,
@@ -12586,8 +12618,8 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
                     }
                     arch_html = build_official_a4_html(r, f_def, logo_b64_global, interactive_sig=False)
                     arch_html = embed_signatures_in_html(arch_html, arch_sigs_only)
-                elif _is_takmeel_arch and saved_html:
-                    # لقطات التكميل تُعرض كما حُفظت (ليست قوالب الإقرار)
+                elif (_is_takmeel_arch or _is_sair_arch) and saved_html:
+                    # لقطات التكميل/السير تُعرض كما حُفظت (قوالب مستقلة)
                     arch_html = saved_html
                 elif saved_html and "slot_" in saved_html:
                     arch_html = embed_signatures_in_html(saved_html, arch_sigs_only)
