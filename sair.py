@@ -503,18 +503,21 @@ def ensure_sair_session(shift: dict | None = None) -> None:
             st.session_state["sair_coords"] = gps_now
 
 
+def _compute_auto_desc() -> str:
+    """حساب نص الوصف التلقائي من حقول السرعة الحالية (قراءة فقط)."""
+    return build_speed_description(
+        vehicle=st.session_state.get("sair_vehicle_type"),
+        plate=st.session_state.get("sair_plate"),
+        plate_class=st.session_state.get("sair_plate_class"),
+        speed=st.session_state.get("sair_speed"),
+        road_speed=st.session_state.get("sair_road_speed"),
+    )
+
+
 def collect_sair_data() -> dict:
+    """قراءة بيانات النموذج فقط — ممنوع الكتابة على مفاتيح الـ widgets هنا."""
     mode = str(st.session_state.get("sair_desc_mode") or DESC_MODES[0])
     desc = str(st.session_state.get("sair_description") or "").strip()
-    if mode == DESC_MODES[0] and not st.session_state.get("sair_desc_manual_lock"):
-        desc = build_speed_description(
-            vehicle=st.session_state.get("sair_vehicle_type"),
-            plate=st.session_state.get("sair_plate"),
-            plate_class=st.session_state.get("sair_plate_class"),
-            speed=st.session_state.get("sair_speed"),
-            road_speed=st.session_state.get("sair_road_speed"),
-        )
-        st.session_state["sair_description"] = desc
     return {
         "case_no": to_western_digits(st.session_state.get("sair_case_no") or "").strip(),
         "location": str(st.session_state.get("sair_location") or "").strip(),
@@ -590,6 +593,7 @@ def push_sair_to_archive(data: dict, html_doc: str, shift: dict | None = None) -
 
 
 def clear_vehicle_fields_keep_officer(*, bump_case: bool = True) -> None:
+    """يُستدعى فقط من on_click أو من بداية render قبل أي Widget."""
     if bump_case:
         raw = to_western_digits(st.session_state.get("sair_case_no") or "0").strip()
         digits = re.sub(r"\D", "", raw)
@@ -603,8 +607,78 @@ def clear_vehicle_fields_keep_officer(*, bump_case: bool = True) -> None:
     st.session_state["sair_photo_left_b64"] = ""
     st.session_state["sair_desc_manual_lock"] = False
     st.session_state["sair_description"] = ""
+    st.session_state["_sair_last_auto_desc"] = ""
     st.session_state["sair_time"] = default_time_24()
     st.session_state["sair_hijri"] = default_hijri_str()
+
+
+def _bump_sair_case_no() -> None:
+    raw = to_western_digits(st.session_state.get("sair_case_no") or "0")
+    digits = re.sub(r"\D", "", raw) or "0"
+    st.session_state["sair_case_no"] = str(int(digits) + 1)
+
+
+def _sync_sair_gps_from_cache() -> None:
+    synced = str(st.session_state.get("_sair_gps_cache") or "").strip()
+    if synced:
+        st.session_state["sair_coords"] = synced
+        st.session_state.pop("_sair_gps_sync_fail", None)
+    else:
+        st.session_state["_sair_gps_sync_fail"] = True
+
+
+def _regen_sair_description() -> None:
+    auto_desc = _compute_auto_desc()
+    st.session_state["sair_desc_manual_lock"] = False
+    st.session_state["sair_description"] = auto_desc
+    st.session_state["_sair_last_auto_desc"] = auto_desc
+
+
+def _on_location_preset_change() -> None:
+    preset = str(st.session_state.get("sair_location_preset") or "")
+    if preset and preset != "— كتابة حرة —":
+        st.session_state["sair_location"] = preset
+
+
+def _on_road_speed_choice_change() -> None:
+    choice = str(st.session_state.get("sair_road_speed_choice") or "")
+    if choice and choice != "إدخال يدوي":
+        st.session_state["sair_road_speed"] = choice
+
+
+def _clear_sair_photo(side: str) -> None:
+    key = "sair_photo_right_b64" if side == "right" else "sair_photo_left_b64"
+    st.session_state[key] = ""
+
+
+def _save_sair_then_next(logo_b64: str = "", logo_mime: str = "image/png") -> None:
+    """on_click: حفظ ثم تفريغ حقول المركبة قبل إعادة الرسم."""
+    data = collect_sair_data()
+    html_doc = build_sair_a4_html(data, logo_b64=logo_b64, logo_mime=logo_mime)
+    ok = push_sair_to_archive(data, html_doc)
+    clear_vehicle_fields_keep_officer(bump_case=True)
+    st.session_state["_sair_flash_save_next"] = "ok" if ok else "partial"
+
+
+def _apply_sair_pending_before_widgets(shift: dict | None = None) -> None:
+    """تنفيذ أي طفرات معلّقة قبل رسم عناصر الواجهة."""
+    # كاش GPS للقراءة داخل on_click دون إغلاق على shift
+    st.session_state["_sair_gps_cache"] = _session_gps_coords(shift)
+    pending = st.session_state.pop("_sair_pending", None)
+    if not isinstance(pending, dict):
+        return
+    if pending.get("bump_case"):
+        _bump_sair_case_no()
+    if pending.get("sync_gps"):
+        _sync_sair_gps_from_cache()
+    if pending.get("regen_desc"):
+        _regen_sair_description()
+    if pending.get("clear_right_photo"):
+        _clear_sair_photo("right")
+    if pending.get("clear_left_photo"):
+        _clear_sair_photo("left")
+    if pending.get("clear_vehicle"):
+        clear_vehicle_fields_keep_officer(bump_case=bool(pending.get("bump_case_with_clear")))
 
 
 def apply_sair_archive_recall(rec: dict) -> None:
@@ -644,6 +718,7 @@ def apply_sair_archive_recall(rec: dict) -> None:
         st.session_state[dst] = val
     if fields.get("description"):
         st.session_state["sair_desc_manual_lock"] = True
+        st.session_state["_sair_last_auto_desc"] = str(fields.get("description") or "")
     st.session_state.nav_tab = "النماذج الميدانية"
     st.session_state.opened_form_id = None
     st.session_state["forms_quick_search"] = ""
@@ -700,8 +775,21 @@ def _handle_sig_pad(shift: dict | None = None) -> None:
 def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: str = "") -> None:
     """واجهة قسم السير داخل تبويب النماذج."""
     ensure_sair_session(shift)
+    _apply_sair_pending_before_widgets(shift)
+
     if st.session_state.pop("_recall_flash_ok", None):
         st.success("✅ تم استدعاء محضر السير من الأرشيف — يمكنك التعديل وإعادة الحفظ/الطباعة.")
+    flash_next = st.session_state.pop("_sair_flash_save_next", None)
+    if flash_next == "ok":
+        st.success("حُفظ المحضر وجُهّزت الحالة التالية (+1) مع الإبقاء على بيانات المعد.")
+    elif flash_next == "partial":
+        st.warning("فُرّغت بيانات المركبة، لكن الحفظ في الأرشيف لم يكتمل.")
+    if st.session_state.pop("_sair_gps_sync_fail", None):
+        st.warning("لا يوجد موقع فعلي معتمد في الجلسة بعد.")
+
+    logo_hdr, logo_mime = get_sair_header_logo_b64()
+    if not logo_hdr and logo_b64:
+        logo_hdr, logo_mime = logo_b64, "image/png"
 
     st.markdown(
         """
@@ -720,22 +808,22 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
     with c2:
         st.write("")
         st.write("")
-        if st.button("+1", key="sair_case_plus", use_container_width=True, help="زيادة رقم الحالة بمقدار 1"):
-            raw = to_western_digits(st.session_state.get("sair_case_no") or "0")
-            digits = re.sub(r"\D", "", raw) or "0"
-            st.session_state["sair_case_no"] = str(int(digits) + 1)
-            st.rerun()
+        st.button(
+            "+1",
+            key="sair_case_plus",
+            use_container_width=True,
+            help="زيادة رقم الحالة بمقدار 1",
+            on_click=_bump_sair_case_no,
+        )
 
     loc_col, _ = st.columns([1, 0.01])
     with loc_col:
-        preset = st.selectbox(
+        st.selectbox(
             "اقتراح موقع سريع",
             options=["— كتابة حرة —"] + LOCATION_PRESETS,
             key="sair_location_preset",
+            on_change=_on_location_preset_change,
         )
-        if preset and preset != "— كتابة حرة —":
-            if st.session_state.get("sair_location") != preset:
-                st.session_state["sair_location"] = preset
         st.text_input("الموقع", key="sair_location")
 
     d1, d2 = st.columns(2)
@@ -745,24 +833,23 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
         st.text_input("الوقت (24 ساعة)", key="sair_time", help="مثال: 16:58")
 
     st.text_input("تصنيف الحالة", key="sair_classification")
-    gps_hint = _session_gps_coords(shift)
+    gps_hint = st.session_state.get("_sair_gps_cache") or _session_gps_coords(shift)
     st.text_input(
         "إحداثي الموقع",
         key="sair_coords",
         help=f"يُملأ من GPS الجلسة عند التوفر. الحالي: {gps_hint or '—'}",
     )
-    if st.button("📍 مزامنة الإحداثيات من GPS الجلسة", key="sair_sync_gps"):
-        synced = _session_gps_coords(shift)
-        if synced:
-            st.session_state["sair_coords"] = synced
-            st.rerun()
-        else:
-            st.warning("لا يوجد موقع فعلي معتمد في الجلسة بعد.")
+    st.button(
+        "📍 مزامنة الإحداثيات من GPS الجلسة",
+        key="sair_sync_gps",
+        on_click=_sync_sair_gps_from_cache,
+    )
 
     # —— وصف الحالة ——
     st.markdown("##### 2) وصف الحالة")
     st.radio("وضع الوصف", options=DESC_MODES, key="sair_desc_mode", horizontal=True)
     mode = st.session_state.get("sair_desc_mode") or DESC_MODES[0]
+    auto_desc = ""
     if mode == DESC_MODES[0]:
         v1, v2 = st.columns(2)
         with v1:
@@ -771,43 +858,39 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
             st.selectbox("فئة اللوحة (اختياري)", options=PLATE_CLASS_OPTIONS, key="sair_plate_class")
         with v2:
             st.text_input("سرعة المركبة المرصودة (كم/ساعة)", key="sair_speed")
-            road_choice = st.selectbox(
+            st.selectbox(
                 "سرعة الطريق المحددة (كم/ساعة)",
                 options=ROAD_SPEED_PRESETS + ["إدخال يدوي"],
                 key="sair_road_speed_choice",
+                on_change=_on_road_speed_choice_change,
             )
-            if road_choice != "إدخال يدوي":
+            # مزامنة اختيار القائمة إلى حقل السرعة قبل إنشاء text_input
+            road_choice = str(st.session_state.get("sair_road_speed_choice") or "")
+            if road_choice and road_choice != "إدخال يدوي":
                 st.session_state["sair_road_speed"] = road_choice
             st.text_input("سرعة الطريق (يدوي إن لزم)", key="sair_road_speed")
-        auto_desc = build_speed_description(
-            vehicle=st.session_state.get("sair_vehicle_type"),
-            plate=st.session_state.get("sair_plate"),
-            plate_class=st.session_state.get("sair_plate_class"),
-            speed=st.session_state.get("sair_speed"),
-            road_speed=st.session_state.get("sair_road_speed"),
-        )
+
+        auto_desc = _compute_auto_desc()
+        last_auto = str(st.session_state.get("_sair_last_auto_desc") or "")
+        # تحديث الوصف التلقائي قبل رسم text_area فقط
         if not st.session_state.get("sair_desc_manual_lock"):
-            st.session_state["sair_description"] = auto_desc
+            if ("sair_description" not in st.session_state) or (auto_desc != last_auto):
+                st.session_state["sair_description"] = auto_desc
+                st.session_state["_sair_last_auto_desc"] = auto_desc
         st.caption("النص يتولد تلقائياً — يمكنك تعديله يدوياً قبل الطباعة.")
 
     desc_val = st.text_area("وصف الحالة", key="sair_description", height=110)
     if mode == DESC_MODES[0]:
-        # إذا عدّل المستخدم النص يدوياً عن المولّد نثبّت القفل حتى يحفظ/يفرّغ
-        auto_now = build_speed_description(
-            vehicle=st.session_state.get("sair_vehicle_type"),
-            plate=st.session_state.get("sair_plate"),
-            plate_class=st.session_state.get("sair_plate_class"),
-            speed=st.session_state.get("sair_speed"),
-            road_speed=st.session_state.get("sair_road_speed"),
-        )
+        auto_now = auto_desc or _compute_auto_desc()
         if str(desc_val or "").strip() and str(desc_val).strip() != auto_now:
             st.session_state["sair_desc_manual_lock"] = True
         b_unlock, _ = st.columns([1, 2])
         with b_unlock:
-            if st.button("🔄 إعادة توليد الوصف من الحقول", key="sair_regen_desc"):
-                st.session_state["sair_desc_manual_lock"] = False
-                st.session_state["sair_description"] = auto_now
-                st.rerun()
+            st.button(
+                "🔄 إعادة توليد الوصف من الحقول",
+                key="sair_regen_desc",
+                on_click=_regen_sair_description,
+            )
 
     # —— الصور ——
     st.markdown("##### 3) صور الحالة")
@@ -834,9 +917,12 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
                 f"data:image/jpeg;base64,{st.session_state['sair_photo_right_b64']}",
                 use_container_width=True,
             )
-            if st.button("🗑️ حذف اليمنى", key="sair_del_right"):
-                st.session_state["sair_photo_right_b64"] = ""
-                st.rerun()
+            st.button(
+                "🗑️ حذف اليمنى",
+                key="sair_del_right",
+                on_click=_clear_sair_photo,
+                kwargs={"side": "right"},
+            )
     with p2:
         st.caption("الصورة اليسرى (المركبة / الطريق)")
         if khafar_file_uploader:
@@ -859,9 +945,12 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
                 f"data:image/jpeg;base64,{st.session_state['sair_photo_left_b64']}",
                 use_container_width=True,
             )
-            if st.button("🗑️ حذف اليسرى", key="sair_del_left"):
-                st.session_state["sair_photo_left_b64"] = ""
-                st.rerun()
+            st.button(
+                "🗑️ حذف اليسرى",
+                key="sair_del_left",
+                on_click=_clear_sair_photo,
+                kwargs={"side": "left"},
+            )
 
     if khafar_file_uploader:
         batch = khafar_file_uploader(
@@ -928,9 +1017,6 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
         )
 
     data = collect_sair_data()
-    logo_hdr, logo_mime = get_sair_header_logo_b64()
-    if not logo_hdr and logo_b64:
-        logo_hdr, logo_mime = logo_b64, "image/png"
     a4_html = build_sair_a4_html(data, logo_b64=logo_hdr, logo_mime=logo_mime)
 
     st.markdown("##### 5) الحفظ والمعاينة والطباعة")
@@ -943,18 +1029,13 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
             else:
                 st.error("تعذر الحفظ في الأرشيف — تأكد من ربط الجهاز.")
     with b:
-        if st.button(
+        st.button(
             "🔄 حفظ وتفريغ بيانات المركبة لحالة تالية",
             key="sair_save_next",
             use_container_width=True,
-        ):
-            ok = push_sair_to_archive(data, a4_html, shift=shift)
-            clear_vehicle_fields_keep_officer(bump_case=True)
-            if ok:
-                st.success("حُفظ المحضر وجُهّزت الحالة التالية (+1) مع الإبقاء على بيانات المعد.")
-            else:
-                st.warning("فُرّغت بيانات المركبة، لكن الحفظ في الأرشيف لم يكتمل.")
-            st.rerun()
+            on_click=_save_sair_then_next,
+            kwargs={"logo_b64": logo_hdr, "logo_mime": logo_mime},
+        )
     with c:
         st.download_button(
             "⬇️ تنزيل HTML",
