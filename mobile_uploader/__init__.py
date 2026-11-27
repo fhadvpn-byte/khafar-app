@@ -151,7 +151,7 @@ def khafar_file_uploader(
     if subtitle is None:
         subtitle = "المعرض أو الكاميرا — متوافق مع أندرويد والآيفون"
 
-    # لا height= ثابت — الارتفاع ديناميكي من index.html عبر setFrameHeight
+    # ارتفاع ثابت من الواجهة (setFrameHeight مرة واحدة) — ممنوع إعادة ضبط مستمرة تسبب rerun/اهتزاز
     result = _mobile_uploader(
         title=label or "إرفاق ملفات",
         subtitle=subtitle or "",
@@ -165,14 +165,15 @@ def khafar_file_uploader(
 
     files = _items_from_component(result, preserve_alpha=preserve_alpha)
     if files:
-        # حفظ فوري من أول قيمة تصل من المكوّن (يمنع ضياع النقرة الأولى عند rerun)
         token = hashlib.sha256(
             "|".join(f"{f.file_id}:{f.size}:{f.name}" for f in files).encode("utf-8")
         ).hexdigest()
-        st.session_state[store_key] = files
-        st.session_state[token_key] = token
+        # حدّث الجلسة فقط عند تغيّر البصمة — يمنع churn وrerun غير ضروري
+        if st.session_state.get(token_key) != token:
+            st.session_state[store_key] = files
+            st.session_state[token_key] = token
     elif isinstance(result, dict) and result.get("action") in ("update", "clear"):
-        if not (result.get("files") or []):
+        if not (result.get("files") or []) and st.session_state.get(token_key):
             st.session_state[store_key] = []
             st.session_state[token_key] = ""
 

@@ -10746,16 +10746,25 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 else "📎 إرفاق صورة الهوية / التقرير الأولي أو مرفق داعم (اختياري)"
             )
             # رافع جوال موحّد لكل النماذج (بما فيها إقرار صلح وتنازل)
+            _att_mu_key = f"att_mu_{st.session_state.doc_no}"
             uploaded_files = khafar_file_uploader(
                 att_label,
-                key=f"att_mu_{st.session_state.doc_no}",
+                key=_att_mu_key,
                 accept_multiple_files=True,
                 allow_pdf=True,
                 preserve_alpha=False,
                 disabled=st.session_state.citizen_locked,
                 help=UPLOAD_HELP_CAPTION,
             )
-            if uploaded_files and not st.session_state.citizen_locked:
+            # ادمج المرفقات مرة واحدة فقط لكل بصمة مكوّن — يمنع إعادة الضغط وثقل الصفحة في كل rerun
+            _mu_token = str(st.session_state.get(f"_khafar_mu_token_{_att_mu_key}") or "")
+            _merged_key = f"_khafar_att_merged_token_{st.session_state.doc_no}"
+            if (
+                uploaded_files
+                and not st.session_state.citizen_locked
+                and _mu_token
+                and st.session_state.get(_merged_key) != _mu_token
+            ):
                 existing = list(st.session_state.get("attachments") or [])
                 if not existing and st.session_state.get("attachment_b64"):
                     existing = parse_attachments(st.session_state.attachment_b64)
@@ -10772,12 +10781,12 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     existing.append(item)
                     known.add(fp)
                     added += 1
+                st.session_state[_merged_key] = _mu_token
                 if added:
                     st.session_state.attachments = existing
                     sync_attachments_to_session()
                     st.success("✅ تم إرفاق المرفق بنجاح وجاهز للظهور في التقرير المطبوع")
                     st.toast(f"تم حفظ {added} مرفق في الجلسة", icon="📎")
-                    # لا نعيد rerun يدوياً — قيمة المكوّن تُحدّث الصفحة؛ rerun إضافي يضيع النقرة الأولى
 
             st.checkbox(
                 "إظهار المرفق المصور في التقرير المطبوع",
@@ -10785,12 +10794,10 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 help="عند التفعيل تُدرج الصور المرفوعة داخل ورقة A4 ونسخة الطباعة/PDF.",
             )
 
-            sync_attachments_to_session()
             persisted_atts = list(st.session_state.get("attachments") or [])
             if not persisted_atts and st.session_state.get("attachment_b64"):
                 persisted_atts = parse_attachments(st.session_state.attachment_b64)
                 st.session_state.attachments = persisted_atts
-                sync_attachments_to_session()
 
             if persisted_atts:
                 st.markdown("##### 🖼️ معاينة المرفقات المحفوظة في الجلسة")

@@ -9,23 +9,17 @@
     html, body {
       margin: 0 !important;
       padding: 0 !important;
-      height: auto !important;
-      min-height: 0 !important;
-      display: block !important;
-      overflow-x: hidden !important;
-      overflow-y: visible !important;
+      height: 320px !important;
+      max-height: 320px !important;
+      overflow: hidden !important;
       background: transparent !important;
       font-family: Cairo, Tahoma, sans-serif;
       color: var(--text);
       box-sizing: border-box !important;
     }
-    #uploaderRoot {
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-start;
-      align-items: stretch;
-      gap: 8px;
-      padding: 8px 6px 12px 6px;
+    #uploaderRoot, #uploaderCard {
+      height: 100%;
+      max-height: 320px;
       box-sizing: border-box;
       width: 100%;
     }
@@ -34,13 +28,13 @@
       border: 1.5px solid rgba(212,175,55,0.45);
       border-radius: 14px;
       padding: 10px;
-      margin: 0;
-      box-sizing: border-box;
-      width: 100%;
+      margin: 2px;
+      width: calc(100% - 4px);
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
       gap: 8px;
+      overflow: hidden;
     }
     #uploaderTop {
       flex: 0 0 auto;
@@ -60,15 +54,11 @@
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      justify-content: stretch;
-      align-items: stretch;
       flex: 0 0 auto;
-      position: relative;
-      z-index: 5;
     }
     .actions label.btn,
     .actions button.btn {
-      flex: 1 1 120px;
+      flex: 1 1 110px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -77,31 +67,27 @@
       color: #ffffff !important;
       -webkit-text-fill-color: #ffffff !important;
       border-radius: 10px;
-      padding: 11px 8px;
+      padding: 10px 8px;
       font-weight: 800;
       font-size: 13px;
       font-family: inherit;
       cursor: pointer;
-      min-height: 46px;
+      min-height: 42px;
       box-sizing: border-box;
       text-align: center;
       user-select: none;
-      -webkit-user-select: none;
-      text-shadow: 0 1px 1px rgba(0,0,0,0.35);
     }
     .actions button.btn.clear-all {
       flex: 0 0 auto;
-      min-width: 96px;
+      min-width: 90px;
       background: #7f1d1d;
       border-color: #fca5a5;
       font-size: 12px;
-      min-height: 40px;
+      min-height: 38px;
     }
     .actions label.btn.secondary {
       background: #0A211A;
       border-color: rgba(212,175,55,0.55);
-      color: #ffffff !important;
-      -webkit-text-fill-color: #ffffff !important;
     }
     .actions label.btn.disabled,
     .actions button.btn.disabled {
@@ -112,7 +98,7 @@
     .drop {
       border: 1.5px dashed rgba(212,175,55,0.45);
       border-radius: 12px;
-      padding: 12px 10px;
+      padding: 10px 8px;
       text-align: center;
       background: rgba(10,33,26,0.55);
       font-size: 12px;
@@ -123,52 +109,50 @@
     }
     .drop.over { border-color: var(--gold); background: rgba(20,108,78,0.25); color: #fff; }
     #thumbsWrap {
-      flex: 0 1 auto;
-      max-height: 200px;
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: 110px;
       overflow-x: hidden;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
-      padding-top: 2px;
     }
     .thumbs {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
-      gap: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
       width: 100%;
       box-sizing: border-box;
     }
     .thumb {
       position: relative;
-      width: 100%;
+      width: 86px;
       background: #0A211A;
       border: 1px solid rgba(212,175,55,0.35);
       border-radius: 10px;
-      overflow: visible;
+      overflow: hidden;
       padding-bottom: 4px;
       box-sizing: border-box;
     }
     .thumb img {
-      width: 100%;
-      height: 72px;
+      width: 86px;
+      height: 64px;
       object-fit: cover;
       display: block;
       background: #fff;
-      border-radius: 10px 10px 0 0;
     }
     .thumb .pdf {
-      width: 100%;
-      height: 72px;
+      width: 86px;
+      height: 64px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 28px;
+      font-size: 26px;
       background: #0A211A;
-      border-radius: 10px 10px 0 0;
     }
     .thumb .name {
       font-size: 10px;
       font-weight: 700;
-      padding: 3px 5px 0;
+      padding: 2px 4px 0;
       color: var(--muted);
       white-space: nowrap;
       overflow: hidden;
@@ -178,23 +162,33 @@
     }
     .thumb .rm {
       position: absolute;
-      top: 4px;
-      left: 4px;
-      width: 24px;
-      height: 24px;
+      top: 3px;
+      left: 3px;
+      width: 22px;
+      height: 22px;
       border: none;
       border-radius: 999px;
       background: rgba(127,29,29,0.95);
       color: #fff;
       font-weight: 900;
       cursor: pointer;
-      line-height: 24px;
+      line-height: 22px;
       padding: 0;
-      font-size: 13px;
+      font-size: 12px;
       z-index: 2;
     }
-    .ok { margin: 0; font-size: 12px; font-weight: 800; color: #86efac; min-height: 14px; text-align: right; flex: 0 0 auto; }
-    .err { color: #fca5a5; }
+    .ok {
+      display: none;
+      margin: 0;
+      font-size: 12px;
+      font-weight: 800;
+      color: #86efac;
+      min-height: 14px;
+      text-align: right;
+      flex: 0 0 auto;
+    }
+    .ok.show { display: block; }
+    .ok.err { color: #fca5a5; }
     .file-inputs input[type="file"] {
       position: absolute !important;
       width: 1px !important;
@@ -222,7 +216,7 @@
         <div class="drop" id="dropZone" role="button" tabindex="0">أسقط الملفات هنا أو اضغط لفتح المعرض</div>
       </div>
       <div id="thumbsWrap"><div class="thumbs" id="thumbs"></div></div>
-      <div class="ok" id="status"></div>
+      <div class="ok" id="status" aria-live="polite"></div>
     </div>
   </div>
 
@@ -234,19 +228,17 @@
 
   <script>
 (function () {
-  var MAX_EDGE = 1600;
-  var JPEG_Q = 0.85;
+  var FRAME_H = 320;
+  var MAX_EDGE = 1100;
+  var JPEG_Q = 0.72;
   var files = [];
   var cfg = { title: "", subtitle: "", multiple: true, allow_pdf: true, preserve_alpha: false, disabled: false };
   var bootstrapped = false;
   var lastArgsSig = "";
-  var lastHeight = 0;
-  var lastWidth = window.innerWidth || 0;
-  var renderSeen = false;
-  var jitterOn = false;
+  var lastEmittedSig = "";
+  var heightPinned = false;
+  var busy = false;
 
-  var rootEl = document.getElementById("uploaderRoot");
-  var cardEl = document.getElementById("uploaderCard");
   var subEl = document.getElementById("subtitle");
   var dropZone = document.getElementById("dropZone");
   var thumbsEl = document.getElementById("thumbs");
@@ -264,30 +256,11 @@
     try { window.parent.postMessage(msg, "*"); } catch (e) {}
   }
   function setReady() { send("streamlit:componentReady", { apiVersion: 1 }); }
-
-  function syncUploaderHeight(forceJitter) {
-    var measure = rootEl || cardEl || document.body;
-    var rect = measure.getBoundingClientRect();
-    var h = Math.ceil(Math.max(rect.height || 0, measure.scrollHeight || 0, measure.offsetHeight || 0) + 22);
-    h = Math.max(180, Math.min(h, 720));
-    if (forceJitter) {
-      jitterOn = !jitterOn;
-      h = h + (jitterOn ? 1 : 0);
-    } else if (lastHeight && Math.abs(h - lastHeight) <= 1) {
-      return;
-    }
-    lastHeight = h;
-    send("streamlit:setFrameHeight", { height: h });
+  function pinFrameHeightOnce() {
+    if (heightPinned) return;
+    heightPinned = true;
+    send("streamlit:setFrameHeight", { height: FRAME_H });
   }
-  function bumpHeight() {
-    syncUploaderHeight(true);
-    if (typeof requestAnimationFrame === "function") {
-      requestAnimationFrame(function () { syncUploaderHeight(true); });
-    }
-    setTimeout(function () { syncUploaderHeight(true); }, 80);
-    setTimeout(function () { syncUploaderHeight(true); }, 250);
-  }
-
   function setValue(value) {
     send("streamlit:setComponentValue", { value: value, dataType: "json" });
   }
@@ -303,30 +276,49 @@
     }
     return btoa(binary);
   }
+  function hideStatus() {
+    statusEl.className = "ok";
+    statusEl.textContent = "";
+  }
+  function showBusy() {
+    statusEl.className = "ok show";
+    statusEl.textContent = "⏳ جارِ تجهيز الملفات...";
+  }
+  function showOk(msg) {
+    if (!msg) { hideStatus(); return; }
+    statusEl.className = "ok show";
+    statusEl.textContent = msg;
+  }
+  function showErr(msg) {
+    statusEl.className = "ok show err";
+    statusEl.textContent = msg || "⚠️ تعذّر قراءة الملف.";
+  }
   function updateClearBtn() {
     if (!btnClearAll) return;
     btnClearAll.hidden = !files.length;
     btnClearAll.classList.toggle("disabled", !!cfg.disabled);
     btnClearAll.disabled = !!cfg.disabled;
   }
+  function filesSig() {
+    return files.map(function (f) { return String(f.id || "") + ":" + String(f.size || 0); }).join("|");
+  }
   function currentPayload() {
     return files.map(function (f) {
       return { name: f.name, type: f.type, size: f.size, data_b64: f.data_b64, id: f.id };
     });
   }
-  function emit() {
-    var payload = currentPayload();
-    var value = { action: "update", files: payload, ts: Date.now() };
-    // إرسال مزدوج يضمن وصول القيمة من أول نقرة قبل أي remount
-    setValue(value);
-    setTimeout(function () {
-      setValue({ action: "update", files: currentPayload(), ts: Date.now() });
-    }, 40);
+  function emitIfChanged() {
+    var sig = filesSig();
     renderThumbs();
     updateClearBtn();
-    statusEl.className = "ok";
-    statusEl.textContent = files.length ? ("✅ تم تجهيز " + files.length + " مرفق") : "";
-    bumpHeight();
+    if (sig === lastEmittedSig) {
+      showOk(files.length ? ("✅ تم تجهيز " + files.length + " مرفق") : "");
+      return;
+    }
+    lastEmittedSig = sig;
+    // إرسال واحد فقط عند تغيّر الملفات فعلياً — ممنوع التكرار/الـ jitter
+    setValue({ action: "update", files: currentPayload(), ts: Date.now() });
+    showOk(files.length ? ("✅ تم تجهيز " + files.length + " مرفق") : "");
   }
   function renderThumbs() {
     thumbsEl.innerHTML = "";
@@ -341,8 +333,6 @@
       } else {
         var img = document.createElement("img");
         img.alt = f.name || "صورة";
-        img.onload = function () { bumpHeight(); };
-        img.onerror = function () { syncUploaderHeight(true); };
         img.src = f.preview || ("data:" + (f.type || "image/jpeg") + ";base64," + f.data_b64);
         card.appendChild(img);
       }
@@ -357,12 +347,11 @@
       rm.onclick = function (ev) {
         if (ev) { ev.preventDefault(); ev.stopPropagation(); }
         files = files.filter(function (x) { return x.id !== f.id; });
-        emit();
+        emitIfChanged();
       };
       card.appendChild(rm);
       thumbsEl.appendChild(card);
     });
-    syncUploaderHeight(true);
   }
 
   function loadImageBitmap(file) {
@@ -410,13 +399,21 @@
       var tw = Math.max(1, Math.round(w * scale));
       var th = Math.max(1, Math.round(h * scale));
       var canvas = document.createElement("canvas");
-      canvas.width = tw; canvas.height = th;
+      canvas.width = tw;
+      canvas.height = th;
       var ctx = canvas.getContext("2d");
       if (cfg.preserve_alpha) {
         ctx.clearRect(0, 0, tw, th);
         ctx.drawImage(bmp, 0, 0, tw, th);
         return canvasToB64(canvas, "image/png").then(function (out) {
-          return { id: uid(), name: (file.name || "توقيع").replace(/\.[^.]+$/, "") + ".png", type: "image/png", size: out.size, data_b64: out.b64, preview: "data:image/png;base64," + out.b64 };
+          return {
+            id: uid(),
+            name: (file.name || "توقيع").replace(/\.[^.]+$/, "") + ".png",
+            type: "image/png",
+            size: out.size,
+            data_b64: out.b64,
+            preview: "data:image/png;base64," + out.b64
+          };
         });
       }
       ctx.fillStyle = "#ffffff";
@@ -424,11 +421,14 @@
       ctx.drawImage(bmp, 0, 0, tw, th);
       return canvasToB64(canvas, "image/jpeg", JPEG_Q).then(function (out) {
         var stem = (file.name || "صورة").replace(/\.[^.]+$/, "");
-        return { id: uid(), name: stem + ".jpg", type: "image/jpeg", size: out.size, data_b64: out.b64, preview: "data:image/jpeg;base64," + out.b64 };
-      });
-    }).catch(function () {
-      return file.arrayBuffer().then(function (ab) {
-        return { id: uid(), name: file.name || ("raw_" + Date.now() + ".heic"), type: file.type || "application/octet-stream", size: file.size || ab.byteLength, data_b64: abToB64(ab), preview: "" };
+        return {
+          id: uid(),
+          name: stem + ".jpg",
+          type: "image/jpeg",
+          size: out.size,
+          data_b64: out.b64,
+          preview: "data:image/jpeg;base64," + out.b64
+        };
       });
     });
   }
@@ -436,7 +436,14 @@
     return file.arrayBuffer().then(function (ab) {
       var name = file.name || ("مرفق_" + Date.now() + ".pdf");
       if (!/\.pdf$/i.test(name)) name += ".pdf";
-      return { id: uid(), name: name, type: "application/pdf", size: file.size || ab.byteLength, data_b64: abToB64(ab), preview: "" };
+      return {
+        id: uid(),
+        name: name,
+        type: "application/pdf",
+        size: file.size || ab.byteLength,
+        data_b64: abToB64(ab),
+        preview: ""
+      };
     });
   }
   function processOne(file) {
@@ -444,21 +451,20 @@
     var name = (file && file.name) || "";
     if (type === "application/pdf" || /\.pdf$/i.test(name)) {
       if (!cfg.allow_pdf) {
-        statusEl.className = "ok err";
-        statusEl.textContent = "⚠️ رفع PDF غير مفعّل لهذا الحقل.";
+        showErr("⚠️ رفع PDF غير مفعّل لهذا الحقل.");
         return Promise.resolve(null);
       }
       return processPdfFile(file);
     }
     return processImageFile(file);
   }
+
   function ingestFileList(list) {
-    if (cfg.disabled) return;
+    if (cfg.disabled || busy) return;
     var arr = Array.prototype.slice.call(list || []);
     if (!arr.length) return;
-    statusEl.className = "ok";
-    statusEl.textContent = "⏳ جارِ تجهيز الملفات...";
-    bumpHeight();
+    busy = true;
+    showBusy();
     var chain = Promise.resolve();
     arr.forEach(function (file) {
       chain = chain.then(function () {
@@ -469,29 +475,49 @@
         });
       });
     });
-    chain.then(emit).catch(function () {
-      statusEl.className = "ok err";
-      statusEl.textContent = "⚠️ تعذّر قراءة بعض الملفات من المعرض.";
-      emit();
+    chain.then(function () {
+      emitIfChanged();
+    }).catch(function () {
+      showErr("⚠️ تعذّر قراءة بعض الملفات من المعرض.");
+      emitIfChanged();
+    }).finally(function () {
+      busy = false;
+      if (!files.length) hideStatus();
+      else if (!statusEl.textContent || statusEl.textContent.indexOf("جارِ") !== -1) {
+        showOk("✅ تم تجهيز " + files.length + " مرفق");
+      }
     });
   }
+
   function bindInput(inp) {
     inp.addEventListener("change", function () {
-      ingestFileList(inp.files);
-      try { inp.value = ""; } catch (e) {}
+      try {
+        ingestFileList(inp.files);
+      } catch (e) {
+        busy = false;
+        hideStatus();
+        showErr("⚠️ تعذّر بدء تجهيز الملفات.");
+      } finally {
+        try { inp.value = ""; } catch (e2) {}
+      }
     });
   }
-  bindInput(inpGallery); bindInput(inpCamera); bindInput(inpPdf);
+  bindInput(inpGallery);
+  bindInput(inpCamera);
+  bindInput(inpPdf);
+
   if (btnClearAll) {
     btnClearAll.addEventListener("click", function (ev) {
       if (ev) { ev.preventDefault(); ev.stopPropagation(); }
-      if (cfg.disabled) return;
+      if (cfg.disabled || busy) return;
       files = [];
-      emit();
+      emitIfChanged();
+      hideStatus();
     });
   }
+
   function openGallery() {
-    if (cfg.disabled) return;
+    if (cfg.disabled || busy) return;
     try { inpGallery.click(); } catch (e) {}
   }
   dropZone.addEventListener("click", function (ev) { ev.preventDefault(); openGallery(); });
@@ -499,10 +525,14 @@
     if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openGallery(); }
   });
   ;["dragenter", "dragover"].forEach(function (evName) {
-    dropZone.addEventListener(evName, function (ev) { ev.preventDefault(); ev.stopPropagation(); dropZone.classList.add("over"); });
+    dropZone.addEventListener(evName, function (ev) {
+      ev.preventDefault(); ev.stopPropagation(); dropZone.classList.add("over");
+    });
   });
   ;["dragleave", "drop"].forEach(function (evName) {
-    dropZone.addEventListener(evName, function (ev) { ev.preventDefault(); ev.stopPropagation(); dropZone.classList.remove("over"); });
+    dropZone.addEventListener(evName, function (ev) {
+      ev.preventDefault(); ev.stopPropagation(); dropZone.classList.remove("over");
+    });
   });
   dropZone.addEventListener("drop", function (ev) {
     if (cfg.disabled) return;
@@ -539,28 +569,16 @@
     bootstrapped = true;
   }
 
+  // streamlit:render: ضبط إعدادات فقط — ممنوع setComponentValue أو إعادة قياس الارتفاع
   window.addEventListener("message", function (ev) {
     var data = ev.data || {};
     if (!data || data.type !== "streamlit:render") return;
-    renderSeen = true;
     applyArgs(data.args || {});
-    bumpHeight();
   });
-  window.addEventListener("resize", function () {
-    var w = window.innerWidth || 0;
-    if (w === lastWidth) return;
-    lastWidth = w;
-    if (renderSeen) bumpHeight();
-  });
-  if (typeof ResizeObserver !== "undefined") {
-    try {
-      var ro = new ResizeObserver(function () { syncUploaderHeight(true); });
-      if (rootEl) ro.observe(rootEl);
-      if (cardEl) ro.observe(cardEl);
-    } catch (e) {}
-  }
+
+  hideStatus();
   setReady();
-  bumpHeight();
+  pinFrameHeightOnce();
 })();
   </script>
 </body>
