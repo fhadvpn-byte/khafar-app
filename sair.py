@@ -14,6 +14,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 from PIL import Image, ImageOps
 
+from khafar_print_portal import inject_print_portal
+
 try:
     from sig_pad_component import sig_pad
 except Exception:  # pragma: no cover
@@ -301,7 +303,7 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
     left_photo_html = _img_html(data.get("photo_left") or "", "صورة المركبة")
     signature_img_html = _img_html(data.get("signature") or "", "التوقيع")
 
-    return f"""<!DOCTYPE html>
+    doc = f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
@@ -398,7 +400,7 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
 </head>
 <body>
 <div class="toolbar no-print">
-  <button class="print-btn" type="button" onclick="window.print()">🖨️ طباعة / حفظ PDF (1/1)</button>
+  <button class="print-btn" type="button" data-khafar-print="1" onclick="khafarPortalPrint(event)">🖨️ طباعة / حفظ PDF (1/1)</button>
 </div>
 <div class="a4-sheet">
   <table class="top-header">
@@ -495,6 +497,7 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
 </div>
 </body>
 </html>"""
+    return inject_print_portal(doc)
 
 
 _GPS_SIMPLE = re.compile(

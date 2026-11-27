@@ -14,6 +14,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 import khafar_box_fix
+from khafar_print_portal import inject_print_portal
 
 TAKMEEL_DB = Path(__file__).resolve().parent / "takmeel_records.db"
 # يُحقن من app.py لربط لقطات التكميل بأرشيف records الموحّد
@@ -968,10 +969,15 @@ def _zoom_script() -> str:
   if(printBtn){
     printBtn.addEventListener('click', function(ev){
       ev.preventDefault();
+      ev.stopPropagation();
       clearForPrint();
       forceOpenEmptyCells(sheet);
       waitImagesThen(function(){
         try { iosAutoFitToOnePage(); } catch(e0) {}
+        if (typeof window.khafarPortalPrint === 'function') {
+          try { window.khafarPortalPrint(ev); } catch(eP) {}
+          return;
+        }
         try { window.focus(); } catch(e) {}
         try { window.print(); } catch(e2) {}
       });
@@ -1009,7 +1015,7 @@ def _force_open_empty_cells(html_str: str, box_h: int = 21) -> str:
 
 def _print_shell(title: str, body: str, logo_b64: str) -> str:
     body = _force_open_empty_cells(body, box_h=32)
-    return f"""<!DOCTYPE html>
+    doc = f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=794">
 <meta name="format-detection" content="telephone=no">
@@ -1066,11 +1072,12 @@ td{{height:32px!important;min-height:32px!important;font-size:13px!important;fon
   .legal-letter-body,.legal-prose{{text-align:justify!important;text-align-last:right!important;line-height:1.75!important;word-spacing:normal!important;overflow-wrap:break-word!important;font-size:13.5px!important;font-weight:500!important}}
 }}
 </style></head><body>
-<div class="toolbar no-print"><button class="print-btn" type="button">🖨️ طباعة / حفظ PDF (1/1)</button></div>
+<div class="toolbar no-print"><button class="print-btn" type="button" data-khafar-print="1">🖨️ طباعة / حفظ PDF (1/1)</button></div>
 {_zoom_controls_html()}
 <div class="preview-scroll" id="previewScroll"><div class="a4" id="a4Sheet">{body}</div></div>
 {_zoom_script()}
 </body></html>"""
+    return inject_print_portal(doc)
 
 
 def _waqoat_cell(v) -> str:
@@ -1415,12 +1422,12 @@ td.sep-row,.sep-row{{
   .logo-img{{display:inline-block!important;visibility:visible!important}}
 }}
 </style></head><body>
-<div class="toolbar no-print"><button class="print-btn" type="button">🖨️ طباعة / حفظ PDF (1/1)</button></div>
+<div class="toolbar no-print"><button class="print-btn" type="button" data-khafar-print="1">🖨️ طباعة / حفظ PDF (1/1)</button></div>
 {_zoom_controls_html()}
 <div class="preview-scroll" id="previewScroll"><div class="a4" id="a4Sheet">{body}</div></div>
 {_zoom_script()}
 </body></html>"""
-    return _force_open_empty_cells(html_doc, box_h=21)
+    return inject_print_portal(_force_open_empty_cells(html_doc, box_h=21))
 
 
 def build_accidents_a4(rows: list[dict], dates: dict, prepared_by: str, phone: str, logo_b64: str) -> str:

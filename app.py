@@ -23,6 +23,10 @@ from sair import (
     register_archive_saver as register_sair_archive_saver,
     render_sair_section,
 )
+from khafar_print_portal import (
+    KHAFAR_PRINT_PORTAL_CSS,
+    inject_print_portal,
+)
 import importlib, khafar_bail; khafar_bail = importlib.reload(khafar_bail) if getattr(khafar_bail, "_KHAFAR_BAIL_VER", "") != "v5" else khafar_bail; khafar_bail.reset_run_state()
 import importlib, khafar_med_age; khafar_med_age = importlib.reload(khafar_med_age) if getattr(khafar_med_age, "_KHAFAR_MED_AGE_VER", "") != "v3" else khafar_med_age; khafar_med_age.reset_run_state()
 
@@ -1682,11 +1686,12 @@ function khafarWaitImagesThen(fn){
 
 
 def render_print_button(report_html: str, btn_label: str = "🖨️ طباعة / حفظ التقرير PDF") -> None:
-    """زر طباعة آمن للآيفون: يفتح نافذة جديدة داخل ضغطة المستخدم ثم يستدعي print()."""
+    """زر طباعة آمن للآيفون: بوابة الصفحة الأب أولاً، ثم نافذة منبثقة كاحتياط."""
     b64_report = base64.b64encode(str(report_html or "").encode("utf-8")).decode("utf-8")
     safe_label = html.escape(btn_label)
     ios_css_json = json.dumps(_KHAFAR_IOS_SAFE_PRINT_CSS)
     ios_js_json = json.dumps(_KHAFAR_IOS_AUTOFIT_JS)
+    portal_css_json = json.dumps(KHAFAR_PRINT_PORTAL_CSS)
     component_code = f"""
     <div dir="rtl" style="text-align: center; font-family: Cairo, Tahoma, sans-serif; margin: 5px 0;">
         <button type="button" onclick="openIosSafePrint()" style="
@@ -1706,6 +1711,44 @@ def render_print_button(report_html: str, btn_label: str = "🖨️ طباعة /
         </div>
     </div>
     <script>
+    function khafarInjectParentPortal(fullHtml) {{
+        try {{
+            var parentWin = null;
+            try {{ if (window.parent && window.parent !== window && window.parent.document && window.parent.document.body) parentWin = window.parent; }} catch (e0) {{}}
+            try {{ if (!parentWin && window.top && window.top.document && window.top.document.body) parentWin = window.top; }} catch (e1) {{}}
+            if (!parentWin) return false;
+            var doc = parentWin.document;
+            var portalCss = {portal_css_json};
+            var cssEl = doc.getElementById("khafar-print-portal-css");
+            if (!cssEl) {{
+                cssEl = doc.createElement("style");
+                cssEl.id = "khafar-print-portal-css";
+                (doc.head || doc.documentElement).appendChild(cssEl);
+            }}
+            var tmp = doc.implementation.createHTMLDocument("print");
+            tmp.documentElement.innerHTML = String(fullHtml || "");
+            var reportCss = "";
+            Array.prototype.forEach.call(tmp.querySelectorAll("style"), function(s) {{
+                reportCss += (s.textContent || "") + "\\n";
+            }});
+            // أنماط المحضر تُفعَّل فقط عند الطباعة مع البوابة
+            cssEl.textContent = portalCss + "\\n@media print {{\\n" + reportCss + "\\n}}\\n";
+            var root = tmp.querySelector(".a4-sheet, .a4-page, .a4-paper, #a4Sheet, .a4, .a4-page-frame, .report-container, .print-area") || tmp.body;
+            var portal = doc.getElementById("khafar-print-portal");
+            if (!portal) {{
+                portal = doc.createElement("div");
+                portal.id = "khafar-print-portal";
+                doc.body.appendChild(portal);
+            }}
+            portal.setAttribute("dir", "rtl");
+            portal.innerHTML = root ? root.outerHTML : String(fullHtml || "");
+            try {{ parentWin.focus(); }} catch (eF) {{}}
+            parentWin.print();
+            return true;
+        }} catch (e) {{
+            return false;
+        }}
+    }}
     function openIosSafePrint() {{
         try {{
             const binary = atob("{b64_report}");
@@ -1764,7 +1807,12 @@ def render_print_button(report_html: str, btn_label: str = "🖨️ طباعة /
             }} else {{
                 htmlContent += autoPrint;
             }}
-            // فتح متزامن داخل ضغطة المستخدم (Safari iOS)
+            // المسار الأساسي على iOS: بوابة الصفحة الأب (لا تعتمد على النوافذ المنبثقة)
+            if (khafarInjectParentPortal(htmlContent)) {{
+                document.getElementById("ios-msg").style.display = "none";
+                return;
+            }}
+            // احتياط: فتح نافذة منبثقة داخل ضغطة المستخدم
             const printWin = window.open("", "_blank");
             if (printWin && !printWin.closed) {{
                 printWin.document.open();
@@ -6957,7 +7005,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         sheet_cls += " a4-dense-print"
     gps_line_html = gps_header_line(str(rec.get("gps_coords") or ""))
 
-    return f"""
+    doc = f"""
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -8988,6 +9036,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             if (hint) hint.style.display = "block";
             try {{ prepareA4Print(); }} catch (e3) {{}}
             waitDocImagesThen(function() {{
+                try {{
+                    if (typeof window.khafarPortalPrint === "function") {{
+                        window.khafarPortalPrint();
+                        return;
+                    }}
+                }} catch (e4a) {{}}
                 try {{ window.print(); }} catch (e4) {{}}
             }});
             return;
@@ -9002,6 +9056,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }} catch (e5) {{
             try {{ prepareA4Print(); }} catch (e6a) {{}}
             waitDocImagesThen(function() {{
+                try {{
+                    if (typeof window.khafarPortalPrint === "function") {{
+                        window.khafarPortalPrint();
+                        return;
+                    }}
+                }} catch (e6b) {{}}
                 try {{ window.print(); }} catch (e6) {{}}
             }});
         }}
@@ -10336,42 +10396,26 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     return shareWin.navigator.share({{ files: [file] }});
   }}
 
-  // طباعة مباشرة عبر النافذة العليا عند الحاجة داخل وضع التطبيق المثبت
+  // طباعة مباشرة عبر بوابة الصفحة الأب — لا تعتمد على iframe.print في iOS
   function triggerIosTopWindowPrint() {{
     try {{
       applyToxicologyDirectorBlock(document);
       window.syncAllLivePads();
-      var topDoc = (window.top && window.top.document) ? window.top.document : null;
-      if (topDoc) {{
-        var oldRoot = topDoc.getElementById('khafarTopIosPrintHost');
-        if (oldRoot) oldRoot.remove();
-        var host = topDoc.createElement('div');
-        host.id = 'khafarTopIosPrintHost';
-
-        var styles = '';
-        document.querySelectorAll('style, link[rel="stylesheet"]').forEach(function(n) {{ styles += n.outerHTML; }});
-
-        var clone = document.getElementById('a4Sheet').cloneNode(true);
-        document.querySelectorAll('#a4Sheet img[id^="slot_"]').forEach(function(ls) {{
-          var cs = clone.querySelector('#' + ls.id);
-          if (ls && cs && ls.getAttribute('src')) {{
-            cs.setAttribute('src', ls.getAttribute('src'));
-            cs.setAttribute('style', ls.getAttribute('style') || 'display:block !important; max-height:48px !important;');
-          }}
-        }});
-
-        host.innerHTML = styles
-          + '<style id="khafarTopMaskStyle">@media screen{{#khafarTopIosPrintHost{{display:none !important;}}}}@media print{{body>*:not(#khafarTopIosPrintHost){{display:none !important;}}#khafarTopIosPrintHost{{display:block !important;width:100% !important;background:#fff !important;}}}}</style>'
-          + clone.outerHTML;
-        topDoc.body.appendChild(host);
-        balanceSheetElement(host.querySelector('#a4Sheet'), 795, true, true, false);
-        window.top.focus();
-        window.top.print();
-        setTimeout(function() {{ try {{ host.remove(); }} catch (e) {{}} }}, 1500);
+      if (typeof window.khafarPortalPrint === 'function') {{
+        window.khafarPortalPrint();
         return;
       }}
+      if (typeof window.khafarSyncPrintPortal === 'function') {{
+        window.khafarSyncPrintPortal();
+        try {{
+          var pw = (window.parent && window.parent !== window) ? window.parent : window.top;
+          try {{ pw.focus(); }} catch (eF) {{}}
+          pw.print();
+          return;
+        }} catch (eP) {{}}
+      }}
     }} catch (e) {{}}
-    window.print();
+    try {{ window.print(); }} catch (e2) {{}}
   }}
 
   function showIosShareReadyTray(anchorBtn) {{
@@ -10473,7 +10517,15 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         return;
       }}
 
-      // على الأندرويد والكمبيوتر: المسار السريع المخفي كما هو بدون أي تغيير
+      // مسار موحّد آمن: بوابة الصفحة الأب أولاً (تمنع PDF فارغ على WebKit)
+      try {{
+        if (typeof window.khafarPortalPrint === 'function') {{
+          window.khafarPortalPrint();
+          return;
+        }}
+      }} catch (ePortal) {{}}
+
+      // احتياط سطح المكتب: إطار طباعة مخفي
       var targetH = 1042;
       var sheetClone = document.getElementById('a4Sheet').cloneNode(true);
       sheetClone.style.zoom = '1';
@@ -10523,6 +10575,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 </body>
 </html>
 """
+    return inject_print_portal(doc)
 import khafar_med_age; khafar_med_age.bind_functions(globals())
 import khafar_bail; khafar_bail.bind_functions(globals())
 
