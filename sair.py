@@ -29,19 +29,12 @@ SAIR_FORM_ID = "sair_case_report"
 SAIR_CATEGORY = "السير"
 _ARCHIVE_SAVER = None
 
-LOCATION_PRESETS = [
-    "طريق العارضة العام",
-    "طريق الصوارمة",
-    "طريق الخوبة الجديد",
-    "الخوبة العقبة",
-    "طريق البحر",
-]
 VEHICLE_PRESETS = [
-    "كامري", "سوناتا", "شاص", "هايلكس", "أكسنت", "كادينزا",
-    "كورولا", "لاندكروزر", "باترول", "إلنترا", "يارس", "أخرى",
+    "كامري", "هايلكس", "شاص", "سوناتا", "أكسنت",
+    "إلنترا", "كورولا", "لاندكروزر", "كادينزا",
 ]
 ROAD_SPEED_PRESETS = ["80", "90", "100", "110", "120"]
-PLATE_CLASS_OPTIONS = ["بدون", "نقل خاص", "نقل عام", "حافلة"]
+PLATE_CLASS_OPTIONS = ["خاص", "نقل خاص", "نقل عام", "حافلة", "دبلوماسي", "مؤقت"]
 DESC_MODES = ["رصد سرعة آلي", "صياغة يدوية حرة"]
 
 _AR_DIGITS = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")
@@ -259,7 +252,7 @@ def build_speed_description(
     speed = to_western_digits(str(speed or "").strip()) or "—"
     road_speed = to_western_digits(str(road_speed or "").strip()) or "—"
     cls = str(plate_class or "").strip()
-    cls_part = f"{cls} " if cls and cls != "بدون" else ""
+    cls_part = f"{cls} " if cls else ""
     return (
         f"بالتوقيت والموقع أعلاه تم الرصد آلياً لمركبة نوع {vehicle} "
         f"تحمل لوحة رقم ( {plate} ) {cls_part}"
@@ -296,6 +289,8 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
     location_text = html.escape(str(data.get("location") or "—"))
     coords_ar = to_arabic_numerals(data.get("coords") or "—")
     classification_text = html.escape(str(data.get("classification") or "مخالفة مرورية"))
+    owner_raw = str(data.get("owner_name") or "").strip()
+    owner_display = html.escape(owner_raw) if owner_raw else "—"
     description_ar = html.escape(to_arabic_numerals(data.get("description") or "—")).replace("\n", "<br>")
     unit_name = html.escape(str(data.get("unit_name") or "قسم مرور محافظة العارضة"))
     officer_name = html.escape(str(data.get("officer_name") or "—"))
@@ -451,6 +446,10 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
         <td class="val">{classification_text}</td>
       </tr>
       <tr>
+        <td class="shaded">مالك المركبة</td>
+        <td class="val" colspan="2">{owner_display}</td>
+      </tr>
+      <tr>
         <th class="shaded" colspan="3">وصف الحالة</th>
       </tr>
       <tr>
@@ -580,7 +579,8 @@ def ensure_sair_session(shift: dict | None = None) -> None:
         "sair_desc_mode": DESC_MODES[0],
         "sair_vehicle_type": "كامري",
         "sair_plate": "",
-        "sair_plate_class": "بدون",
+        "sair_plate_class": "خاص",
+        "sair_owner_name": "",
         "sair_speed": "",
         "sair_road_speed": "100",
         "sair_description": "",
@@ -598,6 +598,9 @@ def ensure_sair_session(shift: dict | None = None) -> None:
     for key, val in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = val
+    # ترحيل قيمة فئة اللوحة القديمة
+    if str(st.session_state.get("sair_plate_class") or "").strip() == "بدون":
+        st.session_state["sair_plate_class"] = "خاص"
     # تعبئة الإحداثيات من GPS الجلسة فقط إذا كان الحقل فارغاً / بانتظار
     cur_coords = str(st.session_state.get("sair_coords") or "").strip()
     if (not cur_coords) or ("بانتظار" in cur_coords) or (cur_coords in ("—", "-")):
@@ -639,6 +642,7 @@ def collect_sair_data() -> dict:
         "vehicle_type": str(st.session_state.get("sair_vehicle_type") or "").strip(),
         "plate": str(st.session_state.get("sair_plate") or "").strip(),
         "plate_class": str(st.session_state.get("sair_plate_class") or "").strip(),
+        "owner_name": str(st.session_state.get("sair_owner_name") or "").strip(),
         "speed": to_western_digits(st.session_state.get("sair_speed") or "").strip(),
         "road_speed": to_western_digits(st.session_state.get("sair_road_speed") or "").strip(),
         "desc_mode": mode,
@@ -704,7 +708,8 @@ def clear_vehicle_fields_keep_officer(*, bump_case: bool = True) -> None:
             st.session_state["sair_case_no"] = str(int(digits) + 1)
     st.session_state["sair_vehicle_type"] = "كامري"
     st.session_state["sair_plate"] = ""
-    st.session_state["sair_plate_class"] = "بدون"
+    st.session_state["sair_plate_class"] = "خاص"
+    st.session_state["sair_owner_name"] = ""
     st.session_state["sair_speed"] = ""
     st.session_state["sair_photo_right_b64"] = ""
     st.session_state["sair_photo_left_b64"] = ""
@@ -737,10 +742,6 @@ def _regen_sair_description() -> None:
     st.session_state["sair_description"] = auto_desc
     st.session_state["_sair_last_auto_desc"] = auto_desc
     st.session_state["_sair_desc_seeded"] = True
-
-
-def _set_sair_location(value: str) -> None:
-    st.session_state["sair_location"] = str(value or "")
 
 
 def _set_sair_road_speed(value: str) -> None:
@@ -845,6 +846,7 @@ def apply_sair_archive_recall(rec: dict) -> None:
         "vehicle_type": "sair_vehicle_type",
         "plate": "sair_plate",
         "plate_class": "sair_plate_class",
+        "owner_name": "sair_owner_name",
         "speed": "sair_speed",
         "road_speed": "sair_road_speed",
         "desc_mode": "sair_desc_mode",
@@ -854,6 +856,8 @@ def apply_sair_archive_recall(rec: dict) -> None:
         if val is None or val == "":
             continue
         st.session_state[dst] = val
+    if str(st.session_state.get("sair_plate_class") or "").strip() == "بدون":
+        st.session_state["sair_plate_class"] = "خاص"
     if fields.get("description"):
         st.session_state["sair_desc_manual_lock"] = True
         st.session_state["_sair_last_auto_desc"] = str(fields.get("description") or "")
@@ -953,12 +957,10 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
             on_click=_bump_sair_case_no,
         )
 
-    st.caption("اقتراحات موقع سريعة (اضغط للتعبئة — الحقل يبقى مفتوحاً للكتابة)")
-    _render_quick_buttons(LOCATION_PRESETS, key_prefix="sair_loc_btn", on_pick=_set_sair_location)
     st.text_input(
         "الموقع",
         key="sair_location",
-        placeholder="اكتب موقع الرصد بحرية أو اختر من الأزرار أعلاه",
+        placeholder="اكتب الموقع يدوياً... مثال: العارضة طريق عرق أبو سبيلة",
     )
 
     d1, d2 = st.columns(2)
@@ -991,26 +993,26 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
     st.radio("وضع الوصف", options=DESC_MODES, key="sair_desc_mode", horizontal=True)
     mode = st.session_state.get("sair_desc_mode") or DESC_MODES[0]
     if mode == DESC_MODES[0]:
-        st.caption("اقتراحات نوع المركبة")
-        _render_quick_buttons(VEHICLE_PRESETS, key_prefix="sair_veh_btn", on_pick=_set_sair_vehicle)
         st.text_input(
             "نوع المركبة",
             key="sair_vehicle_type",
-            placeholder="كامري / سوناتا / شاص...",
+            placeholder="اكتب أي نوع مركبة بحرية (مثال: BMW / كامري / شاص)...",
             on_change=_on_auto_desc_source_change,
         )
+        st.caption("اقتراحات سريعة لأنواع المركبات المتكررة")
+        _render_quick_buttons(VEHICLE_PRESETS, key_prefix="sair_veh_btn", on_pick=_set_sair_vehicle)
         st.text_input(
             "رقم اللوحة",
             key="sair_plate",
             placeholder="أ ق ب 7894 أو س 219711",
             on_change=_on_auto_desc_source_change,
         )
-        st.caption("فئة اللوحة (اختياري)")
+        st.caption("فئة اللوحة / نوع التسجيل")
         _render_quick_buttons(PLATE_CLASS_OPTIONS, key_prefix="sair_pcls_btn", on_pick=_set_sair_plate_class)
         st.text_input(
             "فئة اللوحة",
             key="sair_plate_class",
-            placeholder="بدون / نقل خاص / نقل عام / حافلة",
+            placeholder="خاص / نقل خاص / نقل عام / حافلة / دبلوماسي / مؤقت",
             on_change=_on_auto_desc_source_change,
         )
         s1, s2 = st.columns(2)
@@ -1037,6 +1039,11 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
             st.session_state["_sair_desc_seeded"] = True
         st.caption("يتحدّث الوصف تلقائياً عند تغيير حقول المركبة/السرعة — ويبقى قابلاً للكتابة الحرة.")
 
+    st.text_input(
+        "اسم مالك المركبة",
+        key="sair_owner_name",
+        placeholder="اكتب اسم مالك المركبة (اختياري)...",
+    )
     st.text_area("وصف الحالة", key="sair_description", height=110)
     if mode == DESC_MODES[0]:
         st.button(
