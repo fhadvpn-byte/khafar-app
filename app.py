@@ -1091,17 +1091,17 @@ div[data-testid="stHorizontalBlock"] div.stButton > button {
     margin: 14px 0;
     color: #FFFFFF;
     font-size: 14.5px;
-    line-height: 1.9 !important;
+    line-height: 1.75 !important;
     direction: rtl !important;
-    text-align: justify !important;
-    text-justify: inter-word !important;
+    text-align: right !important;
     text-align-last: right !important;
     width: 100% !important;
     max-width: 100% !important;
     box-sizing: border-box !important;
-    overflow-wrap: anywhere !important;
+    overflow-wrap: break-word !important;
     word-break: normal !important;
     white-space: normal !important;
+    word-spacing: normal !important;
 }
 .stApp .legal-dark-box .legal-title {
     direction: rtl !important;
@@ -1114,15 +1114,44 @@ div[data-testid="stHorizontalBlock"] div.stButton > button {
 .stApp .legal-dark-box .legal-body {
     direction: rtl !important;
     unicode-bidi: embed !important;
-    text-align: justify !important;
-    text-justify: inter-word !important;
+    text-align: right !important;
     text-align-last: right !important;
-    line-height: 1.9 !important;
+    line-height: 1.75 !important;
     width: 100% !important;
     max-width: 100% !important;
     box-sizing: border-box !important;
-    overflow-wrap: anywhere !important;
+    overflow-wrap: break-word !important;
     word-break: normal !important;
+    white-space: normal !important;
+    word-spacing: normal !important;
+    color: #FFFFFF !important;
+}
+.stApp .legal-dark-box .legal-addr {
+    text-align: center !important;
+    text-align-last: center !important;
+    font-weight: 800 !important;
+    line-height: 1.35 !important;
+    margin: 0 0 4px 0 !important;
+    word-spacing: normal !important;
+    color: #FFFFFF !important;
+}
+.stApp .legal-dark-box .legal-salam {
+    text-align: right !important;
+    text-align-last: right !important;
+    font-weight: 700 !important;
+    line-height: 1.35 !important;
+    margin: 0 0 6px 0 !important;
+    word-spacing: normal !important;
+    color: #FFFFFF !important;
+}
+.stApp .legal-dark-box .legal-letter-body {
+    direction: rtl !important;
+    text-align: justify !important;
+    text-justify: inter-word !important;
+    text-align-last: right !important;
+    line-height: 1.75 !important;
+    word-spacing: normal !important;
+    overflow-wrap: break-word !important;
     white-space: normal !important;
     color: #FFFFFF !important;
 }
@@ -1418,6 +1447,72 @@ def render_print_button(report_html: str, btn_label: str = "🖨️ طباعة /
     components.html(component_code, height=110)
 
 
+_LEGAL_ADDR_CLS = "legal-addr"
+_LEGAL_SALAM_CLS = "legal-salam"
+_LEGAL_BODY_CLS = "legal-letter-body"
+_LEGAL_SALAM_TXT = "السلام عليكم ورحمة الله وبركاته"
+_LEGAL_LETTER_SPLIT_RE = re.compile(
+    r"^(?P<addr>سعادة[\s\S]{0,220}?المحترم)\s*[,،]?\s*"
+    r"(?P<salam>السلام عليكم ورحمة الله وبركاته)\s*[.．…]*\s*"
+    r"(?P<body>[\s\S]+)$",
+    re.UNICODE,
+)
+
+
+def _legal_addr_html(heading_html: str) -> str:
+    return (
+        f'<div class="{_LEGAL_ADDR_CLS}" dir="rtl">'
+        f"{heading_html}</div>"
+    )
+
+
+def _legal_salam_html() -> str:
+    return (
+        f'<div class="{_LEGAL_SALAM_CLS}" dir="rtl">'
+        f"{_LEGAL_SALAM_TXT}</div>"
+    )
+
+
+def _legal_body_html(body_html: str) -> str:
+    body = str(body_html or "").strip()
+    return (
+        f'<div class="{_LEGAL_BODY_CLS}" dir="rtl">'
+        f"{body}</div>"
+    )
+
+
+def structure_official_legal_html(text: str) -> str:
+    """افصل المخاطبة والسلام عن المتن حتى لا يتشوّه justify على الأسطر القصيرة."""
+    raw = str(text or "").strip()
+    if not raw:
+        return ""
+    # بنية الخطاب الطبي/الرسمي الجاهزة
+    if f'class="{_LEGAL_ADDR_CLS}"' in raw or f"class='{_LEGAL_ADDR_CLS}'" in raw:
+        if f'class="{_LEGAL_BODY_CLS}"' not in raw and f"class='{_LEGAL_BODY_CLS}'" not in raw:
+            # غلاف احتياطي إن نقصت حاوية المتن
+            return raw
+        return raw
+    if f'class="{_LEGAL_BODY_CLS}"' in raw or f"class='{_LEGAL_BODY_CLS}'" in raw:
+        return raw
+
+    plain = re.sub(r"<br\s*/?>", " ", raw, flags=re.I)
+    plain = re.sub(r"</?div[^>]*>", " ", plain, flags=re.I)
+    plain = re.sub(r"</?p[^>]*>", " ", plain, flags=re.I)
+    plain = re.sub(r"\s+", " ", plain).strip()
+    m = _LEGAL_LETTER_SPLIT_RE.match(plain)
+    if m:
+        addr = html.escape(m.group("addr").strip())
+        body = m.group("body").strip()
+        # الجسم قد يحتوي عزل RTL/HTML من _val — إن كان بلا وسوم اهربه
+        if "<" not in body:
+            body = html.escape(body)
+        return _legal_addr_html(addr) + _legal_salam_html() + _legal_body_html(body)
+    # إقرار/متن واحد: حاوية متن فقط بضبط كامل متوازن
+    if "<" not in plain:
+        return _legal_body_html(html.escape(plain))
+    return _legal_body_html(plain)
+
+
 def normalize_official_legal_text(text: str) -> str:
     """وحّد المسافات والصق الأقواس بالنص حتى لا تنفصل على الجوال أو داخل A4."""
     raw = str(text or "")
@@ -1446,6 +1541,7 @@ def normalize_official_legal_text(text: str) -> str:
         if chunk.startswith("<") and chunk.endswith(">"):
             cleaned.append(chunk)
             continue
+        # ادمج فواصل الأسطر اليدوية داخل الجملة الواحدة بمسافة (بدون قطع منتصف الجملة)
         part = " ".join(chunk.splitlines())
         part = re.sub(r"[ \t\f\v]+", " ", part)
         # الصق القوس المفتوح بأول كلمة والمغلق بآخر كلمة
@@ -1460,7 +1556,7 @@ def normalize_official_legal_text(text: str) -> str:
     out = "".join(cleaned)
     out = re.sub(r"[ \t]{2,}", " ", out)
     out = re.sub(r"\s+([،,.؛;:!؟?])", r"\1", out)
-    return out.strip()
+    return structure_official_legal_html(out.strip())
 
 
 def _val(values: dict, key: str) -> str:
@@ -2042,22 +2138,10 @@ def _official_recipient_heading(raw_name: str) -> str:
 
 
 def _format_medical_letter_html(recipient_raw: str, body_html: str) -> str:
-    """خطاب طبي/جنائي رسمي من 3 أجزاء HTML داخل مربع النص."""
+    """خطاب طبي/جنائي رسمي: مخاطبة + سلام (بلا justify) ثم متن بضبط كامل متوازن."""
     heading = _official_recipient_heading(recipient_raw)
     body = str(body_html or "").strip()
-    return (
-        f'<div class="legal-addr" style="text-align:center !important; text-align-last:center !important; '
-        f'font-weight:800 !important; font-size:13.5px !important; margin:0 0 4px 0 !important; '
-        f'line-height:1.35 !important; padding:0 !important;">'
-        f"{heading}</div>"
-        f'<div class="legal-salam" style="text-align:right !important; text-align-last:right !important; '
-        f'font-weight:700 !important; font-size:13px !important; margin:0 0 4px 0 !important; '
-        f'line-height:1.35 !important; padding:0 !important;">'
-        f"السلام عليكم ورحمة الله وبركاته</div>"
-        f'<div class="legal-letter-body" style="text-align:right !important; text-align-last:right !important; '
-        f'line-height:1.65 !important; margin:0 !important; padding:0 !important;">'
-        f"{body}</div>"
-    )
+    return _legal_addr_html(heading) + _legal_salam_html() + _legal_body_html(body)
 
 
 def _med_injury_legal(m: dict) -> str:
@@ -6867,32 +6951,37 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         background: #ffffff !important; border: 1px solid #94a3b8; border-right: 4px solid #0f3d2e !important;
         border-radius: 4px; padding: 10px 12px !important; margin-bottom: 12px !important;
         font-size: 12.5px !important; line-height: 1.75 !important;
-        text-align: justify !important; text-justify: inter-word !important; text-align-last: right !important;
+        text-align: right !important; text-align-last: right !important;
         direction: rtl !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important;
         overflow-wrap: break-word !important; word-break: normal !important; white-space: normal !important;
         word-spacing: normal !important; color: #000000 !important; font-weight: 700 !important;
     }}
     .legal-box > div.legal-title:first-child {{ margin-bottom: 8px !important; font-weight: 800 !important; text-align: right !important; }}
-    .legal-box div {{
-        font-size: 12.5px !important; line-height: 1.75 !important; color: #000000 !important; font-weight: 700 !important;
-        text-align: justify !important; text-justify: inter-word !important; text-align-last: right !important;
+    .legal-box .legal-body {{
+        font-size: 12.5px !important; color: #000000 !important; font-weight: 700 !important;
         direction: rtl !important; overflow-wrap: break-word !important; word-break: normal !important;
         white-space: normal !important; word-spacing: normal !important;
     }}
     .legal-box > div.legal-title:first-child {{ text-align: right !important; }}
+    /* المخاطبة والسلام: بلا justify حتى لا تتمدد الأسطر القصيرة */
     .legal-box .legal-addr {{
         text-align: center !important; text-align-last: center !important; font-weight: 800 !important;
         font-size: 13.5px !important; margin: 0 0 4px 0 !important; line-height: 1.35 !important;
-        padding: 0 !important;
+        padding: 0 !important; word-spacing: normal !important;
     }}
     .legal-box .legal-salam {{
         text-align: right !important; text-align-last: right !important; font-weight: 700 !important;
-        font-size: 13px !important; margin: 0 0 4px 0 !important; line-height: 1.35 !important;
-        padding: 0 !important;
+        font-size: 13px !important; margin: 0 0 6px 0 !important; line-height: 1.35 !important;
+        padding: 0 !important; word-spacing: normal !important;
     }}
+    /* فقرة المتن فقط: ضبط كامل متوازن مع بقاء السطر الأخير يميناً */
     .legal-box .legal-letter-body {{
-        text-align: right !important; text-align-last: right !important; line-height: 1.65 !important;
+        direction: rtl !important;
+        text-align: justify !important; text-justify: inter-word !important; text-align-last: right !important;
+        line-height: 1.75 !important; word-spacing: normal !important; overflow-wrap: break-word !important;
+        word-break: normal !important; white-space: normal !important;
         margin: 0 !important; padding: 0 !important;
+        font-size: 12.5px !important; color: #000000 !important; font-weight: 700 !important;
     }}
     table.sig-tbl {{
         table-layout: fixed !important; width: 100% !important;
@@ -7307,8 +7396,24 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             background: #ffffff !important;
             border: 1px solid #94a3b8 !important;
             border-right: 4px solid #0f3d2e !important;
-            text-align: justify !important; text-align-last: right !important;
+            text-align: right !important; text-align-last: right !important;
             direction: rtl !important; white-space: normal !important;
+            word-spacing: normal !important;
+        }}
+        .a4-paper .legal-box .legal-addr, .a4-sheet .legal-box .legal-addr {{
+            text-align: center !important; text-align-last: center !important;
+            line-height: 1.35 !important; word-spacing: normal !important;
+        }}
+        .a4-paper .legal-box .legal-salam, .a4-sheet .legal-box .legal-salam {{
+            text-align: right !important; text-align-last: right !important;
+            line-height: 1.35 !important; word-spacing: normal !important;
+        }}
+        .a4-paper .legal-box .legal-letter-body, .a4-sheet .legal-box .legal-letter-body {{
+            direction: rtl !important;
+            text-align: justify !important; text-justify: inter-word !important;
+            text-align-last: right !important; line-height: 1.75 !important;
+            word-spacing: normal !important; overflow-wrap: break-word !important;
+            white-space: normal !important;
         }}
         .a4-paper .hdr, .a4-sheet .hdr {{
             display: flex !important; justify-content: space-between !important; align-items: center !important;
@@ -7921,9 +8026,26 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             legal.style.setProperty("line-height", m.lh.toFixed(3), "important");
             legal.style.setProperty("padding", padY.toFixed(2) + "px " + padX.toFixed(2) + "px", "important");
             legal.style.setProperty("margin", marY.toFixed(2) + "px 0", "important");
-            legal.querySelectorAll(".legal-body, .legal-title, div").forEach(function(el) {{
+            legal.querySelectorAll(".legal-body, .legal-title, .legal-letter-body, div").forEach(function(el) {{
                 el.style.setProperty("font-size", m.fs.toFixed(2) + "px", "important");
+                if (el.classList && (el.classList.contains("legal-addr") || el.classList.contains("legal-salam"))) {{
+                    el.style.setProperty("line-height", "1.35", "important");
+                    el.style.setProperty("word-spacing", "normal", "important");
+                    if (el.classList.contains("legal-addr")) {{
+                        el.style.setProperty("text-align", "center", "important");
+                        el.style.setProperty("text-align-last", "center", "important");
+                    }} else {{
+                        el.style.setProperty("text-align", "right", "important");
+                        el.style.setProperty("text-align-last", "right", "important");
+                    }}
+                    return;
+                }}
                 el.style.setProperty("line-height", m.lh.toFixed(3), "important");
+                if (el.classList && el.classList.contains("legal-letter-body")) {{
+                    el.style.setProperty("text-align", "justify", "important");
+                    el.style.setProperty("text-align-last", "right", "important");
+                    el.style.setProperty("word-spacing", "normal", "important");
+                }}
             }});
         }}
 
@@ -8504,13 +8626,37 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
   .legal-box .legal-box-body {{
     direction: rtl !important;
     unicode-bidi: embed !important;
-    text-align: justify !important;
-    text-justify: inter-word !important;
+    text-align: right !important;
     text-align-last: right !important;
     color: #000000 !important;
     font-weight: 700 !important;
     overflow-wrap: break-word !important;
     white-space: normal !important;
+    word-spacing: normal !important;
+  }}
+  .legal-box .legal-addr {{
+    text-align: center !important;
+    text-align-last: center !important;
+    line-height: 1.35 !important;
+    word-spacing: normal !important;
+  }}
+  .legal-box .legal-salam {{
+    text-align: right !important;
+    text-align-last: right !important;
+    line-height: 1.35 !important;
+    word-spacing: normal !important;
+  }}
+  .legal-box .legal-letter-body {{
+    direction: rtl !important;
+    text-align: justify !important;
+    text-justify: inter-word !important;
+    text-align-last: right !important;
+    line-height: 1.75 !important;
+    word-spacing: normal !important;
+    overflow-wrap: break-word !important;
+    white-space: normal !important;
+    color: #000000 !important;
+    font-weight: 700 !important;
   }}
   img.sig-slot-img {{
     background: #ffffff !important;
@@ -11173,15 +11319,15 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             live_legal_text = normalize_official_legal_text(form_def["legal_fn"](current_values))
             st.markdown(
                 (
-                    '<div class="legal-dark-box" dir="rtl" style="direction:rtl !important;text-align:justify !important;'
-                    "text-justify:inter-word !important;text-align-last:right !important;line-height:1.9 !important;"
+                    '<div class="legal-dark-box" dir="rtl" style="direction:rtl !important;text-align:right !important;'
+                    "text-align-last:right !important;line-height:1.75 !important;word-spacing:normal !important;"
                     'width:100% !important;max-width:100% !important;box-sizing:border-box !important;'
-                    'padding:14px 16px !important;overflow-wrap:anywhere !important;word-break:normal !important;'
+                    'padding:14px 16px !important;overflow-wrap:break-word !important;word-break:normal !important;'
                     'white-space:normal !important;">'
                     '<div class="legal-title" dir="rtl">⚖️ معاينة النص الرسمي المعتمد في الوثيقة:</div>'
                     '<div class="legal-body" dir="rtl" style="direction:rtl !important;unicode-bidi:embed !important;'
-                    "text-align:justify !important;text-justify:inter-word !important;text-align-last:right !important;"
-                    'line-height:1.9 !important;overflow-wrap:anywhere !important;white-space:normal !important;">'
+                    "text-align:right !important;text-align-last:right !important;line-height:1.75 !important;"
+                    'word-spacing:normal !important;overflow-wrap:break-word !important;white-space:normal !important;">'
                     f"\u200f{live_legal_text}</div></div>"
                 ),
                 unsafe_allow_html=True,

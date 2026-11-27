@@ -1006,6 +1006,10 @@ td{{height:32px!important;min-height:32px!important}}
 .logo-img{{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
 .note-red{{color:#c00000!important;font-size:12.5px;font-weight:800;margin-top:6px}}
 .foot{{display:flex;justify-content:space-between;margin-top:8px;font-size:13.5px;font-weight:800}}
+/* متن رسمي متوازن إن وُجد في لقطات/معاينة التكميل — بلا تمدد لأسطر المخاطبة القصيرة */
+.legal-addr{{direction:rtl;text-align:center!important;text-align-last:center!important;line-height:1.35;word-spacing:normal}}
+.legal-salam{{direction:rtl;text-align:right!important;text-align-last:right!important;line-height:1.35;word-spacing:normal}}
+.legal-letter-body,.legal-prose{{direction:rtl;text-align:justify!important;text-justify:inter-word;text-align-last:right!important;line-height:1.75;word-spacing:normal;overflow-wrap:break-word;white-space:normal}}
 .a4-monthly .hdr-title{{font-size:15px}}
 .a4-monthly th{{height:34px!important;min-height:34px!important;font-size:13px!important}}
 .a4-monthly td{{height:32px!important;min-height:32px!important;padding:4px 6px!important;font-size:13px!important;font-weight:700!important}}
@@ -1025,6 +1029,9 @@ td{{height:32px!important;min-height:32px!important}}
   .txt-red,.note-red{{color:#c00000!important}}
   .hdr-title{{font-size:13px!important}}
   .logo-img{{display:inline-block!important;visibility:visible!important}}
+  .legal-addr{{text-align:center!important;text-align-last:center!important;word-spacing:normal!important}}
+  .legal-salam{{text-align:right!important;text-align-last:right!important;word-spacing:normal!important}}
+  .legal-letter-body,.legal-prose{{text-align:justify!important;text-align-last:right!important;line-height:1.75!important;word-spacing:normal!important;overflow-wrap:break-word!important}}
 }}
 </style></head><body>
 <div class="toolbar no-print"><button class="print-btn" type="button">🖨️ طباعة / حفظ PDF (1/1)</button></div>
@@ -1337,11 +1344,17 @@ td.sep-row,.sep-row{{
 .logo-img{{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
 .waqoat-note{{text-align:center;margin-top:4px;font-size:12.5px;font-weight:800}}
 .waqoat-foot{{display:flex;justify-content:space-between;margin-top:4px;font-size:13px;font-weight:800;direction:rtl}}
+.legal-addr{{direction:rtl;text-align:center!important;text-align-last:center!important;line-height:1.35;word-spacing:normal}}
+.legal-salam{{direction:rtl;text-align:right!important;text-align-last:right!important;line-height:1.35;word-spacing:normal}}
+.legal-letter-body,.legal-prose{{direction:rtl;text-align:justify!important;text-justify:inter-word;text-align-last:right!important;line-height:1.75;word-spacing:normal;overflow-wrap:break-word;white-space:normal}}
 @media print{{
   @page{{size:A4 portrait;margin:4mm!important}}
   html,body{{background:#fff!important;padding:0!important;margin:0!important}}
   .toolbar,.no-print,.zoom-bar{{display:none!important}}
   .preview-scroll{{overflow:visible!important;height:auto!important;max-height:none!important}}
+  .legal-addr{{text-align:center!important;text-align-last:center!important;word-spacing:normal!important}}
+  .legal-salam{{text-align:right!important;text-align-last:right!important;word-spacing:normal!important}}
+  .legal-letter-body,.legal-prose{{text-align:justify!important;text-align-last:right!important;line-height:1.75!important;word-spacing:normal!important;overflow-wrap:break-word!important}}
   .a4{{width:100%!important;max-width:198mm!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;border:none!important;padding:0!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
   table.waqoat-grid{{page-break-inside:avoid!important;border:1.4px solid #000000!important}}
   table.waqoat-grid th,table.waqoat-grid td{{
