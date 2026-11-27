@@ -335,6 +335,58 @@ _SAIR_LOGO_PH = "__SAIR_LOGO_SRC__"
 _SAIR_PHOTO_PH = "__SAIR_PHOTO_SRC__"
 _SAIR_SIG_PH = "__SAIR_SIG_SRC__"
 
+# جسم قواعد ضغط طباعة iOS — يُعاد استخدامه في المعاينة وبوابة الصفحة الأب
+_SAIR_IOS_PRINT_SUPPORTS_BODY = """
+      #khafar-print-portal .a4-sheet,
+      .a4-sheet {
+        zoom: 0.88 !important;
+        width: 100% !important;
+        padding: 0 4px !important;
+        margin: 0 auto !important;
+        border: none !important;
+      }
+      .top-header { margin-bottom: 4px !important; }
+      .top-header td { font-size: 11px !important; line-height: 1.35 !important; }
+      .top-header .hdr-logo img { height: 52px !important; }
+      .case-num-line { font-size: 11.5px !important; margin-top: 1px !important; }
+      .report-frame {
+        padding: 6px 8px 8px 8px !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      .report-main-title {
+        font-size: 16px !important;
+        margin: 0 0 4px 0 !important;
+      }
+      .main-grid td, .main-grid th, .footer-grid td, .footer-grid th {
+        padding: 3.5px 4px !important;
+        font-size: 11.5px !important;
+        line-height: 1.35 !important;
+        min-height: 0 !important;
+      }
+      .shaded { font-size: 11px !important; }
+      .desc-val {
+        min-height: 0 !important;
+        padding: 5px 8px !important;
+        font-size: 11.5px !important;
+        line-height: 1.5 !important;
+      }
+      .photo-cell {
+        height: auto !important;
+        min-height: 0 !important;
+        padding: 5px !important;
+      }
+      .photo-cell img {
+        max-height: 155px !important;
+        max-width: 96% !important;
+        width: auto !important;
+        height: auto !important;
+        margin: 0 auto !important;
+      }
+      .sig-cell { height: 46px !important; padding: 2px !important; }
+      .sig-cell img { max-height: 40px !important; }
+"""
+
 
 def _sair_data_uri(*, b64: str, default_mime: str = "image/jpeg") -> str:
     payload = strip_data_url(b64)
@@ -565,54 +617,7 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
 
     /* iOS Safari فقط — ضغط عمودي ليستقر المحضر 1/1 رغم الهامش السفلي الإجباري */
     @supports (-webkit-touch-callout: none) {{
-      #khafar-print-portal .a4-sheet,
-      .a4-sheet {{
-        zoom: 0.88 !important;
-        width: 100% !important;
-        padding: 0 4px !important;
-        margin: 0 auto !important;
-        border: none !important;
-      }}
-      .top-header {{ margin-bottom: 4px !important; }}
-      .top-header td {{ font-size: 11px !important; line-height: 1.35 !important; }}
-      .top-header .hdr-logo img {{ height: 52px !important; }}
-      .case-num-line {{ font-size: 11.5px !important; margin-top: 1px !important; }}
-      .report-frame {{
-        padding: 6px 8px 8px 8px !important;
-        page-break-inside: avoid !important;
-        break-inside: avoid !important;
-      }}
-      .report-main-title {{
-        font-size: 16px !important;
-        margin: 0 0 4px 0 !important;
-      }}
-      .main-grid td, .main-grid th, .footer-grid td, .footer-grid th {{
-        padding: 3.5px 4px !important;
-        font-size: 11.5px !important;
-        line-height: 1.35 !important;
-        min-height: 0 !important;
-      }}
-      .shaded {{ font-size: 11px !important; }}
-      .desc-val {{
-        min-height: 0 !important;
-        padding: 5px 8px !important;
-        font-size: 11.5px !important;
-        line-height: 1.5 !important;
-      }}
-      .photo-cell {{
-        height: auto !important;
-        min-height: 0 !important;
-        padding: 5px !important;
-      }}
-      .photo-cell img {{
-        max-height: 155px !important;
-        max-width: 96% !important;
-        width: auto !important;
-        height: auto !important;
-        margin: 0 auto !important;
-      }}
-      .sig-cell {{ height: 46px !important; padding: 2px !important; }}
-      .sig-cell img {{ max-height: 40px !important; }}
+{_SAIR_IOS_PRINT_SUPPORTS_BODY}
     }}
   }}
 """
@@ -764,6 +769,13 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
 </html>"""
 
     # تحميل Tajawal في الصفحة الأب فوراً (خارج @media print) ثم أنماط المحضر عند الطباعة
+    # بلوك iOS منفصل بمستوى أعلى — يتجنب تداخل @media print المزدوج على Safari
+    _ios_portal_print = (
+        "\n@media print {\n"
+        "  @supports (-webkit-touch-callout: none) {\n"
+        + _SAIR_IOS_PRINT_SUPPORTS_BODY
+        + "\n  }\n}\n"
+    )
     portal_print_css = (
         "@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800&display=swap');\n"
         + "#khafar-print-portal, #khafar-print-portal * {"
@@ -773,6 +785,7 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
         + "\n@media print {\n"
         + report_css
         + "\n}\n"
+        + _ios_portal_print
     )
 
     safe_full_html_js = _js_embed(full_print_html)
