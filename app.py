@@ -3198,6 +3198,7 @@ DEFAULT_MANAGER_TITLE = "مدير وحدة الحوادث بقسم مرور ال
 TOX_AUTH_ENTITY = "إدارة مرور منطقة جازان"
 TOX_AUTH_NAME = "عقيد / محمد بن عبدالله آل هادي"
 TOX_OFFICER_SECTION = "إجراء قسم مرور العارضة / ضابط الخفر"
+TOX_AUTH_SEAL = "اعتماد إلكتروني — رئيس وحدة الحوادث فهد بن أحمد مجرشي"
 DEVICE_COOKIE = "khafar_device_uid"
 SHIFT_COOKIE = "khafar_shift"
 _SHIFT_TEXT_KEYS = ("dept_name", "officer_rank", "officer_name", "duty_rank", "duty_name", "default_gps")
@@ -6175,15 +6176,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     # --- Duty cell ---
     if duty_stamp_now:
+        # نفس رسمة التوقيع الأصلية (slot_duty) المستخدمة في بقية النماذج
         duty_box_inner = _sig_slot_img(duty_stamp_now, "slot_duty")
         if manager_auto:
             if is_toxicology:
-                # إطار اعتماد رسمي لإدارة مرور جازان — مختلف بصرياً عن شارة وحدة الحوادث
-                duty_box_inner = (
-                    '<div class="tox-auth-frame">'
-                    f"{duty_box_inner}"
-                    '<div class="tox-auth-seal">اعتماد إلكتروني — إدارة مرور منطقة جازان</div>'
-                    "</div>"
+                duty_box_inner += (
+                    f'<div class="tox-auth-seal">{html.escape(TOX_AUTH_SEAL)}</div>'
                 )
             else:
                 duty_box_inner += '<div class="sig-approved-badge">مُصادق ومُعتمد نظاماً</div>'
@@ -6195,30 +6193,22 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + "</div>"
         )
     elif "ختم" in duty_mode or not duty_mode:
-        duty_stamp_label = (
-            "ختم المصادقة النظامي لإدارة مرور منطقة جازان"
-            if is_toxicology
-            else "مُصادق ومُعتمد نظاماً"
-        )
         if is_toxicology:
             duty_box_inner = (
-                '<div class="tox-auth-frame">'
-                '<div class="tox-auth-seal">'
-                f"{html.escape(duty_stamp_label)}"
-                "</div></div>"
+                f'<div class="tox-auth-seal">{html.escape(TOX_AUTH_SEAL)}</div>'
             )
         else:
             duty_box_inner = (
                 '<div style="display:inline-block; border:1.5px solid #000000; color:#000000; '
                 'padding:3px 10px; border-radius:5px; font-size:11.5px; font-weight:800;">'
-                f"{html.escape(duty_stamp_label)}"
+                "مُصادق ومُعتمد نظاماً"
                 "</div>"
             )
     else:
         duty_box_inner = _sig_slot_img("", "slot_duty")
 
     # جدول التوقيعات: 3 أعمدة للنماذج العامة.
-    # خطاب تحليل السموم فقط: صف علوي بخانتين + صف سفلي لضابط الخفر قبل QR.
+    # خطاب تحليل السموم فقط: صف علوي (استلام + ضابط الخفر) ثم مستطيل جازان بعرض كامل فوق QR.
     col_width = "50%" if is_toxicology else "33.3%"
     party_signers = _waiver_signers(form_id_now, fields_map)
     multi_sig = bool(party_signers)
@@ -6287,9 +6277,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             sig_slots.append((signer["header"], signer["name"], signer["role"], inner))
         duty_name_now = manager_duty_full or str(rec.get("duty_full") or "")
         if is_toxicology:
-            # صف علوي: الأطراف + جهة الاستلام + إدارة مرور جازان — ثم صف مستقل لضابط الخفر
+            # صف علوي: الأطراف/الاستلام + ضابط الخفر — ثم مستطيل جازان بعرض كامل
             tox_top_slots = list(sig_slots)
-            tox_top_slots.append((TOX_AUTH_ENTITY, TOX_AUTH_NAME, "", duty_box_inner))
+            officer_name_tox = str(rec.get("officer_full") or "")
+            tox_top_slots.append((TOX_OFFICER_SECTION, officer_name_tox, "", officer_box_inner))
             top_cols = min(3, max(2, len(tox_top_slots)))
             top_rows = []
             for start in range(0, len(tox_top_slots), top_cols):
@@ -6303,17 +6294,14 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                     )
                     + "</tr>"
                 )
-            officer_name_tox = str(rec.get("officer_full") or "")
-            officer_name_html = (
-                f'<div class="sig-person">{html.escape(officer_name_tox)}</div>'
-                if officer_name_tox else ""
-            )
             top_rows.append(
                 "<tr>"
-                f"<td class='sig-cell tox-officer-row' colspan='{top_cols}'>"
-                f"<div class='sig-head'>{html.escape(TOX_OFFICER_SECTION)}</div>"
-                f"<div class='tox-officer-body'>{officer_name_html}{officer_box_inner}</div>"
-                "</td></tr>"
+                f"<td class='sig-cell tox-auth-row' colspan='{top_cols}'>"
+                f"<div class='sig-head'>{html.escape(TOX_AUTH_ENTITY)}</div>"
+                f"<div class='tox-auth-body'>"
+                f"<div class='sig-person tox-auth-name'>{html.escape(TOX_AUTH_NAME)}</div>"
+                f"{duty_box_inner}"
+                f"</div></td></tr>"
             )
             sig_table_html = (
                 f"<table class='sig-tbl sig-multi sig-tbl-tox' data-tox-layout='2plus1'><tbody>"
@@ -6363,7 +6351,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                     <thead>
                         <tr>
                             <th style="width:50%;">{html.escape(col1_header)}</th>
-                            <th style="width:50%;">{html.escape(TOX_AUTH_ENTITY)}</th>
+                            <th style="width:50%;">{html.escape(TOX_OFFICER_SECTION)}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -6374,16 +6362,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                                 {citizen_box_inner}
                             </td>
                             <td style="width:50%;">
-                                <div class="sig-person tox-auth-name">{html.escape(TOX_AUTH_NAME)}</div>
-                                {duty_box_inner}
+                                {officer_name_html}
+                                {officer_box_inner}
                             </td>
                         </tr>
                         <tr>
-                            <td class="tox-officer-row" colspan="2">
-                                <div class="sig-head">{html.escape(TOX_OFFICER_SECTION)}</div>
-                                <div class="tox-officer-body">
-                                    {officer_name_html}
-                                    {officer_box_inner}
+                            <td class="tox-auth-row" colspan="2">
+                                <div class="sig-head">{html.escape(TOX_AUTH_ENTITY)}</div>
+                                <div class="tox-auth-body">
+                                    <div class="sig-person tox-auth-name">{html.escape(TOX_AUTH_NAME)}</div>
+                                    {duty_box_inner}
                                 </div>
                             </td>
                         </tr>
@@ -6917,41 +6905,39 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #1e293b !important; padding: 8px !important; font-size: 12px; line-height: 1.45 !important; color: #000000 !important; font-weight: 800 !important; }}
     table.sig-tbl td {{ border: 1px solid #1e293b !important; padding: 8px 6px !important; width: {col_width}; vertical-align: top; height: auto !important; min-height: 90px; max-height: none !important; overflow: visible !important; line-height: 1.45 !important; color: #000000 !important; font-weight: 700 !important; }}
-    /* تخطيط تحليل السموم فقط: صفان علويان + صف ضابط الخفر — مضغوط لصفحة A4 واحدة */
+    /* تخطيط تحليل السموم فقط: صف علوي (استلام + ضابط) + مستطيل جازان بعرض كامل فوق QR */
     table.sig-tbl-tox {{ margin-top: 6px !important; }}
     table.sig-tbl-tox th {{
         padding: 4px 6px !important; font-size: 11px !important; line-height: 1.3 !important;
         background: #eef3f0 !important;
     }}
     table.sig-tbl-tox td {{
-        padding: 4px 5px !important; min-height: 58px !important; height: auto !important;
+        padding: 4px 5px !important; min-height: 56px !important; height: auto !important;
         font-size: 11px !important; line-height: 1.35 !important; vertical-align: middle !important;
     }}
-    table.sig-tbl-tox td.tox-officer-row {{
-        min-height: 52px !important; padding: 3px 6px 5px !important;
-        background: #fafbfa !important;
+    table.sig-tbl-tox td.tox-auth-row {{
+        min-height: 58px !important; padding: 3px 8px 5px !important;
+        background: #f7faf8 !important; text-align: center !important;
     }}
-    table.sig-tbl-tox .tox-officer-body {{
+    table.sig-tbl-tox .tox-auth-body {{
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: 2px; text-align: center; padding: 2px 0 0;
     }}
     table.sig-tbl-tox .tox-auth-name {{
         font-size: 12px !important; font-weight: 900 !important; color: #0b2e22 !important;
-        margin: 1px 0 3px !important; letter-spacing: 0.01em;
-    }}
-    table.sig-tbl-tox .tox-auth-frame {{
-        display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 2px; padding: 3px 8px 4px; margin: 0 auto;
-        border: 1.6px double #1a4d3a; border-radius: 4px; background: #f7faf8;
-        max-width: 96%; box-sizing: border-box;
+        margin: 1px 0 2px !important; letter-spacing: 0.01em;
     }}
     table.sig-tbl-tox .tox-auth-seal {{
-        font-size: 9.5px !important; font-weight: 800 !important; color: #0f3d2e !important;
-        line-height: 1.3 !important; white-space: normal;
+        font-size: 10px !important; font-weight: 800 !important; color: #0f3d2e !important;
+        line-height: 1.35 !important; white-space: normal; margin-top: 2px;
     }}
-    table.sig-tbl-tox img.sig-slot-img, table.sig-tbl-tox img#slot_duty,
+    /* توقيع رئيس الوحدة بنفس مقاس بقية النماذج (خط متصل أصلي) */
+    table.sig-tbl-tox img#slot_duty {{
+        height: 38px !important; max-height: 40px !important; max-width: 220px !important;
+        margin: 2px auto !important; filter: contrast(1.15);
+    }}
     table.sig-tbl-tox img#slot_officer, table.sig-tbl-tox img#slot_citizen {{
-        height: 30px !important; max-height: 32px !important; max-width: 88% !important;
+        height: 32px !important; max-height: 34px !important; max-width: 88% !important;
         margin: 1px auto !important;
     }}
     table.sig-tbl-tox .sig-head {{
@@ -7174,9 +7160,9 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-tier-balanced table.sig-tbl-tox td, .a4-tier-spacious table.sig-tbl-tox td {{
         height: auto !important; min-height: 52px !important; padding: 3px 5px !important;
     }}
-    .a4-tier-dense table.sig-tbl-tox td.tox-officer-row,
-    .a4-dense-print table.sig-tbl-tox td.tox-officer-row {{
-        min-height: 48px !important; padding: 2px 5px 4px !important;
+    .a4-tier-dense table.sig-tbl-tox td.tox-auth-row,
+    .a4-dense-print table.sig-tbl-tox td.tox-auth-row {{
+        min-height: 54px !important; padding: 2px 6px 4px !important;
     }}
     .a4-tier-dense img.sig-slot-img, .a4-dense-print img.sig-slot-img {{ max-height: 40px !important; }}
     .a4-tier-dense img#slot_duty, .a4-tier-dense img#slot_officer,
@@ -7186,10 +7172,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         height: 38px !important; max-height: 40px !important; max-width: 92% !important;
         margin: 2px auto !important; opacity: 1 !important; filter: contrast(1.15);
     }}
-    .a4-tier-dense table.sig-tbl-tox img.sig-slot-img, .a4-dense-print table.sig-tbl-tox img.sig-slot-img,
-    .a4-tier-dense table.sig-tbl-tox img#slot_duty, .a4-tier-dense table.sig-tbl-tox img#slot_officer,
-    .a4-dense-print table.sig-tbl-tox img#slot_duty, .a4-dense-print table.sig-tbl-tox img#slot_officer {{
-        height: 28px !important; max-height: 30px !important;
+    .a4-tier-dense table.sig-tbl-tox img#slot_officer, .a4-dense-print table.sig-tbl-tox img#slot_officer,
+    .a4-tier-dense table.sig-tbl-tox img#slot_citizen, .a4-dense-print table.sig-tbl-tox img#slot_citizen {{
+        height: 30px !important; max-height: 32px !important;
+    }}
+    .a4-tier-dense table.sig-tbl-tox img#slot_duty, .a4-dense-print table.sig-tbl-tox img#slot_duty {{
+        height: 36px !important; max-height: 38px !important; max-width: 200px !important;
     }}
     .a4-tier-dense .footer-qr, .a4-dense-print .footer-qr {{
         padding: 4px 7px !important; margin-top: 4px !important;
@@ -9178,30 +9166,40 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       || (sheetTxt.indexOf('مراقبة السموم') !== -1);
     if (!isTox) return;
 
-    // التخطيط الجديد من Python: صفان علويان + صف ضابط الخفر — لا تُعدّل البنية
+    // التخطيط من Python: صف علوي (استلام + ضابط) + مستطيل جازان سفلي — لا تُكسَر البنية
     var toxTbl = sheet.querySelector('table.sig-tbl-tox[data-tox-layout="2plus1"], table.sig-tbl[data-tox-layout="2plus1"]');
     if (toxTbl) {{
       sheet.dataset.toxLayoutFixed = '2plus1';
-      // ضمان ظهور صور التواقيع داخل خانات السموم
       toxTbl.querySelectorAll('img.sig-slot-img, img#slot_duty, img#slot_officer, img#slot_citizen').forEach(function(img) {{
         var src = (img.getAttribute('src') || '').trim();
         if (!src || src.indexOf('data:') !== 0) return;
+        var isDuty = ((img.id || '') === 'slot_duty');
         img.style.setProperty('display', 'block', 'important');
         img.style.setProperty('visibility', 'visible', 'important');
         img.style.setProperty('opacity', '1', 'important');
-        img.style.setProperty('max-height', '32px', 'important');
-        img.style.setProperty('height', '30px', 'important');
-        img.style.setProperty('margin', '1px auto', 'important');
+        img.style.setProperty('height', isDuty ? '38px' : '32px', 'important');
+        img.style.setProperty('max-height', isDuty ? '40px' : '34px', 'important');
+        img.style.setProperty('max-width', isDuty ? '220px' : '88%', 'important');
+        img.style.setProperty('margin', '2px auto', 'important');
         img.style.setProperty('object-fit', 'contain', 'important');
         img.style.setProperty('background', '#ffffff', 'important');
+        if (isDuty) img.style.setProperty('filter', 'contrast(1.15)', 'important');
       }});
-      // تصحيح تسميات قديمة إن وُجدت داخل الجدول فقط
-      toxTbl.querySelectorAll('th, .sig-head, .sig-person').forEach(function(el) {{
+      toxTbl.querySelectorAll('.tox-auth-seal').forEach(function(el) {{
+        el.textContent = 'اعتماد إلكتروني — رئيس وحدة الحوادث فهد بن أحمد مجرشي';
+      }});
+      toxTbl.querySelectorAll('th, .sig-head').forEach(function(el) {{
         var t = (el.textContent || '').trim();
         if (t === 'وحدة الحوادث' || t === 'رئيس وحدة الحوادث' || t === 'مصادقة إدارة مرور منطقة جازان' || t === 'مدير إدارة مرور منطقة جازان') {{
           el.textContent = 'إدارة مرور منطقة جازان';
         }}
-        if (t.indexOf('فهد بن أحمد') !== -1 || t.indexOf('مجرشي') !== -1) {{
+        if (t === 'ضابط الخفر' || t === 'ضابط الخفر المناوب' || t === 'مستلم الخفر المناوب') {{
+          el.textContent = 'إجراء قسم مرور العارضة / ضابط الخفر';
+        }}
+      }});
+      toxTbl.querySelectorAll('.tox-auth-name, td.tox-auth-row .sig-person').forEach(function(el) {{
+        var t = (el.textContent || '').trim();
+        if (!t || t.indexOf('فهد') !== -1 || t.indexOf('مجرشي') !== -1 || t.indexOf('آل هادي') !== -1 || t.indexOf('وحدة') !== -1) {{
           el.textContent = 'عقيد / محمد بن عبدالله آل هادي';
         }}
       }});
@@ -9218,7 +9216,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       return;
     }}
 
-    // أرشيف قديم بثلاثة أعمدة: حوّله إلى 2+1 دون المساس بنماذج غير السموم
+    // أرشيف قديم بثلاثة أعمدة: حوّله إلى استلام+ضابط أعلى، وجازان مستطيل سفلي
     if (sheet.dataset.toxLayoutFixed === '2plus1') return;
     var existingTbl = sheet.querySelector('table.sig-tbl');
     if (!existingTbl || !existingTbl.rows || existingTbl.rows.length < 2) return;
@@ -9229,40 +9227,39 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       return;
     }}
     var ownerDoc = sheet.ownerDocument || document;
-    var hospCell = bRow.cells[0];
-    var officerCell = bRow.cells[1];
     var authCell = bRow.cells[2];
-    // ترويسة الاعتماد
-    if (hRow.cells[2]) hRow.cells[2].textContent = 'إدارة مرور منطقة جازان';
-    // اسم صاحب التوقيع
-    var nameEl = authCell.querySelector('.sig-person, .tox-auth-name');
-    if (nameEl) {{
-      nameEl.textContent = 'عقيد / محمد بن عبدالله آل هادي';
-      nameEl.classList.add('tox-auth-name');
-    }} else {{
-      var nm = ownerDoc.createElement('div');
-      nm.className = 'sig-person tox-auth-name';
-      nm.textContent = 'عقيد / محمد بن عبدالله آل هادي';
-      authCell.insertBefore(nm, authCell.firstChild);
-    }}
-    // نقل خانة ضابط الخفر إلى صف سفلي
-    var officerClone = officerCell.cloneNode(true);
-    hRow.deleteCell(1);
-    bRow.deleteCell(1);
+    var authClone = authCell.cloneNode(true);
+    if (hRow.cells[1]) hRow.cells[1].textContent = 'إجراء قسم مرور العارضة / ضابط الخفر';
+    hRow.deleteCell(2);
+    bRow.deleteCell(2);
     if (hRow.cells[0]) hRow.cells[0].style.width = '50%';
     if (hRow.cells[1]) hRow.cells[1].style.width = '50%';
     if (bRow.cells[0]) bRow.cells[0].style.width = '50%';
     if (bRow.cells[1]) bRow.cells[1].style.width = '50%';
     var newRow = ownerDoc.createElement('tr');
     var newTd = ownerDoc.createElement('td');
-    newTd.className = 'tox-officer-row';
+    newTd.className = 'tox-auth-row';
     newTd.colSpan = 2;
     var head = ownerDoc.createElement('div');
     head.className = 'sig-head';
-    head.textContent = 'إجراء قسم مرور العارضة / ضابط الخفر';
+    head.textContent = 'إدارة مرور منطقة جازان';
     var body = ownerDoc.createElement('div');
-    body.className = 'tox-officer-body';
-    while (officerClone.firstChild) body.appendChild(officerClone.firstChild);
+    body.className = 'tox-auth-body';
+    var nm = ownerDoc.createElement('div');
+    nm.className = 'sig-person tox-auth-name';
+    nm.textContent = 'عقيد / محمد بن عبدالله آل هادي';
+    body.appendChild(nm);
+    while (authClone.firstChild) body.appendChild(authClone.firstChild);
+    var seal = body.querySelector('.tox-auth-seal, .sig-approved-badge');
+    if (seal) {{
+      seal.className = 'tox-auth-seal';
+      seal.textContent = 'اعتماد إلكتروني — رئيس وحدة الحوادث فهد بن أحمد مجرشي';
+    }} else {{
+      var sealNew = ownerDoc.createElement('div');
+      sealNew.className = 'tox-auth-seal';
+      sealNew.textContent = 'اعتماد إلكتروني — رئيس وحدة الحوادث فهد بن أحمد مجرشي';
+      body.appendChild(sealNew);
+    }}
     newTd.appendChild(head);
     newTd.appendChild(body);
     newRow.appendChild(newTd);
