@@ -843,7 +843,7 @@ def compute_monthly_stats(cases: list[dict]) -> dict:
 
 # ---------- طباعة A4 ----------
 _FONT_STACK = '"Cairo","Tajawal","Segoe UI",Tahoma,Arial,sans-serif'
-_FONT_IMPORT = "@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap');"
+_FONT_IMPORT = "@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@500;600;700;800;900&family=Tajawal:wght@500;600;700;800;900&display=swap');"
 
 
 def _zoom_controls_html() -> str:
@@ -1016,54 +1016,54 @@ def _print_shell(title: str, body: str, logo_b64: str) -> str:
 <title>{html.escape(title)}</title>
 <style>
 {_FONT_IMPORT}
-*{{box-sizing:border-box;font-family:{_FONT_STACK}!important}}
+*,*::before,*::after{{box-sizing:border-box;font-family:{_FONT_STACK}!important}}
 html,body{{direction:rtl;margin:0;padding:10px;background:#0d1316;color:#e2e8f0}}
-.toolbar{{max-width:210mm;margin:0 auto 8px;text-align:center}}
+.toolbar{{max-width:100%;width:100%;margin:0 auto 8px;text-align:center;box-sizing:border-box}}
 .print-btn{{background:linear-gradient(135deg,#d4a853,#a37a2c);color:#fff;border:none;padding:8px 20px;border-radius:8px;font-weight:800;cursor:pointer;font-size:14px}}
-.zoom-bar{{max-width:210mm;margin:0 auto 10px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center}}
+.zoom-bar{{max-width:100%;margin:0 auto 10px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center}}
 .z-btn{{background:#112924;color:#fff;border:1px solid #d4a853;border-radius:8px;padding:6px 10px;font-weight:800;cursor:pointer;font-size:12.5px}}
 .z-pct{{background:#fff;color:#000;border-radius:8px;padding:6px 10px;font-weight:900;min-width:58px;text-align:center}}
-.preview-scroll{{max-width:100%;overflow:auto;margin:0 auto}}
-.a4{{width:794px;margin:0 auto;background:#fff;color:#000000!important;border:2px solid #000000;padding:6mm 7mm;direction:rtl}}
+.preview-scroll{{width:100%;max-width:100%;overflow:auto;margin:0 auto;box-sizing:border-box;padding:0 2px}}
+.a4{{width:100%;max-width:794px;margin:0 auto;background:#fff;color:#000000!important;border:2px solid #000000;padding:6mm 8mm;direction:rtl;box-sizing:border-box;overflow:visible}}
 .a4,.a4 *{{color:#000000!important;opacity:1!important}}
 .a4 .txt-red,.a4 .note-red{{color:#c00000!important}}
-table{{width:100%;border-collapse:collapse;margin:4px 0;table-layout:fixed}}
-th,td{{border:1.4px solid #000000!important;padding:4px 6px!important;text-align:center;vertical-align:middle;font-size:13px!important;line-height:1.3!important;font-weight:700!important}}
-th{{background:#d9ead3;font-weight:800!important;height:34px!important;min-height:34px!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-td{{height:32px!important;min-height:32px!important}}
-.lbl{{background:#f4f7f6;font-weight:800!important;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-.hdr{{display:grid;grid-template-columns:1fr 2.2fr 1fr;align-items:center;gap:6px;margin-bottom:6px;border-bottom:2px solid #000;padding-bottom:4px}}
-.hdr-title{{text-align:center;font-size:16px;font-weight:800!important;line-height:1.4}}
+table{{width:100%;max-width:100%;border-collapse:collapse;margin:4px 0;table-layout:fixed;box-sizing:border-box}}
+th,td{{border:1.4px solid #000000!important;padding:4px 6px!important;text-align:center;vertical-align:middle;font-size:13px!important;line-height:1.3!important;font-weight:600!important;overflow:visible!important}}
+th{{background:#d9ead3;font-size:12.5px!important;font-weight:700!important;height:34px!important;min-height:34px!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+td{{height:32px!important;min-height:32px!important;font-size:13px!important;font-weight:600!important}}
+.lbl{{background:#f4f7f6;font-size:12.5px!important;font-weight:700!important;text-align:right;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.hdr{{display:grid;grid-template-columns:1fr 2.2fr 1fr;align-items:center;gap:6px;margin-bottom:6px;border-bottom:2px solid #000;padding-bottom:4px;width:100%;max-width:100%;box-sizing:border-box}}
+.hdr-title{{text-align:center;font-size:16px;font-weight:700!important;line-height:1.4}}
 .logo-img{{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
-.note-red{{color:#c00000!important;font-size:12.5px;font-weight:800;margin-top:6px}}
-.foot{{display:flex;justify-content:space-between;margin-top:8px;font-size:13.5px;font-weight:800}}
+.note-red{{color:#c00000!important;font-size:12.5px;font-weight:700;margin-top:6px}}
+.foot{{display:flex;justify-content:space-between;margin-top:8px;font-size:13.5px;font-weight:600;width:100%;max-width:100%;box-sizing:border-box}}
 /* متن رسمي متوازن إن وُجد في لقطات/معاينة التكميل — بلا تمدد لأسطر المخاطبة القصيرة */
-.legal-addr{{direction:rtl;text-align:center!important;text-align-last:center!important;line-height:1.35;word-spacing:normal}}
-.legal-salam{{direction:rtl;text-align:right!important;text-align-last:right!important;line-height:1.35;word-spacing:normal}}
-.legal-letter-body,.legal-prose{{direction:rtl;text-align:justify!important;text-justify:inter-word;text-align-last:right!important;line-height:1.75;word-spacing:normal;overflow-wrap:break-word;white-space:normal}}
+.legal-addr{{direction:rtl;text-align:center!important;text-align-last:center!important;line-height:1.35;word-spacing:normal;font-size:13.5px;font-weight:500}}
+.legal-salam{{direction:rtl;text-align:right!important;text-align-last:right!important;line-height:1.35;word-spacing:normal;font-size:13.5px;font-weight:500}}
+.legal-letter-body,.legal-prose{{direction:rtl;text-align:justify!important;text-justify:inter-word;text-align-last:right!important;line-height:1.75;word-spacing:normal;overflow-wrap:break-word;white-space:normal;font-size:13.5px!important;font-weight:500!important}}
 .a4-monthly .hdr-title{{font-size:15px}}
-.a4-monthly th{{height:34px!important;min-height:34px!important;font-size:13px!important}}
-.a4-monthly td{{height:32px!important;min-height:32px!important;padding:4px 6px!important;font-size:13px!important;font-weight:700!important}}
+.a4-monthly th{{height:34px!important;min-height:34px!important;font-size:12.5px!important;font-weight:700!important}}
+.a4-monthly td{{height:32px!important;min-height:32px!important;padding:4px 6px!important;font-size:13px!important;font-weight:600!important}}
 @media print{{
   @page{{size:A4 portrait;margin:5mm}}
   html,body{{margin:0!important;padding:0!important;width:100%!important;height:auto!important;min-height:0!important;background:#fff!important;overflow:visible!important;-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
   .toolbar,.no-print,.zoom-bar{{display:none!important}}
   .preview-scroll{{display:block!important;overflow:visible!important;height:auto!important;min-height:0!important;max-height:none!important;width:100%!important;margin:0!important;padding:0!important}}
-  .a4{{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0!important;border:none!important;padding:3mm 4mm!important;box-shadow:none!important;transform:none!important;box-sizing:border-box!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+  .a4{{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0!important;border:none!important;padding:5mm 6mm!important;box-shadow:none!important;transform:none!important;box-sizing:border-box!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
   .a4-monthly{{padding:2.5mm 3.5mm!important}}
-  table,.foot{{page-break-inside:avoid!important;break-inside:avoid!important}}
-  th{{height:34px!important;min-height:34px!important;font-size:13px!important;font-weight:800!important;background:#d9ead3!important;padding:4px 6px!important;border:1.4px solid #000000!important}}
-  td{{height:32px!important;min-height:32px!important;font-size:13px!important;font-weight:700!important;padding:4px 6px!important;line-height:1.3!important;border:1.4px solid #000000!important}}
-  .lbl{{background:#f4f7f6!important}}
+  table,.foot{{page-break-inside:avoid!important;break-inside:avoid!important;width:100%!important;max-width:100%!important}}
+  th{{height:34px!important;min-height:34px!important;font-size:12.5px!important;font-weight:700!important;background:#d9ead3!important;padding:4px 6px!important;border:1.4px solid #000000!important}}
+  td{{height:32px!important;min-height:32px!important;font-size:13px!important;font-weight:600!important;padding:4px 6px!important;line-height:1.3!important;border:1.4px solid #000000!important}}
+  .lbl{{background:#f4f7f6!important;font-size:12.5px!important;font-weight:700!important}}
   .bg-green{{background:#d9ead3!important}}
   .bg-blue{{background:#dce6f1!important}}
   .bg-peach{{background:#fbe4d5!important}}
   .txt-red,.note-red{{color:#c00000!important}}
   .hdr-title{{font-size:13px!important}}
   .logo-img{{display:inline-block!important;visibility:visible!important}}
-  .legal-addr{{text-align:center!important;text-align-last:center!important;word-spacing:normal!important}}
-  .legal-salam{{text-align:right!important;text-align-last:right!important;word-spacing:normal!important}}
-  .legal-letter-body,.legal-prose{{text-align:justify!important;text-align-last:right!important;line-height:1.75!important;word-spacing:normal!important;overflow-wrap:break-word!important}}
+  .legal-addr{{text-align:center!important;text-align-last:center!important;word-spacing:normal!important;font-size:13.5px!important;font-weight:500!important}}
+  .legal-salam{{text-align:right!important;text-align-last:right!important;word-spacing:normal!important;font-size:13.5px!important;font-weight:500!important}}
+  .legal-letter-body,.legal-prose{{text-align:justify!important;text-align-last:right!important;line-height:1.75!important;word-spacing:normal!important;overflow-wrap:break-word!important;font-size:13.5px!important;font-weight:500!important}}
 }}
 </style></head><body>
 <div class="toolbar no-print"><button class="print-btn" type="button">🖨️ طباعة / حفظ PDF (1/1)</button></div>
@@ -1340,34 +1340,35 @@ def build_daily_incidents_a4(payload: dict, logo_b64: str) -> str:
 <title>{html.escape(title)}</title>
 <style>
 {_FONT_IMPORT}
-*{{box-sizing:border-box;font-family:{_FONT_STACK}!important}}
+*,*::before,*::after{{box-sizing:border-box;font-family:{_FONT_STACK}!important}}
 html,body{{direction:rtl;margin:0;padding:10px;background:#0d1316;color:#e2e8f0}}
-.toolbar{{max-width:210mm;margin:0 auto 8px;text-align:center}}
+.toolbar{{max-width:100%;width:100%;margin:0 auto 8px;text-align:center;box-sizing:border-box}}
 .print-btn{{background:linear-gradient(135deg,#d4a853,#a37a2c);color:#fff;border:none;padding:8px 20px;border-radius:8px;font-weight:800;cursor:pointer;font-size:14px}}
-.zoom-bar{{max-width:210mm;margin:0 auto 10px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center}}
+.zoom-bar{{max-width:100%;margin:0 auto 10px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center}}
 .z-btn{{background:#112924;color:#fff;border:1px solid #d4a853;border-radius:8px;padding:6px 10px;font-weight:800;cursor:pointer;font-size:12.5px}}
 .z-pct{{background:#fff;color:#000;border-radius:8px;padding:6px 10px;font-weight:900;min-width:58px;text-align:center}}
-.preview-scroll{{max-width:100%;overflow:auto;margin:0 auto}}
-.a4{{width:794px;margin:0 auto;background:#fff;color:#000000!important;border:1px solid #000;padding:3mm 4mm;direction:rtl}}
+.preview-scroll{{width:100%;max-width:100%;overflow:auto;margin:0 auto;box-sizing:border-box;padding:0 2px}}
+.a4{{width:100%;max-width:794px;margin:0 auto;background:#fff;color:#000000!important;border:1px solid #000;padding:5mm 6mm;direction:rtl;box-sizing:border-box;overflow:visible}}
 .a4,.a4 *{{color:#000000!important;opacity:1!important}}
 .a4 .txt-red{{color:#c00000!important}}
 table.waqoat-grid{{
-  width:100%;border-collapse:collapse;table-layout:fixed;direction:rtl;
-  border:1.4px solid #000000!important;font-family:{_FONT_STACK}!important;
+  width:100%;max-width:100%;border-collapse:collapse;table-layout:fixed;direction:rtl;
+  border:1.4px solid #000000!important;font-family:{_FONT_STACK}!important;box-sizing:border-box;
 }}
 table.waqoat-grid th,table.waqoat-grid td{{
-  border:1.4px solid #000000!important;padding:2px 3px!important;text-align:center;vertical-align:middle;
-  font-size:12px!important;line-height:1.3!important;color:#000000!important;font-weight:700!important;
+  border:1.4px solid #000000!important;padding:3px 4px!important;text-align:center;vertical-align:middle;
+  font-size:13px!important;line-height:1.35!important;color:#000000!important;font-weight:600!important;
+  overflow:visible!important;font-family:inherit!important;
 }}
-table.waqoat-grid th,.waqoat-grid .bg-green,.waqoat-grid .bg-blue,.waqoat-grid .bg-peach{{font-weight:800!important;font-size:13.5px}}
+table.waqoat-grid th,.waqoat-grid .bg-green,.waqoat-grid .bg-blue,.waqoat-grid .bg-peach{{font-weight:700!important;font-size:12.5px!important}}
 table.waqoat-grid tr.person-row td{{
-  padding:2px 4px!important;line-height:1.3!important;
+  padding:3px 4px!important;line-height:1.35!important;font-size:13px!important;font-weight:600!important;
 }}
-.bg-green{{background-color:#d9ead3!important;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-.bg-blue{{background-color:#dce6f1!important;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-.bg-peach{{background-color:#fbe4d5!important;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-.bg-white{{background-color:#ffffff!important;font-weight:800!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-.txt-red{{color:#c00000!important;font-weight:800}}
+.bg-green{{background-color:#d9ead3!important;font-weight:700!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.bg-blue{{background-color:#dce6f1!important;font-weight:700!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.bg-peach{{background-color:#fbe4d5!important;font-weight:700!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.bg-white{{background-color:#ffffff!important;font-weight:700!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+.txt-red{{color:#c00000!important;font-weight:700}}
 td.sep-row,.sep-row{{
   height:6px!important;min-height:6px!important;max-height:6px!important;
   line-height:6px!important;padding:0!important;font-size:0!important;
@@ -1375,32 +1376,32 @@ td.sep-row,.sep-row{{
   overflow:hidden!important;
 }}
 .logo-img{{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
-.waqoat-note{{text-align:center;margin-top:4px;font-size:12.5px;font-weight:800}}
-.waqoat-foot{{display:flex;justify-content:space-between;margin-top:4px;font-size:13px;font-weight:800;direction:rtl}}
-.legal-addr{{direction:rtl;text-align:center!important;text-align-last:center!important;line-height:1.35;word-spacing:normal}}
-.legal-salam{{direction:rtl;text-align:right!important;text-align-last:right!important;line-height:1.35;word-spacing:normal}}
-.legal-letter-body,.legal-prose{{direction:rtl;text-align:justify!important;text-justify:inter-word;text-align-last:right!important;line-height:1.75;word-spacing:normal;overflow-wrap:break-word;white-space:normal}}
+.waqoat-note{{text-align:center;margin-top:4px;font-size:13.5px;font-weight:500}}
+.waqoat-foot{{display:flex;justify-content:space-between;margin-top:4px;font-size:13px;font-weight:600;direction:rtl;width:100%;max-width:100%;box-sizing:border-box}}
+.legal-addr{{direction:rtl;text-align:center!important;text-align-last:center!important;line-height:1.35;word-spacing:normal;font-size:13.5px;font-weight:500}}
+.legal-salam{{direction:rtl;text-align:right!important;text-align-last:right!important;line-height:1.35;word-spacing:normal;font-size:13.5px;font-weight:500}}
+.legal-letter-body,.legal-prose{{direction:rtl;text-align:justify!important;text-justify:inter-word;text-align-last:right!important;line-height:1.75;word-spacing:normal;overflow-wrap:break-word;white-space:normal;font-size:13.5px!important;font-weight:500!important}}
 @media print{{
   @page{{size:A4 portrait;margin:5mm}}
   html,body{{margin:0!important;padding:0!important;width:100%!important;height:auto!important;min-height:0!important;background:#fff!important;overflow:visible!important;-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
   .toolbar,.no-print,.zoom-bar{{display:none!important}}
   .preview-scroll{{display:block!important;overflow:visible!important;height:auto!important;min-height:0!important;max-height:none!important;width:100%!important;margin:0!important;padding:0!important}}
-  .legal-addr{{text-align:center!important;text-align-last:center!important;word-spacing:normal!important}}
-  .legal-salam{{text-align:right!important;text-align-last:right!important;word-spacing:normal!important}}
-  .legal-letter-body,.legal-prose{{text-align:justify!important;text-align-last:right!important;line-height:1.75!important;word-spacing:normal!important;overflow-wrap:break-word!important}}
-  .a4{{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0!important;border:none!important;padding:3mm 4mm!important;box-shadow:none!important;transform:none!important;box-sizing:border-box!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
-  table.waqoat-grid,.waqoat-foot{{page-break-inside:avoid!important;break-inside:avoid!important;border:1.4px solid #000000!important}}
+  .legal-addr{{text-align:center!important;text-align-last:center!important;word-spacing:normal!important;font-size:13.5px!important;font-weight:500!important}}
+  .legal-salam{{text-align:right!important;text-align-last:right!important;word-spacing:normal!important;font-size:13.5px!important;font-weight:500!important}}
+  .legal-letter-body,.legal-prose{{text-align:justify!important;text-align-last:right!important;line-height:1.75!important;word-spacing:normal!important;overflow-wrap:break-word!important;font-size:13.5px!important;font-weight:500!important}}
+  .a4{{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0!important;border:none!important;padding:5mm 6mm!important;box-shadow:none!important;transform:none!important;box-sizing:border-box!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+  table.waqoat-grid,.waqoat-foot{{page-break-inside:avoid!important;break-inside:avoid!important;border:1.4px solid #000000!important;width:100%!important;max-width:100%!important}}
   table.waqoat-grid th,table.waqoat-grid td{{
-    font-size:11.5px!important;padding:2px 3px!important;line-height:1.3!important;
-    border:1.4px solid #000000!important;
+    font-size:13px!important;font-weight:600!important;padding:3px 4px!important;line-height:1.35!important;
+    border:1.4px solid #000000!important;overflow:visible!important;
   }}
-  table.waqoat-grid th{{font-size:12.5px!important;background:#d9ead3!important}}
+  table.waqoat-grid th{{font-size:12.5px!important;font-weight:700!important;background:#d9ead3!important}}
   table.waqoat-grid tr.bg-blue th,table.waqoat-grid th.bg-blue{{background:#dce6f1!important}}
   table.waqoat-grid tr.bg-peach th,table.waqoat-grid th.bg-peach{{background:#fbe4d5!important}}
   table.waqoat-grid tr.bg-white th,table.waqoat-grid th.bg-white{{background:#ffffff!important}}
   table.waqoat-grid th.txt-red{{color:#c00000!important}}
   table.waqoat-grid tr.person-row td{{
-    padding:2px 4px!important;line-height:1.3!important;font-size:11.5px!important;
+    padding:3px 4px!important;line-height:1.35!important;font-size:13px!important;font-weight:600!important;
   }}
   td.sep-row,.sep-row{{
     height:6px!important;min-height:6px!important;max-height:6px!important;
@@ -1410,6 +1411,7 @@ td.sep-row,.sep-row{{
   .bg-blue{{background:#dce6f1!important}}
   .bg-peach{{background:#fbe4d5!important}}
   .txt-red,.waqoat-note{{color:#c00000!important}}
+  .waqoat-note{{font-size:13.5px!important;font-weight:500!important}}
   .logo-img{{display:inline-block!important;visibility:visible!important}}
 }}
 </style></head><body>

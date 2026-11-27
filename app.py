@@ -1391,14 +1391,15 @@ div[data-testid="stHorizontalBlock"] div.stButton > button {
 # 2. تعريف النماذج الـ 12 والصيغ النظامية المحكمة
 # =====================================================================
 def _rtl_isolate(text: str, *, as_html: bool = True) -> str:
-    """عزل القيم المختلطة (لوحة/هوية) لمنع انعكاس الأقواس في PDF."""
+    """عزل القيم المختلطة (لوحة/هوية) لمنع انعكاس الأقواس في PDF — بنفس حجم خط النص العربي."""
     v = str(text or "").strip()
     if not v:
         return "...................."
     if not as_html:
         return "\u200f" + v + "\u200f"
     return (
-        '<span dir="rtl" style="unicode-bidi:isolate; white-space:normal;">'
+        '<span class="rtl-iso" dir="ltr" style="direction:ltr;unicode-bidi:embed;'
+        'white-space:normal;font-size:inherit;font-weight:inherit;font-family:inherit;">'
         + html.escape(v)
         + "</span>"
     )
@@ -2149,21 +2150,20 @@ def _med_injury_persons_table_html(fields_map: dict) -> str:
         body_rows.append(
             "<tr>"
             + "".join(
-                f"<td class='val' style='font-size:11px !important;padding:3px 4px !important;"
-                f"line-height:1.25 !important;'>{html.escape(c)}</td>"
+                f"<td class='val'>{html.escape(c)}</td>"
                 for c in cells
             )
             + "</tr>"
         )
     inner = (
-        '<table class="data-tbl injured-persons-tbl" style="width:100%;border-collapse:collapse;'
-        'table-layout:fixed;margin:2px 0 4px 0;">'
+        '<table class="data-tbl injured-persons-tbl" style="width:100%;max-width:100%;'
+        'border-collapse:collapse;table-layout:fixed;margin:2px 0 4px 0;box-sizing:border-box;">'
         f"<thead>{head}</thead><tbody>{''.join(body_rows)}</tbody></table>"
     )
     return (
         '<tr><td colspan="4" style="padding:2px 0 !important;border:1px solid #000 !important;'
         'background:#fff !important;">'
-        '<div style="font-size:11.5px;font-weight:800;margin:2px 4px 4px;text-align:right;">'
+        '<div style="font-size:12.5px;font-weight:700;margin:2px 4px 4px;text-align:right;">'
         "بيانات المصابين المحالين</div>"
         f"{inner}</td></tr>"
     )
@@ -4831,7 +4831,7 @@ def gps_header_line(coords: str) -> str:
     return (
         f"<p>إحداثيات الموقع: {safe} "
         f"<a class='no-print' href='{href}' target='_blank' rel='noopener noreferrer' "
-        f"style='font-size:11px; font-weight:800; color:#000000; margin-right:6px;'>خرائط</a></p>"
+        f"style='font-size:11.5px; font-weight:600; color:#000000; margin-right:6px;'>خرائط</a></p>"
     )
 
 
@@ -6400,12 +6400,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         )
     elif is_medical and "ختم وتوقيع" in citizen_mode:
         citizen_box_inner = """
-        <div class='sig-guide sig-guide-print-clean' style='border:1px dashed #000000; border-radius:6px; padding:8px 6px; margin:3px 4px; font-size:11px; color:#000000; font-weight:700; line-height:1.6;'>
+        <div class='sig-guide sig-guide-print-clean' style='border:1px dashed #000000; border-radius:6px; padding:8px 6px; margin:3px 4px; font-size:12px; color:#000000; font-weight:600; line-height:1.6;'>
             التوقيع والختم الرسمي لجهة الاستلام
         </div>
         """
     elif "غياب" in citizen_mode or "امتناع" in citizen_mode:
-        citizen_box_inner = "<div style='padding:16px 0; font-weight:700; color:#7f1d1d; font-size:11px;'>غياب الطرف / امتناع مثبت بالمحضر</div>"
+        citizen_box_inner = "<div style='padding:16px 0; font-weight:600; color:#7f1d1d; font-size:12px;'>غياب الطرف / امتناع مثبت بالمحضر</div>"
     else:
         citizen_box_inner = _sig_slot_img("", "slot_citizen")
 
@@ -6453,7 +6453,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         else:
             duty_box_inner = (
                 '<div style="display:inline-block; border:1.5px solid #000000; color:#000000; '
-                'padding:3px 10px; border-radius:5px; font-size:11.5px; font-weight:800;">'
+                'padding:3px 10px; border-radius:5px; font-size:12px; font-weight:700;">'
                 "مُصادق ومُعتمد نظاماً"
                 "</div>"
             )
@@ -6772,7 +6772,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 <meta name="format-detection" content="telephone=no">
 <title>{rec['doc_no']} - {banner_title}</title>
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@500;600;700;800;900&family=Tajawal:wght@500;600;700;800;900&display=swap');
     *, *::before, *::after {{ box-sizing: border-box; font-family: "Cairo", "Tajawal", Tahoma, Arial, sans-serif !important; }}
     /* ورقة A4 معزولة داخل iframe: نص أسود عريض فوق خلفية بيضاء */
     html, body {{ color-scheme: light; direction: rtl; }}
@@ -6843,8 +6843,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     .sig-guide {{ border: 1px dashed #94a3b8; border-radius: 6px; padding: 4px; min-height: 48px; }}
     .sig-guide-hint, .sig-mode-note {{ display: none !important; }}
-    .sig-person {{ font-size: 10.5px; font-weight: 800; margin-bottom: 2px; }}
-    .sig-role {{ font-size: 10.5px; font-weight: 700; color: #000000 !important; margin-bottom: 3px; }}
+    .sig-person {{ font-size: 12px; font-weight: 700; margin-bottom: 2px; }}
+    .sig-role {{ font-size: 12px; font-weight: 600; color: #000000 !important; margin-bottom: 3px; }}
     .sig-grid {{
         display: grid; margin-top: 10px; border: 1.4px solid #000000;
         page-break-inside: avoid; break-inside: avoid;
@@ -6855,10 +6855,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         overflow: visible !important; height: auto !important; max-height: none !important;
     }}
     .sig-head {{
-        background: #f1f5f3; color: #000000 !important; font-size: 13px; font-weight: 800; padding: 9px !important; line-height: 1.65 !important; border: 1.4px solid #000000 !important;
+        background: #f1f5f3; color: #000000 !important; font-size: 12px; font-weight: 700; padding: 9px !important; line-height: 1.65 !important; border: 1.4px solid #000000 !important;
     }}
-    .sig-grid .sig-person {{ font-size: 9px; }}
-    .sig-grid .sig-role {{ font-size: 8.5px; }}
+    .sig-grid .sig-person {{ font-size: 12px; }}
+    .sig-grid .sig-role {{ font-size: 12px; }}
     .sig-grid .sig-slot-img, .sig-multi .sig-slot-img, .sig-tbl .sig-slot-img,
     img.sig-slot-img, img[id^="slot_"], #slot_duty, #slot_officer, #slot_citizen,
     #slot_p1, #slot_p2, #slot_p3, #slot_p4, #slot_p5, #slot_guarantor, #slot_bailed {{
@@ -6909,30 +6909,35 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
     }}
     @media screen {{
-        body {{ padding: 8px !important; overflow-x: hidden; overflow-y: visible !important; height: auto !important; }}
-        .toolbar {{ width: 100%; padding: 8px; }}
+        body {{ padding: 8px !important; overflow-x: auto; overflow-y: visible !important; height: auto !important; }}
+        .toolbar {{ width: 100%; max-width: 100%; padding: 8px; box-sizing: border-box; }}
         .print-btn {{ width: 100% !important; max-width: none !important; font-size: 14px; padding: 12px 14px; }}
         .a4-preview-viewport {{
             direction: rtl !important;
             width: 100% !important;
-            overflow-x: hidden !important;
+            max-width: 100% !important;
+            overflow-x: auto !important;
             overflow-y: auto !important;
             display: block !important;
-            padding: 0 !important;
+            padding: 0 2px !important;
             margin: 0 !important;
             height: auto !important;
             max-height: 1220px !important;
+            box-sizing: border-box !important;
         }}
         .a4-page-frame {{
             direction: rtl !important;
-            width: 210mm !important;
+            width: 100% !important;
+            max-width: 794px !important;
+            min-width: 0 !important;
             height: auto !important;
             min-height: 0 !important;
             max-height: 1220px !important;
-            padding: 6mm 7mm !important;
+            padding: 6mm 8mm !important;
             box-sizing: border-box !important;
             margin: 0 auto 12px auto !important;
-            overflow-x: hidden !important;
+            overflow: visible !important;
+            overflow-x: visible !important;
             overflow-y: auto !important;
             background: #ffffff !important;
             position: relative !important;
@@ -6982,14 +6987,21 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         .a4-preview-viewport {{
             direction: rtl !important;
             width: 100% !important;
-            overflow: auto !important;
+            max-width: 100% !important;
+            overflow-x: auto !important;
+            overflow-y: auto !important;
             display: block !important;
-            padding: 0 !important;
+            padding: 0 2px !important;
+            box-sizing: border-box !important;
         }}
         .a4-page-frame {{
-            width: 210mm !important;
-            max-width: none !important;
+            width: 100% !important;
+            max-width: 794px !important;
+            min-width: 0 !important;
             margin: 0 auto !important;
+            padding: 6mm 8mm !important;
+            overflow: visible !important;
+            box-sizing: border-box !important;
             transform-origin: top center !important;
         }}
         .a4-sheet, .a4-paper {{
@@ -7027,7 +7039,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     .hdr-right p {{
         margin: 0 !important; padding: 0 !important;
-        font-size: 12.5px !important; font-weight: 800 !important;
+        font-size: 12.5px !important; font-weight: 700 !important;
         line-height: 1.38 !important; color: #000000 !important;
         text-align: center !important;
     }}
@@ -7058,7 +7070,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     .hdr-left p {{
         margin: 0 !important; padding: 0 !important;
-        font-size: 11.5px !important; font-weight: 700 !important;
+        font-size: 11.5px !important; font-weight: 600 !important;
         line-height: 1.32 !important; color: #000000 !important;
         text-align: left !important;
         overflow-wrap: anywhere !important; word-break: break-word !important;
@@ -7077,8 +7089,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }}
     table.data-tbl {{
-        width: 100% !important; border-collapse: collapse !important;
-        table-layout: fixed !important; margin-bottom: 20px !important;
+        width: 100% !important; max-width: 100% !important; border-collapse: collapse !important;
+        table-layout: fixed !important; margin-bottom: 20px !important; box-sizing: border-box !important;
     }}
     .a4-paper, .a4-paper * {{
         -webkit-print-color-adjust: exact !important;
@@ -7087,30 +7099,42 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     table.data-tbl th, table.data-tbl td {{
         border: 1px solid #1e293b !important; padding: 5px 8px !important;
-        font-size: 12px !important; line-height: 1.45 !important; vertical-align: top;
-        direction: rtl; text-align: right; color: #000000 !important; font-weight: 700 !important;
+        font-size: 13px !important; line-height: 1.45 !important; vertical-align: top;
+        direction: rtl; text-align: right; color: #000000 !important; font-weight: 600 !important;
         white-space: normal !important; word-wrap: break-word !important;
         overflow-wrap: anywhere !important; word-break: break-word !important;
-        overflow: hidden !important;
+        overflow: visible !important;
+        font-family: "Cairo", "Tajawal", Tahoma, Arial, sans-serif !important;
     }}
-    table.data-tbl td.lbl {{ width: 20%; background: #f3f6f5 !important; font-weight: 800 !important; color: #000000 !important; }}
+    table.data-tbl td.lbl, table.data-tbl th {{
+        width: 20%; background: #f3f6f5 !important;
+        font-size: 12.5px !important; font-weight: 700 !important; color: #000000 !important;
+    }}
     table.data-tbl td.val {{
-        width: 30%; background: #ffffff !important; color: #000000 !important; font-weight: 700 !important;
-        white-space: normal !important; font-size: 12px !important;
-        overflow-wrap: anywhere !important; word-break: break-word !important; overflow: hidden !important;
+        width: 30%; background: #ffffff !important; color: #000000 !important;
+        font-size: 13px !important; font-weight: 600 !important;
+        white-space: normal !important;
+        overflow-wrap: anywhere !important; word-break: break-word !important; overflow: visible !important;
+        font-family: inherit !important;
     }}
     table.data-tbl td.val.plate-val, table.data-tbl td.plate-val {{
-        white-space: normal !important; overflow: hidden !important;
+        white-space: normal !important; overflow: visible !important;
         word-break: break-word !important; overflow-wrap: anywhere !important;
+        font-size: 13px !important; font-weight: 600 !important; font-family: inherit !important;
     }}
-    table.data-tbl .rtl-iso {{
-        unicode-bidi: isolate; white-space: normal !important; display: inline !important;
+    table.data-tbl .rtl-iso, table.data-tbl .mono, table.data-tbl .num,
+    table.data-tbl td.val .mono, table.data-tbl td.val code {{
+        direction: ltr !important; unicode-bidi: embed !important;
+        white-space: normal !important; display: inline !important;
         overflow-wrap: anywhere !important; word-break: break-word !important;
+        font-size: inherit !important; font-weight: inherit !important;
+        font-family: inherit !important;
     }}
     table.data-tbl td span, table.data-tbl td b, table.data-tbl td strong,
     table.sig-tbl td span, table.sig-tbl td b, table.sig-tbl td strong {{
         white-space: normal !important; display: inline !important;
         overflow-wrap: anywhere !important; word-break: break-word !important;
+        font-size: inherit !important; font-family: inherit !important;
     }}
     table.data-tbl.cols-4 td.lbl.half {{ width: 20%; }}
     table.data-tbl.cols-4 td.val.half {{ width: 30%; }}
@@ -7119,28 +7143,33 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .legal-box {{
         background: #ffffff !important; border: 1px solid #94a3b8; border-right: 4px solid #0f3d2e !important;
         border-radius: 4px; padding: 10px 12px !important; margin-bottom: 12px !important;
-        font-size: 12.5px !important; line-height: 1.75 !important;
+        font-size: 13.5px !important; line-height: 1.75 !important;
         text-align: right !important; text-align-last: right !important;
         direction: rtl !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important;
         overflow-wrap: break-word !important; word-break: normal !important; white-space: normal !important;
-        word-spacing: normal !important; color: #000000 !important; font-weight: 700 !important;
+        word-spacing: normal !important; color: #000000 !important; font-weight: 500 !important;
+        overflow: visible !important;
     }}
-    .legal-box > div.legal-title:first-child {{ margin-bottom: 8px !important; font-weight: 800 !important; text-align: right !important; }}
+    .legal-box > div.legal-title:first-child {{
+        margin-bottom: 8px !important; font-weight: 700 !important; text-align: right !important;
+        font-size: 13.5px !important;
+    }}
     .legal-box .legal-body {{
-        font-size: 12.5px !important; color: #000000 !important; font-weight: 700 !important;
+        font-size: 13.5px !important; color: #000000 !important; font-weight: 500 !important;
+        line-height: 1.75 !important;
         direction: rtl !important; overflow-wrap: break-word !important; word-break: normal !important;
         white-space: normal !important; word-spacing: normal !important;
     }}
     .legal-box > div.legal-title:first-child {{ text-align: right !important; }}
     /* المخاطبة والسلام: بلا justify حتى لا تتمدد الأسطر القصيرة */
     .legal-box .legal-addr {{
-        text-align: center !important; text-align-last: center !important; font-weight: 800 !important;
+        text-align: center !important; text-align-last: center !important; font-weight: 700 !important;
         font-size: 13.5px !important; margin: 0 0 4px 0 !important; line-height: 1.35 !important;
         padding: 0 !important; word-spacing: normal !important;
     }}
     .legal-box .legal-salam {{
-        text-align: right !important; text-align-last: right !important; font-weight: 700 !important;
-        font-size: 13px !important; margin: 0 0 6px 0 !important; line-height: 1.35 !important;
+        text-align: right !important; text-align-last: right !important; font-weight: 500 !important;
+        font-size: 13.5px !important; margin: 0 0 6px 0 !important; line-height: 1.35 !important;
         padding: 0 !important; word-spacing: normal !important;
     }}
     /* فقرة المتن فقط: ضبط كامل متوازن مع بقاء السطر الأخير يميناً */
@@ -7150,28 +7179,30 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         line-height: 1.75 !important; word-spacing: normal !important; overflow-wrap: break-word !important;
         word-break: normal !important; white-space: normal !important;
         margin: 0 !important; padding: 0 !important;
-        font-size: 12.5px !important; color: #000000 !important; font-weight: 700 !important;
+        font-size: 13.5px !important; color: #000000 !important; font-weight: 500 !important;
     }}
     table.sig-tbl {{
-        table-layout: fixed !important; width: 100% !important;
+        table-layout: fixed !important; width: 100% !important; max-width: 100% !important;
         border-collapse: collapse; margin-top: 10px; text-align: center;
-        page-break-inside: avoid; break-inside: avoid;
+        page-break-inside: avoid; break-inside: avoid; box-sizing: border-box !important;
     }}
     table.sig-multi.cols-4 > tbody > tr:first-child > td {{ width: 25% !important; }}
     table.sig-multi .sig-person, table.sig-multi .sig-head, table.sig-multi .sig-role {{
         word-break: normal !important; overflow-wrap: break-word; white-space: normal;
+        font-size: 12px !important;
     }}
-    table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #1e293b !important; padding: 8px !important; font-size: 12px; line-height: 1.45 !important; color: #000000 !important; font-weight: 800 !important; }}
-    table.sig-tbl td {{ border: 1px solid #1e293b !important; padding: 8px 6px !important; width: {col_width}; vertical-align: top; height: auto !important; min-height: 90px; max-height: none !important; overflow: visible !important; line-height: 1.45 !important; color: #000000 !important; font-weight: 700 !important; }}
+    table.sig-tbl th {{ background: #f1f5f3; border: 1px solid #1e293b !important; padding: 8px !important; font-size: 12px !important; line-height: 1.45 !important; color: #000000 !important; font-weight: 700 !important; }}
+    table.sig-tbl td {{ border: 1px solid #1e293b !important; padding: 8px 6px !important; width: {col_width}; vertical-align: top; height: auto !important; min-height: 90px; max-height: none !important; overflow: visible !important; line-height: 1.45 !important; color: #000000 !important; font-size: 12px !important; font-weight: 600 !important; }}
     /* تخطيط تحليل السموم فقط: صف علوي (استلام + ضابط) + مستطيل جازان بعرض كامل فوق QR */
     table.sig-tbl-tox {{ margin-top: 6px !important; }}
     table.sig-tbl-tox th {{
-        padding: 4px 6px !important; font-size: 11px !important; line-height: 1.3 !important;
-        background: #eef3f0 !important;
+        padding: 4px 6px !important; font-size: 12px !important; line-height: 1.3 !important;
+        background: #eef3f0 !important; font-weight: 700 !important;
     }}
     table.sig-tbl-tox td {{
         padding: 4px 5px !important; min-height: 56px !important; height: auto !important;
-        font-size: 11px !important; line-height: 1.35 !important; vertical-align: middle !important;
+        font-size: 12px !important; line-height: 1.35 !important; vertical-align: middle !important;
+        font-weight: 600 !important;
     }}
     table.sig-tbl-tox td.tox-auth-row {{
         min-height: 58px !important; padding: 3px 8px 5px !important;
@@ -7182,11 +7213,11 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         gap: 2px; text-align: center; padding: 2px 0 0;
     }}
     table.sig-tbl-tox .tox-auth-name {{
-        font-size: 12px !important; font-weight: 900 !important; color: #0b2e22 !important;
+        font-size: 12px !important; font-weight: 700 !important; color: #0b2e22 !important;
         margin: 1px 0 2px !important; letter-spacing: 0.01em;
     }}
     table.sig-tbl-tox .tox-auth-seal {{
-        font-size: 10px !important; font-weight: 800 !important; color: #0f3d2e !important;
+        font-size: 12px !important; font-weight: 600 !important; color: #0f3d2e !important;
         line-height: 1.35 !important; white-space: normal; margin-top: 2px;
     }}
     /* توقيع رئيس الوحدة بنفس مقاس بقية النماذج (خط متصل أصلي) */
@@ -7199,16 +7230,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         margin: 1px auto !important;
     }}
     table.sig-tbl-tox .sig-head {{
-        padding: 3px 6px !important; font-size: 11px !important; margin-bottom: 2px;
-        background: #e8f0ec !important;
+        padding: 3px 6px !important; font-size: 12px !important; margin-bottom: 2px;
+        background: #e8f0ec !important; font-weight: 700 !important;
     }}
-    .sig-person {{ color: #000000 !important; font-weight: 800 !important; }}
-    .sig-role {{ color: #000000 !important; font-weight: 700 !important; }}
-    .sig-head {{ color: #000000 !important; font-weight: 800 !important; border: 1.4px solid #000000 !important; }}
+    .sig-person {{ color: #000000 !important; font-size: 12px !important; font-weight: 700 !important; }}
+    .sig-role {{ color: #000000 !important; font-size: 12px !important; font-weight: 600 !important; }}
+    .sig-head {{ color: #000000 !important; font-size: 12px !important; font-weight: 700 !important; border: 1.4px solid #000000 !important; }}
     .sig-cell {{ border: 1.4px solid #000000 !important; color: #000000 !important; }}
     .sig-footer {{
         display: flex; flex-direction: column; flex: 1 1 auto;
         page-break-inside: avoid; break-inside: avoid;
+        width: 100% !important; max-width: 100% !important; box-sizing: border-box !important;
     }}
     .footer-qr {{
         margin-top: 8px !important;
@@ -7218,8 +7250,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         width: 100% !important; max-width: 100% !important;
         box-sizing: border-box !important;
         page-break-inside: avoid; break-inside: avoid;
-        color: #000000 !important; font-weight: 700 !important;
-        overflow: hidden !important;
+        color: #000000 !important; font-weight: 600 !important;
+        overflow: visible !important;
     }}
     .footer-qr > div:first-child {{
         flex: 1 1 auto; min-width: 0; text-align: right !important; padding-left: 8px !important;
@@ -7266,7 +7298,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         box-sizing: border-box !important; text-align: center;
     }}
     .att-pdf-icon {{ font-size: 16px; line-height: 1; }}
-    .att-pdf-note {{ font-size: 10px; color: #000000; font-weight: 700; }}
+    .att-pdf-note {{ font-size: 12px; color: #000000; font-weight: 600; }}
     @media print {{
         .attachment-section, .report-attachments, .attachments-box, .report-attachments img, .attachments-box img, img.att-img {{
             page-break-inside: avoid !important; break-inside: avoid !important;
@@ -7287,11 +7319,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
 
     /* ===== إطار A4 فيزيائي ثابت + مستويات كثافة بايثون ===== */
     .a4-page-frame {{
-        width: 210mm;
-        height: 297mm;
-        padding: 6mm 7mm;
+        width: 100%;
+        max-width: 794px;
+        height: auto;
+        padding: 6mm 8mm;
         box-sizing: border-box;
-        overflow: hidden;
+        overflow: visible;
         page-break-after: avoid !important;
         page-break-inside: avoid !important;
         break-after: avoid !important;
@@ -7302,6 +7335,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     .a4-sheet, .a4-paper, .a4-page, .print-area {{
         width: 100% !important;
+        max-width: 100% !important;
         height: 285mm !important;
         min-height: 285mm !important;
         max-height: 285mm !important;
@@ -7313,7 +7347,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         background: #ffffff !important;
         margin: 0 auto !important;
         padding: 0 !important;
-        overflow: hidden !important;
+        overflow: visible !important;
         page-break-after: avoid !important;
         page-break-inside: avoid !important;
     }}
@@ -7333,51 +7367,60 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
     .sig-footer {{ width: 100% !important; }}
 
-    /* spacious */
+    /* spacious — المسافات فقط؛ أحجام الخط موحّدة */
     .a4-tier-spacious .hdr-center, .a4-tier-spacious .hdr-center img, .a4-tier-spacious .hdr-logo {{
         width: 86px !important; height: 86px !important; max-width: 86px !important; max-height: 86px !important;
         min-width: 86px !important; min-height: 86px !important;
     }}
-    .a4-tier-spacious .hdr-right p {{ font-size: 13px !important; line-height: 1.42 !important; }}
-    .a4-tier-spacious .hdr-left p {{ font-size: 12.5px !important; line-height: 1.4 !important; }}
+    .a4-tier-spacious .hdr-right p {{ font-size: 12.5px !important; font-weight: 700 !important; line-height: 1.42 !important; }}
+    .a4-tier-spacious .hdr-left p {{ font-size: 11.5px !important; font-weight: 600 !important; line-height: 1.4 !important; }}
     .a4-tier-spacious .doc-banner {{
         font-size: 16px !important; padding: 9px 14px !important; margin: 10px 0 14px !important;
     }}
     .a4-tier-spacious table.data-tbl {{ margin-bottom: 12px !important; }}
-    .a4-tier-spacious table.data-tbl th, .a4-tier-spacious table.data-tbl td {{
-        font-size: 13.5px !important; line-height: 1.65 !important; padding: 10px 12px !important;
+    .a4-tier-spacious table.data-tbl th, .a4-tier-spacious table.data-tbl td.lbl {{
+        font-size: 12.5px !important; font-weight: 700 !important; line-height: 1.55 !important; padding: 8px 10px !important;
     }}
-    .a4-tier-spacious .legal-box, .a4-tier-spacious .legal-box .legal-body, .a4-tier-spacious .legal-box .legal-title {{
-        font-size: 15px !important; line-height: 2.1 !important;
+    .a4-tier-spacious table.data-tbl td, .a4-tier-spacious table.data-tbl td.val {{
+        font-size: 13px !important; font-weight: 600 !important; line-height: 1.55 !important; padding: 8px 10px !important;
+    }}
+    .a4-tier-spacious .legal-box, .a4-tier-spacious .legal-box .legal-body,
+    .a4-tier-spacious .legal-box .legal-title, .a4-tier-spacious .legal-box .legal-letter-body {{
+        font-size: 13.5px !important; font-weight: 500 !important; line-height: 1.75 !important;
     }}
     .a4-tier-spacious .legal-box {{
-        padding: 18px !important; margin: 4px 0 10px !important;
+        padding: 14px 16px !important; margin: 4px 0 10px !important;
     }}
     .a4-tier-spacious .legal-title {{ margin-bottom: 10px !important; }}
     .a4-tier-spacious table.sig-tbl td, .a4-tier-spacious .sig-cell {{
-        height: 105px !important; min-height: 105px !important; padding: 10px 8px !important; font-size: 13px !important;
+        height: 105px !important; min-height: 105px !important; padding: 10px 8px !important; font-size: 12px !important;
     }}
     .a4-tier-spacious table.sig-tbl th, .a4-tier-spacious .sig-head {{
-        padding: 8px !important; font-size: 13px !important;
+        padding: 8px !important; font-size: 12px !important;
     }}
     .a4-tier-spacious img.sig-slot-img {{ max-height: 56px !important; }}
     .a4-tier-spacious .footer-qr {{ padding: 8px 10px !important; margin-top: 8px !important; }}
 
-    /* balanced */
+    /* balanced — المسافات فقط؛ أحجام الخط موحّدة */
     .a4-tier-balanced .hdr-center, .a4-tier-balanced .hdr-center img, .a4-tier-balanced .hdr-logo {{
         width: 76px !important; height: 76px !important; max-width: 76px !important; max-height: 76px !important;
         min-width: 76px !important; min-height: 76px !important;
     }}
-    .a4-tier-balanced .hdr-right p {{ font-size: 12.5px !important; }}
+    .a4-tier-balanced .hdr-right p {{ font-size: 12.5px !important; font-weight: 700 !important; }}
+    .a4-tier-balanced .hdr-left p {{ font-size: 11.5px !important; font-weight: 600 !important; }}
     .a4-tier-balanced .doc-banner {{
         font-size: 14.5px !important; padding: 7px 12px !important; margin: 8px 0 10px !important;
     }}
     .a4-tier-balanced table.data-tbl {{ margin-bottom: 8px !important; }}
-    .a4-tier-balanced table.data-tbl th, .a4-tier-balanced table.data-tbl td {{
-        font-size: 12.5px !important; line-height: 1.5 !important; padding: 6px 9px !important;
+    .a4-tier-balanced table.data-tbl th, .a4-tier-balanced table.data-tbl td.lbl {{
+        font-size: 12.5px !important; font-weight: 700 !important; line-height: 1.45 !important; padding: 5px 8px !important;
     }}
-    .a4-tier-balanced .legal-box, .a4-tier-balanced .legal-box .legal-body, .a4-tier-balanced .legal-box .legal-title {{
-        font-size: 13px !important; line-height: 1.75 !important;
+    .a4-tier-balanced table.data-tbl td, .a4-tier-balanced table.data-tbl td.val {{
+        font-size: 13px !important; font-weight: 600 !important; line-height: 1.45 !important; padding: 5px 8px !important;
+    }}
+    .a4-tier-balanced .legal-box, .a4-tier-balanced .legal-box .legal-body,
+    .a4-tier-balanced .legal-box .legal-title, .a4-tier-balanced .legal-box .legal-letter-body {{
+        font-size: 13.5px !important; font-weight: 500 !important; line-height: 1.75 !important;
     }}
     .a4-tier-balanced .legal-box {{
         padding: 12px 14px !important; margin: 4px 0 8px !important;
@@ -7388,31 +7431,42 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-tier-balanced img.sig-slot-img {{ max-height: 48px !important; }}
     .a4-tier-balanced .footer-qr {{ padding: 6px 8px !important; margin-top: 6px !important; }}
 
-    /* dense */
+    /* dense — المسافات فقط؛ أحجام الخط موحّدة */
     .a4-tier-dense .hdr-center, .a4-tier-dense .hdr-center img, .a4-tier-dense .hdr-logo,
     .a4-dense-print .hdr-center, .a4-dense-print .hdr-center img, .a4-dense-print .hdr-logo {{
         width: 66px !important; height: 66px !important; max-width: 66px !important; max-height: 66px !important;
         min-width: 66px !important; min-height: 66px !important;
     }}
-    .a4-tier-dense .hdr-right p, .a4-dense-print .hdr-right p {{ font-size: 11.5px !important; }}
+    .a4-tier-dense .hdr-right p, .a4-dense-print .hdr-right p {{
+        font-size: 12.5px !important; font-weight: 700 !important;
+    }}
+    .a4-tier-dense .hdr-left p, .a4-dense-print .hdr-left p {{
+        font-size: 11.5px !important; font-weight: 600 !important;
+    }}
     .a4-tier-dense .doc-banner, .a4-dense-print .doc-banner {{
         font-size: 13px !important; padding: 5px 10px !important; margin: 4px 0 6px !important;
     }}
     .a4-tier-dense table.data-tbl, .a4-dense-print table.data-tbl {{ margin-bottom: 5px !important; }}
-    .a4-tier-dense table.data-tbl th, .a4-tier-dense table.data-tbl td,
-    .a4-dense-print table.data-tbl th, .a4-dense-print table.data-tbl td {{
-        font-size: 11px !important; line-height: 1.35 !important; padding: 3.5px 6px !important;
+    .a4-tier-dense table.data-tbl th, .a4-tier-dense table.data-tbl td.lbl,
+    .a4-dense-print table.data-tbl th, .a4-dense-print table.data-tbl td.lbl {{
+        font-size: 12.5px !important; font-weight: 700 !important; line-height: 1.4 !important; padding: 4px 6px !important;
     }}
-    .a4-tier-dense .legal-box, .a4-tier-dense .legal-box .legal-body, .a4-tier-dense .legal-box .legal-title,
-    .a4-dense-print .legal-box, .a4-dense-print .legal-box .legal-body, .a4-dense-print .legal-box .legal-title {{
-        font-size: 11.5px !important; line-height: 1.45 !important;
+    .a4-tier-dense table.data-tbl td, .a4-tier-dense table.data-tbl td.val,
+    .a4-dense-print table.data-tbl td, .a4-dense-print table.data-tbl td.val {{
+        font-size: 13px !important; font-weight: 600 !important; line-height: 1.4 !important; padding: 4px 6px !important;
+    }}
+    .a4-tier-dense .legal-box, .a4-tier-dense .legal-box .legal-body,
+    .a4-tier-dense .legal-box .legal-title, .a4-tier-dense .legal-box .legal-letter-body,
+    .a4-dense-print .legal-box, .a4-dense-print .legal-box .legal-body,
+    .a4-dense-print .legal-box .legal-title, .a4-dense-print .legal-box .legal-letter-body {{
+        font-size: 13.5px !important; font-weight: 500 !important; line-height: 1.75 !important;
     }}
     .a4-tier-dense .legal-box, .a4-dense-print .legal-box {{
         padding: 7px 10px !important; margin: 2px 0 5px !important;
     }}
     .a4-tier-dense table.sig-tbl td, .a4-tier-dense .sig-cell,
     .a4-dense-print table.sig-tbl td, .a4-dense-print .sig-cell {{
-        height: 54px !important; min-height: 54px !important; padding: 4px 5px !important; font-size: 11px !important;
+        height: 54px !important; min-height: 54px !important; padding: 4px 5px !important; font-size: 12px !important;
     }}
     .a4-tier-dense table.sig-tbl-tox td, .a4-dense-print table.sig-tbl-tox td,
     .a4-tier-balanced table.sig-tbl-tox td, .a4-tier-spacious table.sig-tbl-tox td {{
@@ -7486,7 +7540,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             height: auto !important;
             max-height: none !important;
             min-height: 0 !important;
-            padding: 3mm 4mm !important;
+            padding: 5mm 6mm !important;
             box-sizing: border-box !important;
             overflow: visible !important;
             margin: 0 !important;
@@ -7610,7 +7664,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         .a4-paper .footer-qr, .a4-sheet .footer-qr, .footer-qr {{
             width: 100% !important; max-width: 100% !important;
-            box-sizing: border-box !important; overflow: hidden !important;
+            box-sizing: border-box !important; overflow: visible !important;
         }}
         a, a[href^="tel"] {{
             color: #000000 !important; text-decoration: none !important; pointer-events: none !important;
@@ -7669,10 +7723,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
                     {sig_table_html}
                     <div class="footer-qr">
                         <div>
-                            <div style="font-size:10.5px; font-weight:800; color:#000000;">
+                            <div style="font-size:11.5px; font-weight:600; color:#000000;">
                                 وثيقة رسمية مقفلة إلكترونياً ضد الكشط أو التعديل اليدوي — قسم مرور العارضة.
                             </div>
-                            <div style="font-size:10px; font-weight:700; color:#000000;">ختم التحقق الرقمي (SHA-256 Seal): {rec['verify_hash']}</div>
+                            <div style="font-size:11.5px; font-weight:600; color:#000000;">ختم التحقق الرقمي (SHA-256 Seal): {rec['verify_hash']}</div>
                         </div>
                         <img src="data:image/png;base64,{qr_b64}" style="width:42px; height:42px;" />
                     </div>
