@@ -805,6 +805,18 @@ def _zoom_script() -> str:
       apply();
     });
   });
+  function waitImagesThen(fn){
+    var imgs=Array.prototype.slice.call(document.images||[]);
+    var pending=imgs.length; var done=false;
+    function finish(){ if(done) return; done=true; try{ fn(); }catch(e){} }
+    var timer=setTimeout(finish, 250);
+    if(!pending){ clearTimeout(timer); setTimeout(finish, 250); return; }
+    imgs.forEach(function(im){
+      if(im.complete){ pending-=1; if(pending<=0){ clearTimeout(timer); setTimeout(finish, 50); } return; }
+      var tick=function(){ pending-=1; if(pending<=0){ clearTimeout(timer); setTimeout(finish, 50); } };
+      im.addEventListener('load', tick); im.addEventListener('error', tick);
+    });
+  }
   window.addEventListener('beforeprint', function(){
     clearForPrint();
     forceOpenEmptyCells(sheet);
@@ -816,8 +828,10 @@ def _zoom_script() -> str:
       ev.preventDefault();
       clearForPrint();
       forceOpenEmptyCells(sheet);
-      try { window.focus(); } catch(e) {}
-      window.print();
+      waitImagesThen(function(){
+        try { window.focus(); } catch(e) {}
+        try { window.print(); } catch(e2) {}
+      });
     });
   }
   apply();

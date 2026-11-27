@@ -240,8 +240,11 @@ def serialize_attachments(items: list) -> str:
 
 
 def resolve_record_attachments(rec: dict | None) -> list:
-    """استخراج المرفقات من أي مصدر متاح في السجل (موحّد لكل النماذج بما فيها التنازل)."""
+    """استخراج المرفقات من أي مصدر متاح في السجل (موحّد للنماذج التي تدعم المرفقات)."""
     rec = rec or {}
+    # إقرار الصلح والتنازل: بدون مرفقات مصورة نهائياً
+    if str(rec.get("form_id") or "") == "decl_settlement":
+        return []
     items = parse_attachments(rec.get("attachment_b64"))
     if items:
         return items
@@ -252,25 +255,33 @@ def resolve_record_attachments(rec: dict | None) -> list:
     return parse_attachments(fields.get("attachment_b64") or fields.get("attachments"))
 
 
+def _clear_settlement_attachment_state() -> None:
+    """تفريغ مفاتيح صور/مرفقات الجلسة عند نموذج التنازل فقط — دون لمس النماذج الأخرى."""
+    st.session_state.attachments = []
+    st.session_state.attachment_b64 = ""
+    st.session_state.show_attachments_in_print = False
+
+
 def build_attachment_section_html(att_items: list | None, *, show: bool = True) -> tuple[str, int]:
     """
     مولّد HTML موحّد لقسم «المرفقات المصورة المعتمدة في التقرير» لكل النماذج.
+    صور مباشرة بـ inline-block (أبعاد صريحة) لتظهر في الطباعة/PDF دون انهيار flex/grid.
     يعيد (html, image_count).
     """
     if not show or not att_items:
         return "", 0
-    cards: list[str] = []
+    parts: list[str] = []
     image_count = 0
     for att in att_items:
         if not isinstance(att, dict):
             continue
         kind = (att.get("kind") or "image").lower()
         if kind == "pdf":
-            cards.append(
-                '<div class="att-card att-pdf-card">'
-                '<div class="att-pdf-icon">📄</div>'
-                '<div class="att-pdf-note">مرفق PDF</div>'
-                "</div>"
+            parts.append(
+                '<span class="att-pdf-card">'
+                '<span class="att-pdf-icon">📄</span>'
+                '<span class="att-pdf-note">مرفق PDF</span>'
+                "</span>"
             )
             continue
         b64 = str(att.get("b64") or "").strip()
@@ -280,25 +291,22 @@ def build_attachment_section_html(att_items: list | None, *, show: bool = True) 
             continue
         image_count += 1
         mime = html.escape(str(att.get("mime") or "image/png"))
-        cards.append(
-            f'<div class="att-card page-keep">'
-            f'<img class="att-img" src="data:{mime};base64,{b64}" alt="" />'
-            f"</div>"
+        parts.append(
+            f'<img class="att-img" src="data:{mime};base64,{b64}" alt="" '
+            'style="display:inline-block;vertical-align:middle;'
+            'width:130px;height:88px;margin:3px;'
+            'object-fit:cover;border:1px solid #cbd5e1;border-radius:4px;'
+            'visibility:visible;opacity:1;" />'
         )
-    if not cards:
+    if not parts:
         return "", 0
-    if image_count <= 1:
-        grid_cls = "attachment-grid atts-n1"
-    elif image_count == 2:
-        grid_cls = "attachment-grid atts-n2"
-    elif image_count == 3:
-        grid_cls = "attachment-grid atts-n3"
-    else:
-        grid_cls = "attachment-grid atts-n4"
     block = (
-        '<div class="attachment-section page-keep">'
+        '<div class="attachment-section report-attachments page-keep">'
         '<div class="attachment-title">📎 المرفقات المصورة المعتمدة في التقرير</div>'
-        f'<div class="{grid_cls}">{"".join(cards)}</div>'
+        '<div class="attachments-box attachment-grid" '
+        'style="width:100%;text-align:center;padding:4px 0;'
+        'page-break-inside:avoid;break-inside:avoid;">'
+        f'{"".join(parts)}</div>'
         "</div>"
     )
     return block, image_count
@@ -1370,7 +1378,21 @@ def render_print_button(report_html: str, btn_label: str = "🖨️ طباعة /
             }} else {{
                 htmlContent = topBar + htmlContent;
             }}
-            const autoPrint = "<" + "script>window.addEventListener('load',function(){{setTimeout(function(){{try{{window.print();}}catch(e){{}}}},700);}});<" + "/script>";
+            const autoPrint = "<" + "script>(function(){{"
+                + "function waitImagesThen(fn){{"
+                + "var imgs=Array.prototype.slice.call(document.images||[]);"
+                + "var pending=imgs.length;var done=false;"
+                + "function finish(){{if(done)return;done=true;try{{fn();}}catch(e){{}}}}"
+                + "var timer=setTimeout(finish,250);"
+                + "if(!pending){{clearTimeout(timer);setTimeout(finish,250);return;}}"
+                + "imgs.forEach(function(im){{"
+                + "if(im.complete){{pending-=1;if(pending<=0){{clearTimeout(timer);setTimeout(finish,50);}}return;}}"
+                + "var tick=function(){{pending-=1;if(pending<=0){{clearTimeout(timer);setTimeout(finish,50);}}}};"
+                + "im.addEventListener('load',tick);im.addEventListener('error',tick);"
+                + "}});}}"
+                + "function go(){{waitImagesThen(function(){{try{{window.focus();}}catch(e1){{}}try{{window.print();}}catch(e2){{}}}});}}"
+                + "window.addEventListener('load',function(){{setTimeout(go,400);}});"
+                + "}})();<" + "/script>";
             if (/<\\/body>/i.test(htmlContent)) {{
                 htmlContent = htmlContent.replace(/<\\/body>/i, autoPrint + "<" + "/body>");
             }} else {{
@@ -1401,6 +1423,12 @@ def normalize_official_legal_text(text: str) -> str:
     raw = str(text or "")
     if not raw.strip():
         return ""
+    # خطابات معالجة المصابين: أزل «رقم (...)» من مطلع المتن أينما وُجدت (معاينة/طباعة/أرشيف قديم)
+    raw = re.sub(
+        r"إشارةً?\s*إلى\s+الحادث\s+المروري\s+رقم\s*\([^)]*\)\s*،\s*",
+        "إشارةً إلى الحادث المروري الواقع لدينا، ",
+        raw,
+    )
     raw = (
         raw.replace("\xa0", " ")
         .replace("\u202f", " ")
@@ -1578,6 +1606,15 @@ def _field_rule_matches(rule: dict, fields_map: dict) -> bool:
     if isinstance(nested, list):
         return bool(nested) and all(_field_rule_matches(part, fields_map) for part in nested)
     source = str(fields_map.get(rule.get("key"), "") or "")
+    if "min_count" in rule:
+        try:
+            m = re.search(r"\d+", source)
+            n = int(m.group()) if m else 0
+            return n >= int(rule["min_count"])
+        except Exception:
+            return False
+    if "equals" in rule:
+        return source.strip() == str(rule.get("equals") or "").strip()
     tokens = rule.get("contains_any") or []
     return any(token in source for token in tokens)
 
@@ -1598,7 +1635,7 @@ _DEMO_AGE_BY_FORM = {
     "med_toxicology": "29",
 }
 _DEMO_CLASS_BY_FORM = {
-    "med_injury": ("cases_mode", "عدة مصابين في حادث مروري (مرفق بيانهم)"),
+    "med_injury": ("injured_count", "2"),
     "med_morgue": ("deceased_count", "عدة جثامين (أكثر من متوفى في الحادث)"),
 }
 _DEMO_OTHER_DECEASED = (
@@ -1697,6 +1734,176 @@ def _count_visible_tokens(index: int) -> list[str]:
     return [_COUNT_TOKEN[n] for n in range(index, 6)]
 
 
+_MED_INJURY_HEALTH_OPTS = ["خفيفة", "متوسطة", "بليغة"]
+_MED_INJURY_ROLE_OPTS = [
+    "سائق", "راكب", "مشاة", "سقوط", "دهس",
+    "قائد دباب", "قائد سكوتر", "قائد دراجة هوائية",
+]
+_MED_INJURY_COUNT_OPTS = [str(n) for n in range(1, 11)]
+_MED_INJURY_SAMPLES = [
+    {},
+    {"name": "موسى بن يحيى بن أحمد خبراني", "nationality": "سعودي", "age": "28", "nid": "1098877665", "health": "متوسطة", "role": "سائق"},
+    {"name": "ريان بن موسى خبراني", "nationality": "سعودي", "age": "19", "nid": "1123344556", "health": "خفيفة", "role": "راكب"},
+    {"name": "عادل محمد علي", "nationality": "يمني", "age": "34", "nid": "2456677889", "health": "بليغة", "role": "سائق"},
+    {"name": "سعيد بن فهد العسيري", "nationality": "سعودي", "age": "41", "nid": "1045566778", "health": "خفيفة", "role": "مشاة"},
+    {"name": "ماجد بن سالم القحطاني", "nationality": "سعودي", "age": "22", "nid": "1088990011", "health": "متوسطة", "role": "قائد دباب"},
+]
+
+
+def _injured_count(values: dict | None) -> int:
+    """عدد المصابين المحالين (1–10) من الحقل الجديد أو الحقول inj*_name."""
+    values = values or {}
+    raw = str(values.get("injured_count") or "").strip()
+    m = re.search(r"\d+", raw)
+    if m:
+        try:
+            return max(1, min(10, int(m.group())))
+        except Exception:
+            pass
+    named = 0
+    for i in range(1, 11):
+        if str(values.get(f"inj{i}_name") or "").strip():
+            named = i
+    if named:
+        return named
+    # توافق السجلات القديمة
+    if _extra_people_listed(values.get("other_injured")) or _text_suggests_plural(values.get("cases_mode")) is True:
+        return 2
+    return 1
+
+
+def _sync_med_injury_aliases(values: dict | None) -> dict:
+    """مزامنة مفاتيح الأرشيف/التوافق مع الحقول الجديدة للمصابين."""
+    v = dict(values or {})
+    # ترحيل سجل قديم لمرة واحدة إن لم تُملأ الحقول الجديدة
+    if not str(v.get("inj1_name") or "").strip() and str(v.get("party_name") or "").strip():
+        v["inj1_name"] = str(v.get("party_name") or "").strip()
+        legacy_id = str(v.get("party_id") or "").strip()
+        if " - " in legacy_id:
+            nid_part, nat_part = legacy_id.split(" - ", 1)
+            v.setdefault("inj1_id", nid_part.strip())
+            v.setdefault("inj1_nationality", nat_part.strip())
+        else:
+            v.setdefault("inj1_id", legacy_id)
+        plate = str(v.get("plate_no") or "").strip()
+        if plate and not str(v.get("inj1_role") or "").strip():
+            for opt in _MED_INJURY_ROLE_OPTS:
+                if opt in plate:
+                    v["inj1_role"] = opt
+                    break
+    n = _injured_count(v)
+    v["injured_count"] = str(n)
+    v["cases_mode"] = f"{n} مصابين محالين" if n >= 2 else "مصاب واحد في حادث مروري"
+    v["party_name"] = str(v.get("inj1_name") or v.get("party_name") or "").strip()
+    v["party_id"] = str(v.get("inj1_id") or v.get("party_id") or "").strip()
+    v["plate_no"] = str(v.get("inj1_role") or v.get("plate_no") or "").strip() or "-"
+    return v
+
+
+def _injured_person_block(index: int, sample: dict | None = None) -> list[dict]:
+    sample = sample or {}
+    count_rule = {"key": "injured_count", "min_count": index}
+    pfx = f"inj{index}_"
+    return [
+        {"key": f"{pfx}name", "label": "الاسم", "type": "text",
+         "sample": sample.get("name", ""), "visible_if": count_rule, "a4_hidden": True},
+        {"key": f"{pfx}nationality", "label": "الجنسية", "type": "text",
+         "sample": sample.get("nationality", "سعودي"), "visible_if": count_rule, "a4_hidden": True},
+        {"key": f"{pfx}age", "label": "العمر", "type": "text",
+         "sample": sample.get("age", "30"), "visible_if": count_rule, "a4_hidden": True},
+        {"key": f"{pfx}id", "label": "رقم الهوية", "type": "text",
+         "sample": sample.get("nid", ""), "visible_if": count_rule, "a4_hidden": True, "normalize_digits": True},
+        {"key": f"{pfx}health", "label": "الحالة الصحية", "type": "select",
+         "options": list(_MED_INJURY_HEALTH_OPTS),
+         "sample": sample.get("health", "خفيفة"), "visible_if": count_rule, "a4_hidden": True},
+        {"key": f"{pfx}role", "label": "نوع المشاركة", "type": "select",
+         "options": list(_MED_INJURY_ROLE_OPTS),
+         "sample": sample.get("role", "سائق"), "visible_if": count_rule, "a4_hidden": True},
+    ]
+
+
+def _med_injury_fields() -> list[dict]:
+    fields = [
+        {"key": "incident_no", "label": "رقم الحادث وتاريخه", "type": "text",
+         "sample": "460986112 - 1448/06/08 هـ"},
+        {"key": "hospital_name", "label": "المستشفى / الجهة الصحية الموجه لها", "type": "text",
+         "sample": "مستشفى العارضة العام - قسم الطوارئ"},
+        {"key": "injured_count", "label": "عدد المصابين المحالين", "type": "select",
+         "options": list(_MED_INJURY_COUNT_OPTS), "sample": "1", "a4_keep_pair": True},
+    ]
+    for index in range(1, 11):
+        sample = _MED_INJURY_SAMPLES[index] if index < len(_MED_INJURY_SAMPLES) else {}
+        fields.extend(_injured_person_block(index, sample))
+    fields.extend([
+        {"key": "transport_way", "label": "وسيلة الوصول للمستشفى والحالة الأولية", "type": "select", "options": [
+            "نُقل بواسطة فرقة الهلال الأحمر السعودي من موقع الحادث",
+            "راجع الطوارئ عن طريق ذويه / نقل خاص إثر الحادث",
+            "حضر برفقة الدورية المرورية المباشرة للموقع",
+            OTHER_OPTION,
+        ], "sample": "نُقل بواسطة فرقة الهلال الأحمر السعودي من موقع الحادث",
+         "a4_compose": {"fmt": "{value}", "append_if": "transport_way_other", "append_fmt": " — {extra}"}},
+        _other_field("transport_way", "اكتب وسيلة النقل يدوياً"),
+        {"key": "security_hold", "label": "التوجيه الأمني بعد تلقي العلاج", "type": "select", "options": [
+            "يُطلق سراحه بعد تلقي العلاج اللازم ما لم يكن مطلوباً لجهة أخرى",
+            "يُتحفظ عليه أمنياً ويُشعر قسم مرور العارضة قبل خروجه لاستكمال التحقيق",
+            "يبقى تحت الملاحظة الطبية مع تزويدنا بالتقرير الطبي العاجل",
+            OTHER_OPTION,
+        ], "sample": "يُطلق سراحه بعد تلقي العلاج اللازم ما لم يكن مطلوباً لجهة أخرى",
+         "a4_compose": {"fmt": "{value}", "append_if": "security_hold_other", "append_fmt": " — {extra}"}},
+        _other_field("security_hold", "اكتب التوجيه الأمني يدوياً"),
+    ])
+    return fields
+
+
+def _med_injury_persons_table_html(fields_map: dict) -> str:
+    """جدول رسمي لجميع المصابين داخل ورقة A4."""
+    n = _injured_count(fields_map)
+    head = (
+        "<tr>"
+        "<th style='width:5%'>م</th>"
+        "<th style='width:22%'>الاسم</th>"
+        "<th style='width:12%'>الجنسية</th>"
+        "<th style='width:8%'>العمر</th>"
+        "<th style='width:16%'>رقم الهوية</th>"
+        "<th style='width:18%'>نوع المشاركة</th>"
+        "<th style='width:19%'>الحالة الصحية</th>"
+        "</tr>"
+    )
+    body_rows = []
+    for i in range(1, n + 1):
+        pfx = f"inj{i}_"
+        cells = [
+            str(i),
+            str(fields_map.get(f"{pfx}name") or "-").strip() or "-",
+            str(fields_map.get(f"{pfx}nationality") or "-").strip() or "-",
+            str(fields_map.get(f"{pfx}age") or "-").strip() or "-",
+            str(fields_map.get(f"{pfx}id") or "-").strip() or "-",
+            str(fields_map.get(f"{pfx}role") or "-").strip() or "-",
+            str(fields_map.get(f"{pfx}health") or "-").strip() or "-",
+        ]
+        body_rows.append(
+            "<tr>"
+            + "".join(
+                f"<td class='val' style='font-size:11px !important;padding:3px 4px !important;"
+                f"line-height:1.25 !important;'>{html.escape(c)}</td>"
+                for c in cells
+            )
+            + "</tr>"
+        )
+    inner = (
+        '<table class="data-tbl injured-persons-tbl" style="width:100%;border-collapse:collapse;'
+        'table-layout:fixed;margin:2px 0 4px 0;">'
+        f"<thead>{head}</thead><tbody>{''.join(body_rows)}</tbody></table>"
+    )
+    return (
+        '<tr><td colspan="4" style="padding:2px 0 !important;border:1px solid #000 !important;'
+        'background:#fff !important;">'
+        '<div style="font-size:11.5px;font-weight:800;margin:2px 4px 4px;text-align:right;">'
+        "بيانات المصابين المحالين</div>"
+        f"{inner}</td></tr>"
+    )
+
+
 def _agr(singular: str, plural: str, is_plural: bool) -> str:
     """اختيار صياغة المفرد أو الجمع."""
     return plural if is_plural else singular
@@ -1735,7 +1942,9 @@ def _detect_people_count(values: dict, form_id: str = "") -> int:
     if fid == "decl_settlement" or values.get("party_count"):
         return max(1, _count_parties(values))
 
-    if fid == "med_injury" or values.get("cases_mode"):
+    if fid == "med_injury" or values.get("injured_count") or values.get("cases_mode"):
+        if values.get("injured_count") or any(str(k).startswith("inj") and str(k).endswith("_name") for k in values):
+            return max(1, _injured_count(values))
         hint = _text_suggests_plural(values.get("cases_mode"))
         if hint is True or _extra_people_listed(values.get("other_injured")):
             return 2
@@ -1775,11 +1984,8 @@ def _field_display_label(form_id: str, field: dict, values: dict) -> str:
     plural = _is_plural_case(values, form_id)
     if form_id == "med_injury":
         mapping = {
-            "party_name": ("اسم المصاب الرباعي", "اسم المصاب الأول الرباعي"),
-            "party_id": ("رقم الهوية / الإقامة والجنسية", "رقم الهوية / الإقامة والجنسية للمصاب الأول"),
-            "plate_no": ("بيانات المركبة وصفته بالحادث", "بيانات المركبة وصفته بالحادث (المصاب الأول)"),
+            "injured_count": ("عدد المصابين المحالين",) * 2,
             "security_hold": ("التوجيه الأمني بعد تلقي العلاج", "التوجيه الأمني بعد تلقي العلاج للمصابين"),
-            "other_injured": ("بيان المصابين الإضافيين (الاسم، الهوية، الصفة، الإصابة الظاهرة)",) * 2,
         }
         if key in mapping:
             return mapping[key][1] if plural else mapping[key][0]
@@ -1855,32 +2061,25 @@ def _format_medical_letter_html(recipient_raw: str, body_html: str) -> str:
 
 
 def _med_injury_legal(m: dict) -> str:
-    plural = _is_plural_case(m, "med_injury")
-    mode_raw = str((m or {}).get("cases_mode") or "").strip()
-    # صياغة واضحة للمفرد دون تكرار جمع/أول
+    m = _sync_med_injury_aliases(m or {})
+    n = _injured_count(m)
+    plural = n >= 2
+    mode_text = f"{n} مصابين محالين للعلاج" if plural else "مصاباً واحداً محالاً للعلاج"
+    mode = _rtl_isolate(mode_text, as_html=True)
     if plural:
-        mode_text = mode_raw or "عدة مصابين في حادث مروري"
-        data_label = "وبيانات المصاب الرئيسي"
-        extras = ""
-        if str(m.get("other_injured") or "").strip():
-            extras = f"، وبيان المصابين الإضافيين: ({_val(m, 'other_injured')})"
         aid_clause = "وإسعافهم ومعالجتهم وتنويم من تستدعي حالته الصحية ذلك"
         report_clause = "وموافاتنا بتقرير طبي مفصل ومعتمد لكل حالة يوضح نوع الإصابات ومدة الشفاء المقررة"
         exit_clause = "حيال خروجهم"
         arrive_clause = "والواصلين إليكم"
     else:
-        mode_text = "مصاب واحد في حادث مروري" if ("واحد" in mode_raw or not mode_raw) else mode_raw
-        data_label = "وبيانات المصاب"
-        extras = ""
         aid_clause = "وإسعافه ومعالجته وتنويمه إن تستدعي حالته الصحية ذلك"
         report_clause = "وموافاتنا بتقرير طبي مفصل ومعتمد يوضح نوع الإصابة ومدة الشفاء المقررة"
         exit_clause = "حيال خروجه"
         arrive_clause = "والواصل إليكم"
-    mode = _rtl_isolate(mode_text, as_html=True) if mode_text else _val(m, "cases_mode")
+    # بيانات المصابين تُعرض في جدول A4 — المتن يذكر الإحالة ووسيلة الوصول والتوجيه فقط
     body = (
-        f"إشارةً إلى الحادث المروري رقم ({_val(m, 'incident_no')})، نبعث لسعادتكم ({mode})، {data_label}: "
-        f"({_val(m, 'party_name')} - هوية: {_val(m, 'party_id')} - {_val(m, 'plate_no')})"
-        f"{extras}، {arrive_clause} ({_sel(m, 'transport_way')}). "
+        f"إشارةً إلى الحادث المروري الواقع لدينا، نبعث لسعادتكم ({mode})، "
+        f"{arrive_clause} ({_sel(m, 'transport_way')}). "
         f"نأمل الأمر بإجراء الكشف الطبي اللازم {aid_clause}، {report_clause}، "
         f"مع اعتماد التوجيه الأمني التالي {exit_clause}: ({_sel(m, 'security_hold')})."
     )
@@ -2821,36 +3020,7 @@ TRAFFIC_FORMS = {
         "category": "إحالة طبية",
         "allow_absence": True,
         "require_image": False,
-        "fields": [
-            {"key": "incident_no", "label": "رقم الحادث وتاريخه", "type": "text", "sample": "460986112 - 1448/06/08 هـ"},
-            {"key": "hospital_name", "label": "المستشفى / الجهة الصحية الموجه لها", "type": "text", "sample": "مستشفى العارضة العام - قسم الطوارئ"},
-            {"key": "cases_mode", "label": "تصنيف الإحالة والعدد", "type": "select", "options": [
-                "مصاب واحد في حادث مروري",
-                "عدة مصابين في حادث مروري (مرفق بيانهم)"
-            ], "sample": "عدة مصابين في حادث مروري (مرفق بيانهم)"},
-            {"key": "party_name", "label": "اسم المصاب الرباعي", "type": "text", "sample": "موسى بن يحيى بن أحمد خبراني"},
-            {"key": "party_id", "label": "رقم الهوية / الإقامة والجنسية", "type": "text", "sample": "1098877665 - سعودي"},
-            {"key": "plate_no", "label": "بيانات المركبة وصفته بالحادث", "type": "text", "sample": "تويوتا هايلوكس (ب ر د 3318) - قائد المركبة"},
-            {"key": "transport_way", "label": "وسيلة الوصول للمستشفى والحالة الأولية", "type": "select", "options": [
-                "نُقل بواسطة فرقة الهلال الأحمر السعودي من موقع الحادث",
-                "راجع الطوارئ عن طريق ذويه / نقل خاص إثر الحادث",
-                "حضر برفقة الدورية المرورية المباشرة للموقع",
-                OTHER_OPTION,
-            ], "sample": "نُقل بواسطة فرقة الهلال الأحمر السعودي من موقع الحادث",
-             "a4_compose": {"fmt": "{value}", "append_if": "transport_way_other", "append_fmt": " — {extra}"}},
-            _other_field("transport_way", "اكتب وسيلة النقل يدوياً"),
-            {"key": "security_hold", "label": "التوجيه الأمني بعد تلقي العلاج", "type": "select", "options": [
-                "يُطلق سراحه بعد تلقي العلاج اللازم ما لم يكن مطلوباً لجهة أخرى",
-                "يُتحفظ عليه أمنياً ويُشعر قسم مرور العارضة قبل خروجه لاستكمال التحقيق",
-                "يبقى تحت الملاحظة الطبية مع تزويدنا بالتقرير الطبي العاجل",
-                OTHER_OPTION,
-            ], "sample": "يُطلق سراحه بعد تلقي العلاج اللازم ما لم يكن مطلوباً لجهة أخرى",
-             "a4_compose": {"fmt": "{value}", "append_if": "security_hold_other", "append_fmt": " — {extra}"}},
-            _other_field("security_hold", "اكتب التوجيه الأمني يدوياً"),
-            {"key": "other_injured", "label": "بيان المصابين الإضافيين (الاسم، الهوية، الصفة، الإصابة الظاهرة)", "type": "textarea",
-             "sample": "2- ريان بن موسى خبراني | هوية: 1123344556 | مرافق | إصابة متوسطة بالكتف الأيمن.\n3- عادل محمد علي | إقامة: 2456677889 | قائد الطرف الثاني | رضوض وكدمات متفرقة.",
-             "visible_if": {"key": "cases_mode", "contains_any": ["عدة مصابين"]}},
-        ],
+        "fields": _med_injury_fields(),
         "legal_fn": _med_injury_legal,
     },
 
@@ -5635,6 +5805,9 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool, form_
         return "".join(rows)
 
     compact_settlement = form_id == "decl_settlement"
+    compact_injury = form_id == "med_injury"
+    if compact_injury:
+        fields_map = _sync_med_injury_aliases(fields_map)
     party_count = _count_parties(fields_map) if compact_settlement else 0
     skip_keys = set()
     if compact_settlement:
@@ -5645,16 +5818,30 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool, form_
             ):
                 skip_keys.add(f"p{index}_{suffix}")
         skip_keys.update({"settlement_basis", "compensation", "injury_statement"})
+    if compact_injury:
+        # الحقول الفردية للمصابين تُعرض في جدول مستقل
+        for index in range(1, 11):
+            for suffix in ("name", "nationality", "age", "id", "health", "role"):
+                skip_keys.add(f"inj{index}_{suffix}")
+        skip_keys.update({"cases_mode", "other_injured", "party_name", "party_id", "plate_no"})
 
     rows = []
     pending = None
     parties_emitted = False
+    injury_table_emitted = False
     for field in form_def["fields"]:
         key = str(field.get("key") or "")
         if key in skip_keys:
             continue
         if not _include_field_on_a4(field, fields_map):
             continue
+        # بعد حقل العدد: أدرج جدول المصابين ثم أكمل وسيلة الوصول والتوجيه
+        if compact_injury and key == "transport_way" and not injury_table_emitted:
+            if pending:
+                rows.append(f"<tr>{pair_cells(pending[0], pending[1], True, isolate=pending[2])}</tr>")
+                pending = None
+            rows.append(_med_injury_persons_table_html(fields_map))
+            injury_table_emitted = True
         shown = _resolve_select_display(fields_map, key, str(fields_map.get(key, "-") or "-"))
         label = str(field.get("a4_label") or field["label"])
         # تسميات المفرد/الجمع في جدول A4 (مثل: اسم المصاب بدل المصاب الأول)
@@ -5726,6 +5913,12 @@ def _data_table_rows(form_def: dict | None, fields_map: dict, dense: bool, form_
                 f"<tr>{pair_cells('أساس الصلح والإقرار المروري', summary, True)}</tr>"
             )
             parties_emitted = True
+    if compact_injury and not injury_table_emitted:
+        if pending:
+            rows.append(f"<tr>{pair_cells(pending[0], pending[1], True, isolate=pending[2])}</tr>")
+            pending = None
+        rows.append(_med_injury_persons_table_html(fields_map))
+        injury_table_emitted = True
     if pending:
         rows.append(f"<tr>{pair_cells(pending[0], pending[1], True, isolate=pending[2])}</tr>")
     return "".join(rows)
@@ -5741,6 +5934,17 @@ def _distinct_role(name: str, role: str) -> str:
 
 def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, interactive_sig: bool = False) -> str:
     fields_map = rec["fields"] if isinstance(rec.get("fields"), dict) else json.loads(rec["fields_json"])
+    if not isinstance(fields_map, dict):
+        fields_map = {}
+    if str(rec.get("form_id") or "") == "med_injury":
+        fields_map = _sync_med_injury_aliases(fields_map)
+        rec = {**rec, "fields": fields_map}
+        if not str(rec.get("party_name") or "").strip():
+            rec["party_name"] = fields_map.get("party_name") or fields_map.get("inj1_name") or ""
+        if not str(rec.get("party_id") or "").strip():
+            rec["party_id"] = fields_map.get("party_id") or fields_map.get("inj1_id") or ""
+        if not str(rec.get("plate_no") or "").strip() or str(rec.get("plate_no") or "").strip() == "-":
+            rec["plate_no"] = fields_map.get("plate_no") or fields_map.get("inj1_role") or "-"
     if form_def:
         field_count = sum(1 for field in form_def["fields"] if _include_field_on_a4(field, fields_map))
     else:
@@ -6155,9 +6359,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + "</div></div>"
         )
 
-    show_atts = bool(rec.get("show_attachments_in_print", True))
-    att_items = resolve_record_attachments(rec)
-    attachment_block, image_count = build_attachment_section_html(att_items, show=show_atts)
+    form_id_now = str(rec.get("form_id") or "")
+    # إقرار صلح وتنازل: بلا مرفقات مصورة في المعاينة/PDF
+    if form_id_now == "decl_settlement":
+        show_atts = False
+        att_items = []
+        attachment_block, image_count = "", 0
+    else:
+        show_atts = bool(rec.get("show_attachments_in_print", True))
+        att_items = resolve_record_attachments(rec)
+        attachment_block, image_count = build_attachment_section_html(att_items, show=show_atts)
 
     if is_letter:
         legal_box_title = "صيغة الخطاب الرسمي الموجه لحجز مرور محافظة أبو عريش:"
@@ -6173,7 +6384,6 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     text_len = len(re.sub(r"<[^>]+>", "", cleaned_legal_text or ""))
     rows_cnt = rows_html.count("<tr")
     sigs_cnt = len(party_signers) + (1 if is_toxicology else 2)
-    form_id_now = str(rec.get("form_id") or "")
     # الصور المضغوطة لا تفرض dense إذا كان النص والجدول قصيرين
     images_force_dense = image_count > 0 and not (rows_cnt <= 5 and text_len <= 480)
     if (
@@ -6622,65 +6832,46 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .attachment-title {{
         font-size: 12px; font-weight: 800; color: #000000; margin-bottom: 6px; text-align: right;
     }}
+    /* مرفقات الطباعة: inline-block بأبعاد صريحة — بدون flex/grid/calc(%) التي تنهار في PDF */
+    .attachment-section.report-attachments,
+    .report-attachments,
+    .attachments-box,
     .attachment-grid {{
-        display: grid !important; width: 100% !important; align-items: stretch !important;
-        overflow: hidden !important; box-sizing: border-box !important;
-    }}
-    .attachment-grid.atts-n1 {{
-        grid-template-columns: 1fr !important; justify-items: center !important; gap: 10px !important;
-    }}
-    .attachment-grid.atts-n2 {{
-        grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important;
-    }}
-    .attachment-grid.atts-n3 {{
-        grid-template-columns: repeat(3, 1fr) !important; gap: 8px !important;
-    }}
-    .attachment-grid.atts-n4 {{
-        grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important;
-    }}
-    .att-card, .att-card.page-keep {{
-        min-width: 0; text-align: center; width: 100%;
+        width: 100% !important; text-align: center !important; padding: 4px 0 !important;
         page-break-inside: avoid !important; break-inside: avoid !important;
+        box-sizing: border-box !important; background: transparent !important;
+        display: block !important;
     }}
-    .att-card img, img.att-img {{
-        width: 100% !important; max-width: 100% !important; display: block !important; margin: 0 auto !important;
-        border: 1px solid #cbd5e1 !important; border-radius: 6px !important; background: #fff !important;
+    .report-attachments img,
+    .attachments-box img,
+    img.att-img {{
+        display: inline-block !important; vertical-align: middle !important;
+        width: 130px !important; height: 88px !important; margin: 3px !important;
+        object-fit: cover !important; border: 1px solid #cbd5e1 !important; border-radius: 4px !important;
+        background: #f8fafc !important; visibility: visible !important; opacity: 1 !important;
         page-break-inside: avoid !important; break-inside: avoid !important;
-    }}
-    .attachment-grid.atts-n1 .att-card img, .attachment-grid.atts-n1 img.att-img {{
-        width: 70% !important; height: 200px !important; max-height: 200px !important; object-fit: contain !important;
-    }}
-    .attachment-grid.atts-n2 .att-card img, .attachment-grid.atts-n2 img.att-img {{
-        width: 100% !important; height: 180px !important; max-height: 180px !important; object-fit: cover !important;
-    }}
-    .attachment-grid.atts-n3 .att-card img, .attachment-grid.atts-n3 img.att-img {{
-        width: 100% !important; height: 165px !important; max-height: 165px !important; object-fit: cover !important;
-    }}
-    .attachment-grid.atts-n4 .att-card img, .attachment-grid.atts-n4 img.att-img {{
-        width: 100% !important; height: 145px !important; max-height: 145px !important; object-fit: cover !important;
+        -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+        box-sizing: border-box !important;
     }}
     .att-caption, .att-pdf-name {{ display: none !important; }}
     .att-pdf-card {{
-        border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; background: #fff;
-        max-height: 75px; display: flex; align-items: center; justify-content: center; gap: 4px;
+        display: inline-block !important; vertical-align: middle !important;
+        width: 130px !important; height: 88px !important; margin: 3px !important;
+        border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px 4px; background: #f8fafc;
+        box-sizing: border-box !important; text-align: center;
     }}
     .att-pdf-icon {{ font-size: 16px; line-height: 1; }}
     .att-pdf-note {{ font-size: 10px; color: #000000; font-weight: 700; }}
     @media print {{
-        .attachment-section, .att-card, .att-card img, img.att-img, table.sig-tbl {{
+        .attachment-section, .report-attachments, .attachments-box, .report-attachments img, .attachments-box img, img.att-img {{
             page-break-inside: avoid !important; break-inside: avoid !important;
         }}
-        .attachment-grid.atts-n1 .att-card img, .attachment-grid.atts-n1 img.att-img {{
-            width: 70% !important; height: 200px !important; max-height: 200px !important; object-fit: contain !important;
-        }}
-        .attachment-grid.atts-n2 .att-card img, .attachment-grid.atts-n2 img.att-img {{
-            width: 100% !important; height: 180px !important; max-height: 180px !important; object-fit: cover !important;
-        }}
-        .attachment-grid.atts-n3 .att-card img, .attachment-grid.atts-n3 img.att-img {{
-            width: 100% !important; height: 165px !important; max-height: 165px !important; object-fit: cover !important;
-        }}
-        .attachment-grid.atts-n4 .att-card img, .attachment-grid.atts-n4 img.att-img {{
-            width: 100% !important; height: 145px !important; max-height: 145px !important; object-fit: cover !important;
+        .report-attachments img, .attachments-box img, img.att-img {{
+            display: inline-block !important; width: 39mm !important; height: 26mm !important;
+            margin: 3px !important; object-fit: cover !important;
+            visibility: visible !important; opacity: 1 !important;
+            border: 1px solid #cbd5e1 !important; border-radius: 4px !important;
+            -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
         }}
     }}
     .a4-sheet table a, .a4-sheet .legal-box a, a[href^="tel"] {{
@@ -6967,6 +7158,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         .signatures, .sig-footer, table.sig-tbl, .sig-grid, .footer-qr, .attachment-section {{
             page-break-inside: avoid !important; break-inside: avoid !important;
+        }}
+        .report-attachments, .attachments-box, .attachment-grid {{
+            width: 100% !important; text-align: center !important; padding: 4px 0 !important;
+            page-break-inside: avoid !important; break-inside: avoid !important; display: block !important;
+        }}
+        .report-attachments img, .attachments-box img, img.att-img {{
+            display: inline-block !important; width: 39mm !important; height: 26mm !important;
+            margin: 3px !important; object-fit: cover !important;
+            visibility: visible !important; opacity: 1 !important;
+            border: 1px solid #cbd5e1 !important; border-radius: 4px !important;
+            -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
         }}
         .a4-paper .footer-qr, .a4-sheet .footer-qr, .footer-qr {{
             width: 100% !important; max-width: 100% !important;
@@ -7857,6 +8059,12 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + 'box-shadow:0 10px 28px rgba(0,0,0,0.45) !important;}}'
             + '.a4-sheet,.a4-paper{{width:100% !important;height:auto !important;min-height:0 !important;'
             + 'max-height:none !important;margin:0 auto !important;}}'
+            + '.report-attachments,.attachments-box,.attachment-grid{{width:100% !important;text-align:center !important;'
+            + 'padding:4px 0 !important;page-break-inside:avoid !important;break-inside:avoid !important;display:block !important;}}'
+            + '.report-attachments img,.attachments-box img,img.att-img{{display:inline-block !important;vertical-align:middle !important;'
+            + 'width:130px !important;height:88px !important;margin:3px !important;object-fit:cover !important;'
+            + 'border:1px solid #cbd5e1 !important;border-radius:4px !important;'
+            + 'visibility:visible !important;opacity:1 !important;}}'
             + '}}'
             + '@media print{{.no-print{{display:none !important;}}'
             + 'html,body{{width:100% !important;height:auto !important;margin:0 !important;padding:0 !important;overflow:hidden !important;}}'
@@ -7865,13 +8073,30 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + 'html.a4-print-desktop .a4-page-frame,body.a4-print-desktop .a4-page-frame{{height:276mm !important;max-height:276mm !important;}}'
             + '.a4-sheet,.a4-paper{{height:945px !important;max-height:945px !important;overflow:hidden !important;width:100% !important;margin:0 auto !important;}}'
             + 'html.a4-print-desktop .a4-sheet,html.a4-print-desktop .a4-paper,'
-            + 'body.a4-print-desktop .a4-sheet,body.a4-print-desktop .a4-paper{{height:1035px !important;max-height:1035px !important;}}}}'
+            + 'body.a4-print-desktop .a4-sheet,body.a4-print-desktop .a4-paper{{height:1035px !important;max-height:1035px !important;}}'
+            + '.report-attachments,.attachments-box{{width:100% !important;text-align:center !important;padding:4px 0 !important;'
+            + 'page-break-inside:avoid !important;break-inside:avoid !important;display:block !important;}}'
+            + '.report-attachments img,.attachments-box img,img.att-img{{display:inline-block !important;width:39mm !important;height:26mm !important;'
+            + 'margin:3px !important;object-fit:cover !important;visibility:visible !important;opacity:1 !important;'
+            + 'border:1px solid #cbd5e1 !important;border-radius:4px !important;'
+            + '-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}}}}'
             + '</style></head><body style="margin:0;padding:12px;background:#0f172a;direction:rtl;width:100%;height:auto;overflow:auto;display:flex;flex-direction:column;align-items:center;">'
             + topBar + frameHtml
             + '<' + 'script>(function(){{'
             + 'window.__khafarPrintWin=true;document.__khafarPrintWin=true;'
             + 'var IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);'
             + 'window.__khafarIsIOS=IS_IOS;'
+            + 'function waitImagesThen(fn){{'
+            + 'var imgs=Array.prototype.slice.call(document.images||[]);'
+            + 'var pending=imgs.length;var done=false;'
+            + 'function finish(){{if(done)return;done=true;try{{fn();}}catch(e){{}}}}'
+            + 'var timer=setTimeout(finish,250);'
+            + 'if(!pending){{clearTimeout(timer);setTimeout(finish,250);return;}}'
+            + 'imgs.forEach(function(im){{'
+            + 'if(im.complete){{pending-=1;if(pending<=0){{clearTimeout(timer);setTimeout(finish,50);}}return;}}'
+            + 'var tick=function(){{pending-=1;if(pending<=0){{clearTimeout(timer);setTimeout(finish,50);}}}};'
+            + 'im.addEventListener("load",tick);im.addEventListener("error",tick);'
+            + '}});}}'
             + 'function getPrintHeightTargets(){{var ios=IS_IOS;return {{isIOS:ios,TARGET_H_PX:ios?945:1035,FRAME_H_PX:ios?960:1040,FRAME_H_MM:ios?"254mm":"276mm"}};}}'
             + 'function applyPrintPhysicalSize(doc){{doc=doc||document;var t=getPrintHeightTargets();'
             + 'try{{var root=doc.documentElement,body=doc.body;'
@@ -7980,7 +8205,8 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + 'function balanceA4Page(rootDoc){{var doc=rootDoc||document;applyPrintPhysicalSize(doc);'
             + 'stepDownFitA4(doc);expandLegalToFillSpace(doc);applyPrintPhysicalSize(doc);}}'
             + 'window.stepDownFitA4=stepDownFitA4;window.expandLegalToFillSpace=expandLegalToFillSpace;window.balanceA4Page=balanceA4Page;'
-            + 'function go(){{try{{balanceA4Page(document);}}catch(e){{}}try{{window.focus();}}catch(e2){{}}try{{window.print();}}catch(e3){{}}}}'
+            + 'function go(){{waitImagesThen(function(){{try{{balanceA4Page(document);}}catch(e){{}}'
+            + 'try{{window.focus();}}catch(e2){{}}try{{window.print();}}catch(e3){{}}}});}}'
             + 'if(document.fonts&&document.fonts.ready){{document.fonts.ready.then(function(){{setTimeout(go,450);}});}}'
             + 'else{{setTimeout(go,450);}}'
             + 'window.addEventListener("load",function(){{setTimeout(go,700);}});'
@@ -8003,11 +8229,39 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             return;
         }}
         var printWin = window.open("", "_blank");
+        function waitDocImagesThen(fn, rootDoc) {{
+            var doc = rootDoc || document;
+            var imgs = Array.prototype.slice.call(doc.images || []);
+            var pending = imgs.length;
+            var done = false;
+            function finish() {{
+                if (done) return;
+                done = true;
+                try {{ fn(); }} catch (eW) {{}}
+            }}
+            var timer = setTimeout(finish, 250);
+            if (!pending) {{ clearTimeout(timer); setTimeout(finish, 250); return; }}
+            imgs.forEach(function(im) {{
+                if (im.complete) {{
+                    pending -= 1;
+                    if (pending <= 0) {{ clearTimeout(timer); setTimeout(finish, 50); }}
+                    return;
+                }}
+                var tick = function() {{
+                    pending -= 1;
+                    if (pending <= 0) {{ clearTimeout(timer); setTimeout(finish, 50); }}
+                }};
+                im.addEventListener("load", tick);
+                im.addEventListener("error", tick);
+            }});
+        }}
         if (!printWin || printWin.closed || typeof printWin.closed === "undefined") {{
             var hint = document.getElementById("iosPrintHint");
             if (hint) hint.style.display = "block";
             try {{ prepareA4Print(); }} catch (e3) {{}}
-            try {{ window.print(); }} catch (e4) {{}}
+            waitDocImagesThen(function() {{
+                try {{ window.print(); }} catch (e4) {{}}
+            }});
             return;
         }}
         var hintHide = document.getElementById("iosPrintHint");
@@ -8018,7 +8272,10 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             printWin.document.write(cleanHtml);
             printWin.document.close();
         }} catch (e5) {{
-            try {{ prepareA4Print(); window.print(); }} catch (e6) {{}}
+            try {{ prepareA4Print(); }} catch (e6a) {{}}
+            waitDocImagesThen(function() {{
+                try {{ window.print(); }} catch (e6) {{}}
+            }});
         }}
         setTimeout(function() {{ try {{ restoreA4Preview(); }} catch (e7) {{}} }}, 1200);
     }}
@@ -8275,6 +8532,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
       page-break-after: avoid !important;
       page-break-inside: avoid !important;
       break-inside: avoid !important;
+    }}
+    .report-attachments, .attachments-box, .attachment-grid {{
+      width: 100% !important; text-align: center !important; padding: 4px 0 !important;
+      page-break-inside: avoid !important; break-inside: avoid !important; display: block !important;
+    }}
+    .report-attachments img, .attachments-box img, img.att-img {{
+      display: inline-block !important; width: 39mm !important; height: 26mm !important;
+      margin: 3px !important; object-fit: cover !important;
+      visibility: visible !important; opacity: 1 !important;
+      border: 1px solid #cbd5e1 !important; border-radius: 4px !important;
+      -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
     }}
   }}
 </style>
@@ -9025,7 +9293,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     var sigHeads = sheet.querySelectorAll('table.sig-tbl th, .sig-head');
     var sigCells = sheet.querySelectorAll('table.sig-tbl td, .sig-cell');
     var sigImgs = sheet.querySelectorAll('img.sig-slot-img');
-    var attImgs = sheet.querySelectorAll('.att-card img');
+    var attImgs = sheet.querySelectorAll('.report-attachments img, .attachments-box img, img.att-img');
     var attSec = sheet.querySelector('.attachment-section');
     var footerQr = sheet.querySelector('.footer-qr');
 
@@ -9119,7 +9387,7 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         attSec.style.setProperty('padding', '4px 6px', 'important');
         attSec.style.setProperty('flex', '0 0 auto', 'important');
       }}
-      // لا تُصغَّر صور المرفقات هنا — المقاسات الموحّدة من CSS (.atts-n1..n4) تبقى كما هي
+      // لا تُصغَّر صور المرفقات هنا — المقاس الثابت inline-block (130×88 / 39×26mm) من CSS
       sigHeads.forEach(function(th) {{
         th.style.setProperty('font-size', '9.2px', 'important');
         th.style.setProperty('padding', '2px 4px', 'important');
@@ -10146,13 +10414,16 @@ def consume_pending_archive_recall() -> None:
         for ak in (f"{fid}_person_age", "med_person_age", "person_age", "age"):
             st.session_state[f"{prefix}{ak}"] = age_val
 
-    # مرفقات الوثيقة (إن وُجدت) بدون التواقيع القديمة
-    att_raw = rec.get("attachment_b64") or fields_map.get("attachment_b64") or ""
-    if att_raw:
-        st.session_state.attachment_b64 = att_raw
-        st.session_state.attachments = parse_attachments(att_raw)
-    if "show_attachments_in_print" in rec:
-        st.session_state.show_attachments_in_print = bool(rec.get("show_attachments_in_print"))
+    # مرفقات الوثيقة (إن وُجدت) بدون التواقيع القديمة — مستثناة من إقرار الصلح والتنازل
+    if fid == "decl_settlement":
+        _clear_settlement_attachment_state()
+    else:
+        att_raw = rec.get("attachment_b64") or fields_map.get("attachment_b64") or ""
+        if att_raw:
+            st.session_state.attachment_b64 = att_raw
+            st.session_state.attachments = parse_attachments(att_raw)
+        if "show_attachments_in_print" in rec:
+            st.session_state.show_attachments_in_print = bool(rec.get("show_attachments_in_print"))
 
     recv_name = str(rec.get("receiver_name") or fields_map.get("receiver_name") or "").strip()
     recv_role = str(rec.get("receiver_role") or fields_map.get("receiver_role") or "").strip()
@@ -10536,7 +10807,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
                     <div>
                         <span class="badge-{cat_badge_cls}">قسم مرور العارضة</span>
-                        <h3 style="margin:6px 0 2px 0; color:#ffffff; font-size:20px;">{form_def['icon']} {_form_display_title(form_def, {k: st.session_state.get(f'inp_{fid}_{k}', '') for k in ('cases_mode', 'deceased_count', 'party_count')}, fid)}</h3>
+                        <h3 style="margin:6px 0 2px 0; color:#ffffff; font-size:20px;">{form_def['icon']} {_form_display_title(form_def, {k: st.session_state.get(f'inp_{fid}_{k}', '') for k in ('cases_mode', 'injured_count', 'deceased_count', 'party_count')}, fid)}</h3>
                         <div style="font-size:13px; color:#f3cc7a; font-weight:700;">{form_def.get('official_title', '')}</div>
                     </div>
                     <div style="font-size:12.5px; color:#d4a853; font-weight:700;">
@@ -10590,7 +10861,7 @@ if st.session_state.nav_tab == "النماذج الميدانية":
             def _label_values_snapshot() -> dict:
                 snap = dict(current_values)
                 for peek_key in (
-                    "cases_mode", "deceased_count", "party_count",
+                    "cases_mode", "injured_count", "deceased_count", "party_count",
                     "waiver_status", "legal_mode", "other_injured", "other_deceased",
                 ):
                     wpeek = f"inp_{fid}_{peek_key}"
@@ -10660,6 +10931,42 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 else:
                     render_field_grid([by_key["party_name"], by_key["party_id"]])
                 render_field_grid([by_key[key] for key in ("party_phone", "vehicle_desc", "plate_no", "vehicle_state")])
+            elif fid == "med_injury":
+                by_key = {fld["key"]: fld for fld in form_def["fields"]}
+                # رأس الخطاب: المستشفى ثم عدد المصابين
+                for top_key in ("hospital_name", "injured_count"):
+                    if top_key in by_key and not _is_unified_ref_field(by_key[top_key]):
+                        current_values[top_key] = render_field(by_key[top_key])
+                injured_n = _injured_count(current_values)
+                for idx_inj in range(1, injured_n + 1):
+                    st.markdown(f"**المصاب رقم {idx_inj}**")
+                    row1 = st.columns(2)
+                    with row1[0]:
+                        current_values[f"inj{idx_inj}_name"] = render_field(by_key[f"inj{idx_inj}_name"])
+                    with row1[1]:
+                        current_values[f"inj{idx_inj}_nationality"] = render_field(by_key[f"inj{idx_inj}_nationality"])
+                    row2 = st.columns(2)
+                    with row2[0]:
+                        current_values[f"inj{idx_inj}_age"] = render_field(by_key[f"inj{idx_inj}_age"])
+                    with row2[1]:
+                        current_values[f"inj{idx_inj}_id"] = render_field(by_key[f"inj{idx_inj}_id"])
+                    row3 = st.columns(2)
+                    with row3[0]:
+                        current_values[f"inj{idx_inj}_health"] = render_field(by_key[f"inj{idx_inj}_health"])
+                    with row3[1]:
+                        current_values[f"inj{idx_inj}_role"] = render_field(by_key[f"inj{idx_inj}_role"])
+                # وسيلة الوصول والتوجيه الأمني (+ حقول أخرى إن وُجدت)
+                for fld in form_def["fields"]:
+                    k = str(fld.get("key") or "")
+                    if not k or k in current_values or _is_unified_ref_field(fld):
+                        continue
+                    if k.startswith("inj"):
+                        continue
+                    if not _field_is_visible(fld, current_values):
+                        continue
+                    current_values[k] = render_field(fld)
+                current_values = _sync_med_injury_aliases(current_values)
+                st.caption("بيانات كل مصاب منظمة في صف مستقل، وتظهر مجمّعة في جدول رسمي داخل ورقة A4 عند الطباعة.")
             elif fid in {"decl_settlement", "decl_flee_waiver", "decl_animal_hit"}:
                 pair_slot = 0
                 pair_cols = None
@@ -10727,6 +11034,9 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                         if _primary_ref_key != "incident_no":
                             current_values["incident_no"] = current_values[_primary_ref_key]
 
+            if fid == "med_injury":
+                current_values = _sync_med_injury_aliases(current_values)
+
             capture_last_incident_meta(fid, current_values, form_def)
 
             if fid == "decl_hit_run":
@@ -10740,104 +11050,107 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     }
                     open_form_from_catalog("decl_flee_waiver")
 
-            att_label = (
-                "📸 إرفاق صورة إشعار المخالفة (مطلوب لحوكمة الإلغاء بالهيئة المرورية)"
-                if form_def["require_image"]
-                else "📎 إرفاق صورة الهوية / التقرير الأولي أو مرفق داعم (اختياري)"
-            )
-            # رافع جوال موحّد لكل النماذج (بما فيها إقرار صلح وتنازل)
-            _att_mu_key = f"att_mu_{st.session_state.doc_no}"
-            uploaded_files = khafar_file_uploader(
-                att_label,
-                key=_att_mu_key,
-                accept_multiple_files=True,
-                allow_pdf=True,
-                preserve_alpha=False,
-                disabled=st.session_state.citizen_locked,
-                help=UPLOAD_HELP_CAPTION,
-            )
-            # ادمج المرفقات مرة واحدة فقط لكل بصمة مكوّن — يمنع إعادة الضغط وثقل الصفحة في كل rerun
-            _mu_token = str(st.session_state.get(f"_khafar_mu_token_{_att_mu_key}") or "")
-            _merged_key = f"_khafar_att_merged_token_{st.session_state.doc_no}"
-            if (
-                uploaded_files
-                and not st.session_state.citizen_locked
-                and _mu_token
-                and st.session_state.get(_merged_key) != _mu_token
-            ):
-                existing = list(st.session_state.get("attachments") or [])
-                if not existing and st.session_state.get("attachment_b64"):
-                    existing = parse_attachments(st.session_state.attachment_b64)
-                known = {attachment_fingerprint(a) for a in existing}
-                added = 0
-                for uf in uploaded_files:
-                    item, err = process_uploaded_attachment_with_status(uf, purpose="attachment")
-                    if not item:
-                        st.warning(err or "⚠️ نوع الملف غير مدعوم، يرجى إرفاق صورة أو ملف PDF.")
-                        continue
-                    fp = attachment_fingerprint(item)
-                    if fp in known:
-                        continue
-                    existing.append(item)
-                    known.add(fp)
-                    added += 1
-                st.session_state[_merged_key] = _mu_token
-                if added:
-                    st.session_state.attachments = existing
-                    sync_attachments_to_session()
-                    st.success("✅ تم إرفاق المرفق بنجاح وجاهز للظهور في التقرير المطبوع")
-                    st.toast(f"تم حفظ {added} مرفق في الجلسة", icon="📎")
+            # إقرار صلح وتنازل: بدون رفع/معاينة/طباعة مرفقات مصورة
+            if fid == "decl_settlement":
+                _clear_settlement_attachment_state()
+            else:
+                att_label = (
+                    "📸 إرفاق صورة إشعار المخالفة (مطلوب لحوكمة الإلغاء بالهيئة المرورية)"
+                    if form_def["require_image"]
+                    else "📎 إرفاق صورة الهوية / التقرير الأولي أو مرفق داعم (اختياري)"
+                )
+                _att_mu_key = f"att_mu_{st.session_state.doc_no}"
+                uploaded_files = khafar_file_uploader(
+                    att_label,
+                    key=_att_mu_key,
+                    accept_multiple_files=True,
+                    allow_pdf=True,
+                    preserve_alpha=False,
+                    disabled=st.session_state.citizen_locked,
+                    help=UPLOAD_HELP_CAPTION,
+                )
+                # ادمج المرفقات مرة واحدة فقط لكل بصمة مكوّن — يمنع إعادة الضغط وثقل الصفحة في كل rerun
+                _mu_token = str(st.session_state.get(f"_khafar_mu_token_{_att_mu_key}") or "")
+                _merged_key = f"_khafar_att_merged_token_{st.session_state.doc_no}"
+                if (
+                    uploaded_files
+                    and not st.session_state.citizen_locked
+                    and _mu_token
+                    and st.session_state.get(_merged_key) != _mu_token
+                ):
+                    existing = list(st.session_state.get("attachments") or [])
+                    if not existing and st.session_state.get("attachment_b64"):
+                        existing = parse_attachments(st.session_state.attachment_b64)
+                    known = {attachment_fingerprint(a) for a in existing}
+                    added = 0
+                    for uf in uploaded_files:
+                        item, err = process_uploaded_attachment_with_status(uf, purpose="attachment")
+                        if not item:
+                            st.warning(err or "⚠️ نوع الملف غير مدعوم، يرجى إرفاق صورة أو ملف PDF.")
+                            continue
+                        fp = attachment_fingerprint(item)
+                        if fp in known:
+                            continue
+                        existing.append(item)
+                        known.add(fp)
+                        added += 1
+                    st.session_state[_merged_key] = _mu_token
+                    if added:
+                        st.session_state.attachments = existing
+                        sync_attachments_to_session()
+                        st.success("✅ تم إرفاق المرفق بنجاح وجاهز للظهور في التقرير المطبوع")
+                        st.toast(f"تم حفظ {added} مرفق في الجلسة", icon="📎")
 
-            st.checkbox(
-                "إظهار المرفق المصور في التقرير المطبوع",
-                key="show_attachments_in_print",
-                help="عند التفعيل تُدرج الصور المرفوعة داخل ورقة A4 ونسخة الطباعة/PDF.",
-            )
+                st.checkbox(
+                    "إظهار المرفق المصور في التقرير المطبوع",
+                    key="show_attachments_in_print",
+                    help="عند التفعيل تُدرج الصور المرفوعة داخل ورقة A4 ونسخة الطباعة/PDF.",
+                )
 
-            persisted_atts = list(st.session_state.get("attachments") or [])
-            if not persisted_atts and st.session_state.get("attachment_b64"):
-                persisted_atts = parse_attachments(st.session_state.attachment_b64)
-                st.session_state.attachments = persisted_atts
+                persisted_atts = list(st.session_state.get("attachments") or [])
+                if not persisted_atts and st.session_state.get("attachment_b64"):
+                    persisted_atts = parse_attachments(st.session_state.attachment_b64)
+                    st.session_state.attachments = persisted_atts
 
-            if persisted_atts:
-                st.markdown("##### 🖼️ معاينة المرفقات المحفوظة في الجلسة")
-                for idx, att in enumerate(persisted_atts):
-                    kind = (att.get("kind") or "image").lower()
-                    mime = att.get("mime") or ("application/pdf" if kind == "pdf" else "image/png")
-                    try:
-                        raw_bytes = base64.b64decode(att.get("b64") or "")
-                    except Exception:
-                        raw_bytes = b""
-                    c_prev, c_dl, c_del = st.columns([3, 1, 1])
-                    with c_prev:
-                        if kind == "pdf":
-                            st.info(f"📄 مستند PDF: **{att.get('name', 'مرفق.pdf')}**")
-                        elif raw_bytes:
-                            st.image(raw_bytes, caption=att.get("name") or f"مرفق {idx + 1}", use_container_width=True)
-                        else:
-                            st.warning(f"تعذّر عرض المرفق: {att.get('name') or idx + 1}")
-                    with c_dl:
-                        st.download_button(
-                            "⬇️ تحميل المرفق",
-                            data=raw_bytes,
-                            file_name=att.get("name") or f"attachment_{idx + 1}",
-                            mime=mime,
-                            key=f"dl_att_{st.session_state.doc_no}_{idx}_{attachment_fingerprint(att)[:8]}",
-                            use_container_width=True,
-                        )
-                    with c_del:
-                        if st.button(
-                            "🗑️ حذف المرفق",
-                            key=f"del_att_{st.session_state.doc_no}_{idx}_{attachment_fingerprint(att)[:8]}",
-                            disabled=st.session_state.citizen_locked,
-                            use_container_width=True,
-                        ):
-                            new_list = [a for i, a in enumerate(st.session_state.attachments) if i != idx]
-                            st.session_state.attachments = new_list
-                            sync_attachments_to_session()
-                            st.rerun()
-            elif form_def["require_image"]:
-                st.caption("⚠️ هذا النموذج يتطلب إرفاق صورة قبل اعتماد الوثيقة.")
+                if persisted_atts:
+                    st.markdown("##### 🖼️ معاينة المرفقات المحفوظة في الجلسة")
+                    for idx, att in enumerate(persisted_atts):
+                        kind = (att.get("kind") or "image").lower()
+                        mime = att.get("mime") or ("application/pdf" if kind == "pdf" else "image/png")
+                        try:
+                            raw_bytes = base64.b64decode(att.get("b64") or "")
+                        except Exception:
+                            raw_bytes = b""
+                        c_prev, c_dl, c_del = st.columns([3, 1, 1])
+                        with c_prev:
+                            if kind == "pdf":
+                                st.info(f"📄 مستند PDF: **{att.get('name', 'مرفق.pdf')}**")
+                            elif raw_bytes:
+                                st.image(raw_bytes, caption=att.get("name") or f"مرفق {idx + 1}", use_container_width=True)
+                            else:
+                                st.warning(f"تعذّر عرض المرفق: {att.get('name') or idx + 1}")
+                        with c_dl:
+                            st.download_button(
+                                "⬇️ تحميل المرفق",
+                                data=raw_bytes,
+                                file_name=att.get("name") or f"attachment_{idx + 1}",
+                                mime=mime,
+                                key=f"dl_att_{st.session_state.doc_no}_{idx}_{attachment_fingerprint(att)[:8]}",
+                                use_container_width=True,
+                            )
+                        with c_del:
+                            if st.button(
+                                "🗑️ حذف المرفق",
+                                key=f"del_att_{st.session_state.doc_no}_{idx}_{attachment_fingerprint(att)[:8]}",
+                                disabled=st.session_state.citizen_locked,
+                                use_container_width=True,
+                            ):
+                                new_list = [a for i, a in enumerate(st.session_state.attachments) if i != idx]
+                                st.session_state.attachments = new_list
+                                sync_attachments_to_session()
+                                st.rerun()
+                elif form_def["require_image"]:
+                    st.caption("⚠️ هذا النموذج يتطلب إرفاق صورة قبل اعتماد الوثيقة.")
 
             live_legal_text = normalize_official_legal_text(form_def["legal_fn"](current_values))
             st.markdown(
@@ -10940,8 +11253,15 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     else:
                         btn_lbl = "🧬 اعتماد التوثيق وقفل الحقول النصية"
                     if st.button(btn_lbl, type="primary", use_container_width=True):
-                        sync_attachments_to_session()
-                        if form_def.get("require_image") and not (st.session_state.get("attachments") or []):
+                        if fid == "decl_settlement":
+                            _clear_settlement_attachment_state()
+                        else:
+                            sync_attachments_to_session()
+                        if (
+                            fid != "decl_settlement"
+                            and form_def.get("require_image")
+                            and not (st.session_state.get("attachments") or [])
+                        ):
                             st.error("هذا النموذج يتطلب إرفاق صورة قبل اعتماد التوثيق.")
                         else:
                             if is_med_form or is_letter_form:
@@ -11157,6 +11477,11 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     party_name_final = current_values.get("p1_name") or "غير محدد"
                     party_id_final = current_values.get("p1_id") or "-"
                     plate_final = current_values.get("p1_vehicle") or "-"
+                elif fid == "med_injury":
+                    current_values = _sync_med_injury_aliases(current_values)
+                    party_name_final = current_values.get("inj1_name") or current_values.get("party_name") or "غير محدد"
+                    party_id_final = current_values.get("inj1_id") or current_values.get("party_id") or "-"
+                    plate_final = current_values.get("inj1_role") or current_values.get("plate_no") or "-"
                 else:
                     party_name_final = current_values.get("party_name") or current_values.get("driver_name") or "غير محدد"
                     party_id_final = current_values.get("party_id") or current_values.get("driver_id_nat") or "-"
@@ -11165,12 +11490,16 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                 verify_hash = "KHF-" + hashlib.sha256(raw_seal.encode("utf-8")).hexdigest()[:16].upper()
                 officer_full_final = (st.session_state.officer_full_override or "").strip() or unit_display
 
-                sync_attachments_to_session()
-                _atts_now = list(st.session_state.get("attachments") or [])
-                if not _atts_now and st.session_state.get("attachment_b64"):
-                    _atts_now = parse_attachments(st.session_state.attachment_b64)
-                    st.session_state.attachments = _atts_now
+                if fid == "decl_settlement":
+                    _clear_settlement_attachment_state()
+                    _atts_now: list = []
+                else:
                     sync_attachments_to_session()
+                    _atts_now = list(st.session_state.get("attachments") or [])
+                    if not _atts_now and st.session_state.get("attachment_b64"):
+                        _atts_now = parse_attachments(st.session_state.attachment_b64)
+                        st.session_state.attachments = _atts_now
+                        sync_attachments_to_session()
                 _consume_live_sig_bridge()
 
                 # التقاط التواقيع عبر sig_pad ثنائي الاتجاه قبل بناء A4 والحفظ
@@ -11242,9 +11571,15 @@ if st.session_state.nav_tab == "النماذج الميدانية":
                     "citizen_auth_mode": st.session_state.citizen_auth_mode,
                     "officer_stamp_b64": officer_b64,
                     "saved_officer_sig_b64": saved_officer_sig,
-                    "attachment_b64": st.session_state.attachment_b64 or serialize_attachments(_atts_now),
-                    "attachments": list(_atts_now),
-                    "show_attachments_in_print": bool(st.session_state.get("show_attachments_in_print", True)),
+                    "attachment_b64": (
+                        "" if fid == "decl_settlement"
+                        else (st.session_state.attachment_b64 or serialize_attachments(_atts_now))
+                    ),
+                    "attachments": [] if fid == "decl_settlement" else list(_atts_now),
+                    "show_attachments_in_print": (
+                        False if fid == "decl_settlement"
+                        else bool(st.session_state.get("show_attachments_in_print", True))
+                    ),
                     "officer_full": officer_full_final,
                     "duty_full": (mgr_cfg.get("display_name") if mgr_active else duty_display),
                     "dept_name": shift["dept_name"],
@@ -11384,7 +11719,18 @@ elif st.session_state.nav_tab == "الأرشيف المحلي":
                     }
                 arch_sigs_only = collect_signatures_map(r, include_session=False)
                 saved_html = str(r.get("archived_html") or "").strip()
-                if saved_html and "slot_" in saved_html:
+                # سجلات التنازل القديمة: أعد البناء بلا مرفقات حتى لو وُجدت في archived_html
+                _is_settlement_arch = str(r.get("form_id") or "") == "decl_settlement"
+                if _is_settlement_arch:
+                    r = {
+                        **r,
+                        "attachment_b64": "",
+                        "attachments": [],
+                        "show_attachments_in_print": False,
+                    }
+                    arch_html = build_official_a4_html(r, f_def, logo_b64_global, interactive_sig=False)
+                    arch_html = embed_signatures_in_html(arch_html, arch_sigs_only)
+                elif saved_html and "slot_" in saved_html:
                     arch_html = embed_signatures_in_html(saved_html, arch_sigs_only)
                 else:
                     arch_html = build_official_a4_html(r, f_def, logo_b64_global, interactive_sig=False)
