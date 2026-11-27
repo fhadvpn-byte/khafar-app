@@ -248,17 +248,20 @@ def build_speed_description(
     plate_class: str,
     speed: str,
     road_speed: str,
+    owner_name: str = "",
 ) -> str:
     vehicle = str(vehicle or "").strip() or "—"
     plate = str(plate or "").strip() or "—"
     speed = to_western_digits(str(speed or "").strip()) or "—"
     road_speed = to_western_digits(str(road_speed or "").strip()) or "—"
     cls = str(plate_class or "").strip()
-    cls_part = f"{cls} " if cls else ""
+    owner = str(owner_name or "").strip()
+    cls_part = f"فئة {cls} " if cls else ""
+    owner_part = f"والعائدة لمالكها / {owner} " if owner else ""
     return (
         f"بالتوقيت والموقع أعلاه تم الرصد آلياً لمركبة نوع {vehicle} "
-        f"تحمل لوحة رقم ( {plate} ) {cls_part}"
-        f"تسير بسرعة {speed} كم / ساعة وسرعة الطريق المحددة هي {road_speed} كم / ساعة"
+        f"تحمل لوحة رقم ( {plate} ) {cls_part}{owner_part}"
+        f"تسير بسرعة {speed} كم/ساعة وسرعة الطريق المحددة هي {road_speed} كم/ساعة"
     ).replace("  ", " ").strip()
 
 
@@ -299,8 +302,14 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
     officer_rank = html.escape(str(data.get("officer_rank") or "—"))
     officer_id_ar = to_arabic_numerals(data.get("officer_id") or "—")
 
-    right_photo_html = _img_html(data.get("photo_right") or "", "صورة الرصد")
-    left_photo_html = _img_html(data.get("photo_left") or "", "صورة المركبة")
+    # صورة واحدة فقط — مع ترحيل من المفاتيح القديمة إن وُجدت
+    single_photo = (
+        data.get("photo")
+        or data.get("photo_right")
+        or data.get("photo_left")
+        or ""
+    )
+    single_photo_html = _img_html(single_photo, "صورة الحالة")
     signature_img_html = _img_html(data.get("signature") or "", "التوقيع")
 
     doc = f"""<!DOCTYPE html>
@@ -326,64 +335,65 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
     padding: 10px 18px; border-radius: 8px; font-weight: 800; cursor: pointer; font-size: 14px;
   }}
   .a4-sheet {{
-    width: 794px; max-width: 100%; margin: 0 auto 16px auto; padding: 14px 18px; background: #fff;
+    width: 794px; max-width: 100%; margin: 0 auto 16px auto; padding: 12px 16px; background: #fff;
   }}
   .top-header {{
-    width: 100%; border-collapse: collapse; margin-bottom: 10px; table-layout: fixed;
+    width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: fixed;
   }}
   .top-header td {{
     border: none; vertical-align: middle; text-align: center;
-    font-size: 14px; font-weight: 700; line-height: 1.65; color: #1f2937;
+    font-size: 14.5px; font-weight: 700; line-height: 1.7; color: #1f2937;
   }}
   .top-header .hdr-right {{ width: 35%; }}
   .top-header .hdr-logo  {{ width: 25%; }}
   .top-header .hdr-left  {{ width: 40%; }}
-  .top-header .hdr-logo img {{ height: 86px; width: auto; object-fit: contain; }}
+  .top-header .hdr-logo img {{ height: 96px; width: auto; object-fit: contain; }}
   .case-num-line {{ margin-top: 3px; font-size: 14.5px; font-weight: 800; color: #000; }}
   .report-frame {{
     border: 1.4px solid #b8c3a8; border-radius: 14px;
-    padding: 10px 12px 14px 12px; background: #ffffff;
+    padding: 14px 14px 16px 14px; background: #ffffff;
   }}
   .report-main-title {{
-    text-align: center; color: #a61c1c; font-size: 21px;
-    font-weight: 800; margin: 0 0 10px 0; letter-spacing: 0.2px;
+    text-align: center; color: #a61c1c; font-size: 23px;
+    font-weight: 800; margin: 0 0 12px 0; letter-spacing: 0.2px;
   }}
   .main-grid, .footer-grid {{
     width: 100%; border-collapse: collapse; table-layout: fixed;
   }}
   .footer-grid {{ margin-top: -1.2px; page-break-inside: avoid; break-inside: avoid; }}
   .main-grid td, .main-grid th, .footer-grid td, .footer-grid th {{
-    border: 1.2px solid #4b5563; padding: 6px 8px;
+    border: 1.2px solid #4b5563; padding: 9px 10px;
     text-align: center; vertical-align: middle; word-wrap: break-word;
   }}
   .shaded {{
-    background-color: #f2f3f5 !important; font-size: 13.5px; font-weight: 800; color: #111;
+    background-color: #f2f3f5 !important; font-size: 14.5px; font-weight: 800; color: #111;
   }}
   .val {{
-    background-color: #ffffff; font-size: 14px; font-weight: 700; color: #111; min-height: 32px;
+    background-color: #ffffff; font-size: 15px; font-weight: 700; color: #111; min-height: 38px;
   }}
   .coords-val {{
-    direction: ltr; unicode-bidi: embed; font-size: 14px; font-weight: 700;
+    direction: ltr; unicode-bidi: embed; font-size: 15px; font-weight: 700;
   }}
   .desc-val {{
-    font-size: 14.5px; font-weight: 700; line-height: 1.85; padding: 10px 14px !important;
-    text-align: right;
+    min-height: 96px; padding: 14px 16px !important;
+    font-size: 15.5px; font-weight: 700; line-height: 1.9; text-align: right;
   }}
   .photo-cell {{
-    height: 235px; padding: 8px !important; background: #ffffff; vertical-align: middle;
+    height: 370px; padding: 10px !important; background: #ffffff;
+    vertical-align: middle; text-align: center;
   }}
   .photo-cell img {{
-    max-width: 100%; max-height: 218px; width: auto; height: auto;
+    max-width: 98%; max-height: 348px; width: auto; height: auto;
     object-fit: contain; display: block; margin: 0 auto;
   }}
   .sig-cell {{
-    height: 68px; padding: 4px !important; background: #ffffff; vertical-align: middle;
+    height: 86px; padding: 4px !important; background: #ffffff; vertical-align: middle;
   }}
   .sig-cell img {{
-    max-width: 100%; max-height: 60px; object-fit: contain; display: block; margin: 0 auto;
+    max-width: 100%; max-height: 76px; object-fit: contain; display: block; margin: 0 auto;
   }}
   @media print {{
-    @page {{ size: A4 portrait; margin: 5mm; }}
+    @page {{ size: A4 portrait; margin: 6mm; }}
     html, body {{
       margin: 0 !important; padding: 0 !important; width: 100% !important;
       height: auto !important; min-height: 0 !important; background: #fff !important;
@@ -392,7 +402,7 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
     .a4-sheet {{
       display: block !important; width: 100% !important; max-width: 100% !important;
       min-width: 0 !important; height: auto !important; min-height: 0 !important;
-      margin: 0 !important; padding: 3mm 4mm !important; box-shadow: none !important;
+      margin: 0 !important; padding: 12px 16px !important; box-shadow: none !important;
     }}
     .no-print, .toolbar {{ display: none !important; }}
   }}
@@ -458,19 +468,18 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
         <td class="val desc-val" colspan="3">{description_ar}</td>
       </tr>
       <tr>
-        <th class="shaded" colspan="3">صور الحالة</th>
+        <th class="shaded" colspan="3">صورة الحالة</th>
       </tr>
       <tr>
-        <td class="photo-cell" colspan="2">{right_photo_html}</td>
-        <td class="photo-cell">{left_photo_html}</td>
+        <td class="photo-cell" colspan="3">{single_photo_html}</td>
       </tr>
     </table>
     <table class="footer-grid">
       <colgroup>
         <col style="width: 9%;">
-        <col style="width: 31%;">
+        <col style="width: 27%;">
         <col style="width: 8%;">
-        <col style="width: 11%;">
+        <col style="width: 15%;">
         <col style="width: 12%;">
         <col style="width: 11%;">
         <col style="width: 18%;">
@@ -497,7 +506,59 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
 </div>
 </body>
 </html>"""
-    return inject_print_portal(doc)
+    doc = inject_print_portal(doc)
+    zoom_js = """
+<script>
+(function(){
+  function isIOS(){
+    return /iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+  function applySairPrintZoom(){
+    try {
+      var parentWin = null;
+      try { if (window.parent && window.parent !== window && window.parent.document) parentWin = window.parent; } catch(e0){}
+      try { if (!parentWin && window.top && window.top.document) parentWin = window.top; } catch(e1){}
+      var targetDoc = parentWin ? parentWin.document : document;
+      try { targetDoc.body.style.zoom = "1"; } catch(e2){}
+      var portal = targetDoc.getElementById("khafar-print-portal");
+      var measureEl = portal || targetDoc.querySelector(".a4-sheet") || targetDoc.body;
+      if (portal) { try { portal.style.zoom = "1"; } catch(e3){} }
+      void (measureEl && measureEl.offsetHeight);
+      var contentH = (measureEl && (measureEl.scrollHeight || measureEl.offsetHeight)) || 0;
+      if (!contentH) contentH = targetDoc.documentElement.scrollHeight || targetDoc.body.scrollHeight || 0;
+      var zoom = 1;
+      if (isIOS()) {
+        if (contentH > 920) zoom = Math.min(1, 920 / contentH);
+      } else if (contentH > 1120) {
+        zoom = 1120 / contentH;
+      }
+      try { targetDoc.body.style.zoom = String(zoom); } catch(e4){}
+      if (portal) { try { portal.style.zoom = String(zoom); } catch(e5){} }
+      return zoom;
+    } catch(e) { return 1; }
+  }
+  function wrapPortalPrint(){
+    if (typeof window.khafarPortalPrint !== "function") return;
+    if (window.__sairPrintZoomWrapped) return;
+    window.__sairPrintZoomWrapped = true;
+    var orig = window.khafarPortalPrint;
+    window.khafarPortalPrint = function(ev){
+      try { if (typeof window.khafarSyncPrintPortal === "function") window.khafarSyncPrintPortal(); } catch(e0){}
+      try { applySairPrintZoom(); } catch(e1){}
+      return orig(ev);
+    };
+  }
+  window.addEventListener("beforeprint", function(){ try { applySairPrintZoom(); } catch(e){} });
+  wrapPortalPrint();
+  window.addEventListener("load", wrapPortalPrint);
+  setTimeout(wrapPortalPrint, 300);
+})();
+</script>
+"""
+    if re.search(r"</body\s*>", doc, flags=re.IGNORECASE):
+        return re.sub(r"</body\s*>", zoom_js + "</body>", doc, count=1, flags=re.IGNORECASE)
+    return doc + zoom_js
 
 
 _GPS_SIMPLE = re.compile(
@@ -587,6 +648,7 @@ def ensure_sair_session(shift: dict | None = None) -> None:
         "sair_speed": "",
         "sair_road_speed": "100",
         "sair_description": "",
+        "sair_photo_b64": "",
         "sair_photo_right_b64": "",
         "sair_photo_left_b64": "",
         "sair_officer_name": str((shift or {}).get("officer_name") or "").strip(),
@@ -604,6 +666,28 @@ def ensure_sair_session(shift: dict | None = None) -> None:
     # ترحيل قيمة فئة اللوحة القديمة
     if str(st.session_state.get("sair_plate_class") or "").strip() == "بدون":
         st.session_state["sair_plate_class"] = "خاص"
+    # ترحيل الصورة الوحيدة من المفاتيح القديمة
+    if not str(st.session_state.get("sair_photo_b64") or "").strip():
+        legacy = str(st.session_state.get("sair_photo_right_b64") or "").strip() or str(
+            st.session_state.get("sair_photo_left_b64") or ""
+        ).strip()
+        if legacy:
+            st.session_state["sair_photo_b64"] = legacy
+    # تحديث صياغة الوصف القديمة (كم / ساعة → كم/ساعة مع فئة/مالك)
+    cur_desc = str(st.session_state.get("sair_description") or "")
+    if cur_desc and "كم / ساعة" in cur_desc:
+        if str(st.session_state.get("sair_desc_mode") or "") == DESC_MODES[0]:
+            if not st.session_state.get("sair_desc_manual_lock"):
+                fresh = build_speed_description(
+                    vehicle=st.session_state.get("sair_vehicle_type"),
+                    plate=st.session_state.get("sair_plate"),
+                    plate_class=st.session_state.get("sair_plate_class"),
+                    speed=st.session_state.get("sair_speed"),
+                    road_speed=st.session_state.get("sair_road_speed"),
+                    owner_name=st.session_state.get("sair_owner_name"),
+                )
+                st.session_state["sair_description"] = fresh
+                st.session_state["_sair_last_auto_desc"] = fresh
     # تعبئة الإحداثيات من GPS الجلسة فقط إذا كان الحقل فارغاً / بانتظار
     cur_coords = str(st.session_state.get("sair_coords") or "").strip()
     if (not cur_coords) or ("بانتظار" in cur_coords) or (cur_coords in ("—", "-")):
@@ -620,6 +704,7 @@ def _compute_auto_desc() -> str:
         plate_class=st.session_state.get("sair_plate_class"),
         speed=st.session_state.get("sair_speed"),
         road_speed=st.session_state.get("sair_road_speed"),
+        owner_name=st.session_state.get("sair_owner_name"),
     )
 
 
@@ -635,8 +720,14 @@ def collect_sair_data() -> dict:
         "classification": str(st.session_state.get("sair_classification") or "مخالفة مرورية").strip(),
         "coords": to_western_digits(st.session_state.get("sair_coords") or "").strip(),
         "description": desc,
-        "photo_right": strip_data_url(st.session_state.get("sair_photo_right_b64") or ""),
-        "photo_left": strip_data_url(st.session_state.get("sair_photo_left_b64") or ""),
+        "photo": strip_data_url(
+            st.session_state.get("sair_photo_b64")
+            or st.session_state.get("sair_photo_right_b64")
+            or st.session_state.get("sair_photo_left_b64")
+            or ""
+        ),
+        "photo_right": strip_data_url(st.session_state.get("sair_photo_b64") or st.session_state.get("sair_photo_right_b64") or ""),
+        "photo_left": "",
         "officer_name": str(st.session_state.get("sair_officer_name") or "").strip(),
         "officer_rank": str(st.session_state.get("sair_officer_rank") or "").strip(),
         "officer_id": to_western_digits(st.session_state.get("sair_officer_id") or "").strip(),
@@ -660,8 +751,9 @@ def push_sair_to_archive(data: dict, html_doc: str, shift: dict | None = None) -
     raw_seal = f"{doc_no}|{SAIR_FORM_ID}|{case_no}"
     verify_hash = "KHF-" + hashlib.sha256(raw_seal.encode("utf-8")).hexdigest()[:16].upper()
     fields = dict(data)
-    fields["photo_right"] = data.get("photo_right") or ""
-    fields["photo_left"] = data.get("photo_left") or ""
+    fields["photo"] = data.get("photo") or data.get("photo_right") or ""
+    fields["photo_right"] = fields["photo"]
+    fields["photo_left"] = ""
     fields["signature"] = data.get("signature") or ""
     rec = {
         "doc_no": doc_no,
@@ -714,6 +806,7 @@ def clear_vehicle_fields_keep_officer(*, bump_case: bool = True) -> None:
     st.session_state["sair_plate_class"] = "خاص"
     st.session_state["sair_owner_name"] = ""
     st.session_state["sair_speed"] = ""
+    st.session_state["sair_photo_b64"] = ""
     st.session_state["sair_photo_right_b64"] = ""
     st.session_state["sair_photo_left_b64"] = ""
     st.session_state["sair_desc_manual_lock"] = False
@@ -772,9 +865,10 @@ def _on_auto_desc_source_change() -> None:
     _regen_sair_description()
 
 
-def _clear_sair_photo(side: str) -> None:
-    key = "sair_photo_right_b64" if side == "right" else "sair_photo_left_b64"
-    st.session_state[key] = ""
+def _clear_sair_photo(side: str = "single") -> None:
+    st.session_state["sair_photo_b64"] = ""
+    st.session_state["sair_photo_right_b64"] = ""
+    st.session_state["sair_photo_left_b64"] = ""
 
 
 def _render_quick_buttons(options: list[str], *, key_prefix: str, on_pick) -> None:
@@ -815,10 +909,8 @@ def _apply_sair_pending_before_widgets(shift: dict | None = None) -> None:
         _sync_sair_gps_from_cache()
     if pending.get("regen_desc"):
         _regen_sair_description()
-    if pending.get("clear_right_photo"):
-        _clear_sair_photo("right")
-    if pending.get("clear_left_photo"):
-        _clear_sair_photo("left")
+    if pending.get("clear_right_photo") or pending.get("clear_left_photo") or pending.get("clear_photo"):
+        _clear_sair_photo()
     if pending.get("clear_vehicle"):
         clear_vehicle_fields_keep_officer(bump_case=bool(pending.get("bump_case_with_clear")))
 
@@ -839,8 +931,9 @@ def apply_sair_archive_recall(rec: dict) -> None:
         "classification": "sair_classification",
         "coords": "sair_coords",
         "description": "sair_description",
-        "photo_right": "sair_photo_right_b64",
-        "photo_left": "sair_photo_left_b64",
+        "photo": "sair_photo_b64",
+        "photo_right": "sair_photo_b64",
+        "photo_left": "sair_photo_b64",
         "officer_name": "sair_officer_name",
         "officer_rank": "sair_officer_rank",
         "officer_id": "sair_officer_id",
@@ -857,6 +950,9 @@ def apply_sair_archive_recall(rec: dict) -> None:
     for src, dst in mapping.items():
         val = fields.get(src)
         if val is None or val == "":
+            continue
+        # لا تستبدل الصورة الوحيدة بصورة يسرى فارغة لاحقاً
+        if dst == "sair_photo_b64" and st.session_state.get("sair_photo_b64") and src == "photo_left":
             continue
         st.session_state[dst] = val
     if str(st.session_state.get("sair_plate_class") or "").strip() == "بدون":
@@ -1046,6 +1142,7 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
         "اسم مالك المركبة",
         key="sair_owner_name",
         placeholder="اكتب اسم مالك المركبة (اختياري)...",
+        on_change=_on_auto_desc_source_change,
     )
     st.text_area("وصف الحالة", key="sair_description", height=110)
     if mode == DESC_MODES[0]:
@@ -1055,90 +1152,40 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
             on_click=_regen_sair_description,
         )
 
-    # —— الصور ——
-    st.markdown("##### 3) صور الحالة")
-    p1, p2 = st.columns(2)
-    with p1:
-        st.caption("الصورة اليمنى (الرصد / اللوحة)")
-        if khafar_file_uploader:
-            right_up = khafar_file_uploader(
-                "رفع/التقاط الصورة اليمنى",
-                key="sair_photo_right_mu",
-                accept_multiple_files=False,
-                allow_pdf=False,
-            )
-        else:
-            right_up = st.file_uploader("الصورة اليمنى", type=["jpg", "jpeg", "png", "webp"], key="sair_photo_right_up")
-        if right_up is not None:
-            files = right_up if isinstance(right_up, list) else [right_up]
-            if files:
-                b64 = _ingest_upload_to_b64(files[0], purpose="photo")
-                if b64:
-                    st.session_state["sair_photo_right_b64"] = b64
-        if st.session_state.get("sair_photo_right_b64"):
-            st.image(
-                f"data:image/jpeg;base64,{st.session_state['sair_photo_right_b64']}",
-                use_container_width=True,
-            )
-            st.button(
-                "🗑️ حذف اليمنى",
-                key="sair_del_right",
-                on_click=_clear_sair_photo,
-                kwargs={"side": "right"},
-            )
-    with p2:
-        st.caption("الصورة اليسرى (المركبة / الطريق)")
-        if khafar_file_uploader:
-            left_up = khafar_file_uploader(
-                "رفع/التقاط الصورة اليسرى",
-                key="sair_photo_left_mu",
-                accept_multiple_files=False,
-                allow_pdf=False,
-            )
-        else:
-            left_up = st.file_uploader("الصورة اليسرى", type=["jpg", "jpeg", "png", "webp"], key="sair_photo_left_up")
-        if left_up is not None:
-            files = left_up if isinstance(left_up, list) else [left_up]
-            if files:
-                b64 = _ingest_upload_to_b64(files[0], purpose="photo")
-                if b64:
-                    st.session_state["sair_photo_left_b64"] = b64
-        if st.session_state.get("sair_photo_left_b64"):
-            st.image(
-                f"data:image/jpeg;base64,{st.session_state['sair_photo_left_b64']}",
-                use_container_width=True,
-            )
-            st.button(
-                "🗑️ حذف اليسرى",
-                key="sair_del_left",
-                on_click=_clear_sair_photo,
-                kwargs={"side": "left"},
-            )
-
+    # —— صورة الحالة (واحدة فقط) ——
+    st.markdown("##### 3) صورة الحالة")
+    st.caption("ارفع أو التقط صورة واحدة فقط للمحضر (معرض / كاميرا / PDF).")
     if khafar_file_uploader:
-        batch = khafar_file_uploader(
-            "رفع صورتين دفعة واحدة (الأولى يمين / الثانية يسار)",
-            key="sair_photo_batch_mu",
-            accept_multiple_files=True,
-            allow_pdf=False,
+        photo_up = khafar_file_uploader(
+            "رفع / التقاط صورة الحالة",
+            key="sair_photo_single_mu",
+            accept_multiple_files=False,
+            allow_pdf=True,
         )
     else:
-        batch = st.file_uploader(
-            "رفع صورتين دفعة واحدة",
-            type=["jpg", "jpeg", "png", "webp"],
-            accept_multiple_files=True,
-            key="sair_photo_batch_up",
+        photo_up = st.file_uploader(
+            "صورة الحالة",
+            type=["jpg", "jpeg", "png", "webp", "pdf"],
+            key="sair_photo_single_up",
         )
-    if batch:
-        files = batch if isinstance(batch, list) else [batch]
-        if len(files) >= 1:
+    if photo_up is not None:
+        files = photo_up if isinstance(photo_up, list) else [photo_up]
+        if files:
             b64 = _ingest_upload_to_b64(files[0], purpose="photo")
             if b64:
+                st.session_state["sair_photo_b64"] = b64
                 st.session_state["sair_photo_right_b64"] = b64
-        if len(files) >= 2:
-            b64 = _ingest_upload_to_b64(files[1], purpose="photo")
-            if b64:
-                st.session_state["sair_photo_left_b64"] = b64
+                st.session_state["sair_photo_left_b64"] = ""
+    if st.session_state.get("sair_photo_b64"):
+        st.image(
+            f"data:image/jpeg;base64,{strip_data_url(st.session_state['sair_photo_b64'])}",
+            use_container_width=True,
+        )
+        st.button(
+            "🗑️ حذف الصورة",
+            key="sair_del_photo",
+            on_click=_clear_sair_photo,
+        )
 
     # —— معد الحالة ——
     st.markdown("##### 4) بيانات معد الحالة والتوقيع (تُثبَّت في الجلسة)")
