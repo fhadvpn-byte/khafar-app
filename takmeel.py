@@ -888,6 +888,10 @@ def _zoom_script() -> str:
     zoom=clamp(avail/Math.max(base,1));
     apply();
   }
+  function isIOS(){
+    return /iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+  }
   function clearForPrint(){
     sheet.style.zoom='1';
     sheet.style.transform='none';
@@ -895,7 +899,28 @@ def _zoom_script() -> str:
     scroller.style.height='auto';
     scroller.style.overflow='visible';
     sheet.style.maxHeight='none';
+    sheet.style.minHeight='0';
+    sheet.style.height='auto';
     sheet.style.overflow='visible';
+    sheet.style.display='block';
+    sheet.style.width='100%';
+    sheet.style.maxWidth='100%';
+    sheet.style.minWidth='0';
+    sheet.style.margin='0';
+    sheet.style.boxSizing='border-box';
+    document.body.style.zoom='1';
+  }
+  function iosAutoFitToOnePage(){
+    if(!isIOS()) return 1;
+    clearForPrint();
+    void document.body.offsetHeight;
+    var contentH=document.documentElement.scrollHeight||document.body.scrollHeight||0;
+    if(contentH>900){
+      var scale=Math.max(0.72, Math.min(1, 900/contentH));
+      document.body.style.zoom=String(scale);
+      return scale;
+    }
+    return 1;
   }
   function forceOpenEmptyCells(container){
     if(!container) return;
@@ -933,8 +958,12 @@ def _zoom_script() -> str:
   window.addEventListener('beforeprint', function(){
     clearForPrint();
     forceOpenEmptyCells(sheet);
+    try { iosAutoFitToOnePage(); } catch(e) {}
   });
-  window.addEventListener('afterprint', apply);
+  window.addEventListener('afterprint', function(){
+    document.body.style.zoom='1';
+    apply();
+  });
   var printBtn=document.querySelector('.print-btn');
   if(printBtn){
     printBtn.addEventListener('click', function(ev){
@@ -942,6 +971,7 @@ def _zoom_script() -> str:
       clearForPrint();
       forceOpenEmptyCells(sheet);
       waitImagesThen(function(){
+        try { iosAutoFitToOnePage(); } catch(e0) {}
         try { window.focus(); } catch(e) {}
         try { window.print(); } catch(e2) {}
       });
@@ -981,6 +1011,7 @@ def _print_shell(title: str, body: str, logo_b64: str) -> str:
     body = _force_open_empty_cells(body, box_h=32)
     return f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=794">
 <meta name="format-detection" content="telephone=no">
 <title>{html.escape(title)}</title>
 <style>
@@ -1014,12 +1045,13 @@ td{{height:32px!important;min-height:32px!important}}
 .a4-monthly th{{height:34px!important;min-height:34px!important;font-size:13px!important}}
 .a4-monthly td{{height:32px!important;min-height:32px!important;padding:4px 6px!important;font-size:13px!important;font-weight:700!important}}
 @media print{{
-  @page{{size:A4 portrait;margin:4mm!important}}
-  html,body{{background:#fff;padding:0;margin:0}}
+  @page{{size:A4 portrait;margin:5mm}}
+  html,body{{margin:0!important;padding:0!important;width:100%!important;height:auto!important;min-height:0!important;background:#fff!important;overflow:visible!important;-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
   .toolbar,.no-print,.zoom-bar{{display:none!important}}
-  .preview-scroll{{overflow:visible!important;height:auto!important;max-height:none!important}}
-  .a4{{width:100%!important;max-width:200mm!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;border:none!important;padding:3mm 4mm!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+  .preview-scroll{{display:block!important;overflow:visible!important;height:auto!important;min-height:0!important;max-height:none!important;width:100%!important;margin:0!important;padding:0!important}}
+  .a4{{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0!important;border:none!important;padding:3mm 4mm!important;box-shadow:none!important;transform:none!important;box-sizing:border-box!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
   .a4-monthly{{padding:2.5mm 3.5mm!important}}
+  table,.foot{{page-break-inside:avoid!important;break-inside:avoid!important}}
   th{{height:34px!important;min-height:34px!important;font-size:13px!important;font-weight:800!important;background:#d9ead3!important;padding:4px 6px!important;border:1.4px solid #000000!important}}
   td{{height:32px!important;min-height:32px!important;font-size:13px!important;font-weight:700!important;padding:4px 6px!important;line-height:1.3!important;border:1.4px solid #000000!important}}
   .lbl{{background:#f4f7f6!important}}
@@ -1303,6 +1335,7 @@ def build_daily_incidents_a4(payload: dict, logo_b64: str) -> str:
 """
     html_doc = f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=794">
 <meta name="format-detection" content="telephone=no">
 <title>{html.escape(title)}</title>
 <style>
@@ -1348,15 +1381,15 @@ td.sep-row,.sep-row{{
 .legal-salam{{direction:rtl;text-align:right!important;text-align-last:right!important;line-height:1.35;word-spacing:normal}}
 .legal-letter-body,.legal-prose{{direction:rtl;text-align:justify!important;text-justify:inter-word;text-align-last:right!important;line-height:1.75;word-spacing:normal;overflow-wrap:break-word;white-space:normal}}
 @media print{{
-  @page{{size:A4 portrait;margin:4mm!important}}
-  html,body{{background:#fff!important;padding:0!important;margin:0!important}}
+  @page{{size:A4 portrait;margin:5mm}}
+  html,body{{margin:0!important;padding:0!important;width:100%!important;height:auto!important;min-height:0!important;background:#fff!important;overflow:visible!important;-webkit-text-size-adjust:100%!important;text-size-adjust:100%!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
   .toolbar,.no-print,.zoom-bar{{display:none!important}}
-  .preview-scroll{{overflow:visible!important;height:auto!important;max-height:none!important}}
+  .preview-scroll{{display:block!important;overflow:visible!important;height:auto!important;min-height:0!important;max-height:none!important;width:100%!important;margin:0!important;padding:0!important}}
   .legal-addr{{text-align:center!important;text-align-last:center!important;word-spacing:normal!important}}
   .legal-salam{{text-align:right!important;text-align-last:right!important;word-spacing:normal!important}}
   .legal-letter-body,.legal-prose{{text-align:justify!important;text-align-last:right!important;line-height:1.75!important;word-spacing:normal!important;overflow-wrap:break-word!important}}
-  .a4{{width:100%!important;max-width:198mm!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0 auto!important;border:none!important;padding:0!important;box-shadow:none!important;transform:none!important;zoom:1!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
-  table.waqoat-grid{{page-break-inside:avoid!important;border:1.4px solid #000000!important}}
+  .a4{{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0!important;border:none!important;padding:3mm 4mm!important;box-shadow:none!important;transform:none!important;box-sizing:border-box!important;page-break-inside:avoid!important;page-break-after:avoid!important;break-inside:avoid!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
+  table.waqoat-grid,.waqoat-foot{{page-break-inside:avoid!important;break-inside:avoid!important;border:1.4px solid #000000!important}}
   table.waqoat-grid th,table.waqoat-grid td{{
     font-size:11.5px!important;padding:2px 3px!important;line-height:1.3!important;
     border:1.4px solid #000000!important;

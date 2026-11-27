@@ -378,11 +378,17 @@ st.markdown("""
         background: #ffffff !important;
         overflow: visible !important;
         height: auto !important;
+        min-height: 0 !important;
+        -webkit-text-size-adjust: 100% !important;
+        text-size-adjust: 100% !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
     }
-    @page { size: A4 portrait; margin: 6mm 8mm !important; }
+    @page { size: A4 portrait; margin: 5mm; }
     html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], .main, .block-container {
         direction: rtl !important;
         transform: none !important;
+        width: 100% !important;
         height: auto !important;
         min-height: 0 !important;
         max-height: none !important;
@@ -1398,10 +1404,112 @@ def _rtl_isolate(text: str, *, as_html: bool = True) -> str:
     )
 
 
+# قواعد طباعة موحّدة: صفحة واحدة على iOS بدون أبعاد mm صلبة / flex
+_KHAFAR_IOS_SAFE_PRINT_CSS = """
+@page { size: A4 portrait; margin: 5mm; }
+html, body {
+  margin: 0 !important; padding: 0 !important; width: 100% !important;
+  height: auto !important; min-height: 0 !important;
+  -webkit-text-size-adjust: 100% !important; text-size-adjust: 100% !important;
+  -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+  background: #ffffff !important;
+}
+@media print {
+  html, body {
+    margin: 0 !important; padding: 0 !important; width: 100% !important;
+    height: auto !important; min-height: 0 !important; overflow: visible !important;
+    -webkit-text-size-adjust: 100% !important; text-size-adjust: 100% !important;
+    -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+    background: #ffffff !important;
+  }
+  .a4-page-frame, .a4-sheet, .a4-paper, .a4-page, .a4, .print-area, .report-container,
+  #a4Sheet, #a4PageFrame, #khafarZoomViewport, #khafarZoomSizer, #khafarZoomCanvas {
+    display: block !important; width: 100% !important; max-width: 100% !important;
+    min-width: 0 !important; height: auto !important; min-height: 0 !important;
+    max-height: none !important; margin: 0 !important; padding: 3mm 4mm !important;
+    box-sizing: border-box !important; overflow: visible !important; box-shadow: none !important;
+    transform: none !important;
+  }
+  table.sig-tbl, .sig-tbl, .sig-footer, .signatures, .sig-grid, .footer-qr,
+  .attachment-section, .report-attachments, .attachments-box {
+    page-break-inside: avoid !important; break-inside: avoid !important;
+  }
+}
+"""
+
+_KHAFAR_IOS_AUTOFIT_JS = r"""
+function khafarDetectIOS(){
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+function khafarReleasePrintHeights(root){
+  var doc = root || document;
+  var nodes = doc.querySelectorAll(
+    ".a4-page-frame,.a4-sheet,.a4-paper,.a4-page,.a4,.print-area,.report-container,#a4Sheet,#a4PageFrame,#khafarZoomViewport,#khafarZoomSizer,#khafarZoomCanvas"
+  );
+  Array.prototype.forEach.call(nodes, function(el){
+    try {
+      el.style.setProperty("display", "block", "important");
+      el.style.setProperty("width", "100%", "important");
+      el.style.setProperty("max-width", "100%", "important");
+      el.style.setProperty("min-width", "0", "important");
+      el.style.setProperty("height", "auto", "important");
+      el.style.setProperty("min-height", "0", "important");
+      el.style.setProperty("max-height", "none", "important");
+      el.style.setProperty("overflow", "visible", "important");
+      el.style.setProperty("margin", "0", "important");
+      el.style.setProperty("box-sizing", "border-box", "important");
+      el.style.setProperty("box-shadow", "none", "important");
+      el.style.setProperty("transform", "none", "important");
+    } catch (e) {}
+  });
+}
+function khafarIosAutoFitToOnePage(){
+  if (!khafarDetectIOS()) return 1;
+  try {
+    document.documentElement.style.zoom = "1";
+    document.body.style.zoom = "1";
+    khafarReleasePrintHeights(document);
+    void document.body.offsetHeight;
+    var contentH = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
+    if (contentH > 900) {
+      var scale = Math.max(0.72, Math.min(1, 900 / contentH));
+      document.body.style.zoom = String(scale);
+      return scale;
+    }
+  } catch (e2) {}
+  return 1;
+}
+function khafarWaitImagesThen(fn){
+  var imgs = Array.prototype.slice.call(document.images || []);
+  var pending = imgs.length;
+  var done = false;
+  function finish(){ if (done) return; done = true; try { fn(); } catch (e) {} }
+  var timer = setTimeout(finish, 280);
+  if (!pending) { clearTimeout(timer); setTimeout(finish, 280); return; }
+  imgs.forEach(function(im){
+    if (im.complete) {
+      pending -= 1;
+      if (pending <= 0) { clearTimeout(timer); setTimeout(finish, 60); }
+      return;
+    }
+    var tick = function(){
+      pending -= 1;
+      if (pending <= 0) { clearTimeout(timer); setTimeout(finish, 60); }
+    };
+    im.addEventListener("load", tick);
+    im.addEventListener("error", tick);
+  });
+}
+"""
+
+
 def render_print_button(report_html: str, btn_label: str = "🖨️ طباعة / حفظ التقرير PDF") -> None:
     """زر طباعة آمن للآيفون: يفتح نافذة جديدة داخل ضغطة المستخدم ثم يستدعي print()."""
     b64_report = base64.b64encode(str(report_html or "").encode("utf-8")).decode("utf-8")
     safe_label = html.escape(btn_label)
+    ios_css_json = json.dumps(_KHAFAR_IOS_SAFE_PRINT_CSS)
+    ios_js_json = json.dumps(_KHAFAR_IOS_AUTOFIT_JS)
     component_code = f"""
     <div dir="rtl" style="text-align: center; font-family: Cairo, Tahoma, sans-serif; margin: 5px 0;">
         <button type="button" onclick="openIosSafePrint()" style="
@@ -1426,6 +1534,20 @@ def render_print_button(report_html: str, btn_label: str = "🖨️ طباعة /
             const binary = atob("{b64_report}");
             const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
             let htmlContent = new TextDecoder("utf-8").decode(bytes);
+            const safeCss = {ios_css_json};
+            const autoFitJs = {ios_js_json};
+            const headPatch = '<meta name="viewport" content="width=794">'
+                + '<style id="khafar-ios-safe-print">' + safeCss + '</style>';
+            if (/<meta[^>]+name=["']viewport["']/i.test(htmlContent)) {{
+                htmlContent = htmlContent.replace(/<meta[^>]+name=["']viewport["'][^>]*>/i, '<meta name="viewport" content="width=794">');
+            }} else if (/<head[^>]*>/i.test(htmlContent)) {{
+                htmlContent = htmlContent.replace(/<head[^>]*>/i, function(m) {{ return m + headPatch; }});
+            }} else {{
+                htmlContent = headPatch + htmlContent;
+            }}
+            if (!/id=["']khafar-ios-safe-print["']/.test(htmlContent) && /<head[^>]*>/i.test(htmlContent)) {{
+                htmlContent = htmlContent.replace(/<head[^>]*>/i, function(m) {{ return m + '<style id="khafar-ios-safe-print">' + safeCss + '</style>'; }});
+            }}
             const topBar = `
                 <style>
                     @media print {{ .no-print-bar {{ display: none !important; }} }}
@@ -1452,25 +1574,27 @@ def render_print_button(report_html: str, btn_label: str = "🖨️ طباعة /
             }} else {{
                 htmlContent = topBar + htmlContent;
             }}
-            const autoPrint = "<" + "script>(function(){{"
-                + "function waitImagesThen(fn){{"
-                + "var imgs=Array.prototype.slice.call(document.images||[]);"
-                + "var pending=imgs.length;var done=false;"
-                + "function finish(){{if(done)return;done=true;try{{fn();}}catch(e){{}}}}"
-                + "var timer=setTimeout(finish,250);"
-                + "if(!pending){{clearTimeout(timer);setTimeout(finish,250);return;}}"
-                + "imgs.forEach(function(im){{"
-                + "if(im.complete){{pending-=1;if(pending<=0){{clearTimeout(timer);setTimeout(finish,50);}}return;}}"
-                + "var tick=function(){{pending-=1;if(pending<=0){{clearTimeout(timer);setTimeout(finish,50);}}}};"
-                + "im.addEventListener('load',tick);im.addEventListener('error',tick);"
-                + "}});}}"
-                + "function go(){{waitImagesThen(function(){{try{{window.focus();}}catch(e1){{}}try{{window.print();}}catch(e2){{}}}});}}"
-                + "window.addEventListener('load',function(){{setTimeout(go,400);}});"
+            const autoPrint = "<" + "script>" + autoFitJs
+                + "(function(){{"
+                + "function go(){{khafarWaitImagesThen(function(){{try{{khafarIosAutoFitToOnePage();}}catch(e0){{}}"
+                + "try{{window.focus();}}catch(e1){{}}try{{window.print();}}catch(e2){{}}}});}}"
+                + "window.addEventListener('beforeprint',function(){{try{{khafarIosAutoFitToOnePage();}}catch(e3){{}}}});"
+                + "window.addEventListener('load',function(){{setTimeout(go,350);}});"
+                + "setTimeout(go,700);"
                 + "}})();<" + "/script>";
             if (/<\\/body>/i.test(htmlContent)) {{
                 htmlContent = htmlContent.replace(/<\\/body>/i, autoPrint + "<" + "/body>");
             }} else {{
                 htmlContent += autoPrint;
+            }}
+            // فتح متزامن داخل ضغطة المستخدم (Safari iOS)
+            const printWin = window.open("", "_blank");
+            if (printWin && !printWin.closed) {{
+                printWin.document.open();
+                printWin.document.write(htmlContent);
+                printWin.document.close();
+                document.getElementById("ios-msg").style.display = "none";
+                return;
             }}
             const blob = new Blob([htmlContent], {{ type: "text/html;charset=utf-8" }});
             const blobUrl = URL.createObjectURL(blob);
@@ -7324,22 +7448,28 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     .a4-tier-dense .sig-bottom-cell {{ padding: 0 2.5mm 2mm 2.5mm !important; }}
 
     @media print {{
-        /* لا تثبت 297mm: US Letter على الآيفون = 279.4mm فقط مع هوامش AirPrint */
-        @page {{ margin: 5mm 6mm !important; }}
+        /* iOS-safe: بلا 210mm/297mm وبلا flex — ارتفاع تلقائي + تصغير JS إن لزم */
+        @page {{ size: A4 portrait; margin: 5mm; }}
         html, body {{
             width: 100% !important;
             height: auto !important;
+            min-height: 0 !important;
             margin: 0 !important;
             padding: 0 !important;
-            overflow: hidden !important;
+            overflow: visible !important;
             background: #ffffff !important;
             direction: rtl !important;
             text-align: right !important;
             transform: none !important;
+            -webkit-text-size-adjust: 100% !important;
+            text-size-adjust: 100% !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
         }}
         .a4-preview-viewport, .a4-preview-wrapper {{
             margin: 0 !important; padding: 0 !important; width: 100% !important; height: auto !important;
-            overflow: hidden !important; background: #ffffff !important; direction: rtl !important;
+            overflow: visible !important; background: #ffffff !important; direction: rtl !important;
+            min-width: 0 !important; max-width: 100% !important; display: block !important;
         }}
         .toolbar, .no-print, .zoom-bar, .live-sig-dock, .clear-sig-btn, .sig-guide-hint, .sig-mode-note,
         .live-pad-actions, .live-sig-dock-head, .ios-print-hint {{ display: none !important; }}
@@ -7348,17 +7478,18 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }}
         .live-pad-canvas {{ display: none !important; border: none !important; }}
 
-        /* قاعدة آمنة افتراضية = سقف الآيفون (US Letter) */
         .a4-page-frame {{
+            display: block !important;
             width: 100% !important;
             max-width: 100% !important;
-            height: 254mm !important;
-            max-height: 254mm !important;
+            min-width: 0 !important;
+            height: auto !important;
+            max-height: none !important;
             min-height: 0 !important;
-            padding: 4mm 5mm !important;
+            padding: 3mm 4mm !important;
             box-sizing: border-box !important;
-            overflow: hidden !important;
-            margin: 0 auto !important;
+            overflow: visible !important;
+            margin: 0 !important;
             position: relative !important;
             background: #ffffff !important;
             page-break-after: avoid !important;
@@ -7367,21 +7498,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             break-inside: avoid !important;
             box-shadow: none !important;
         }}
-        html.a4-print-desktop .a4-page-frame, body.a4-print-desktop .a4-page-frame {{
-            height: 276mm !important;
-            max-height: 276mm !important;
-        }}
         .a4-sheet, .a4-paper, .a4-page, .print-area, .report-container {{
             direction: rtl !important;
             transform: none !important;
+            display: block !important;
             width: 100% !important;
             max-width: 100% !important;
-            height: 945px !important;
+            min-width: 0 !important;
+            height: auto !important;
             min-height: 0 !important;
-            max-height: 945px !important;
-            margin: 0 auto !important;
-            display: table !important;
-            table-layout: fixed !important;
+            max-height: none !important;
+            margin: 0 !important;
             box-sizing: border-box !important;
             page-break-after: avoid !important;
             break-after: avoid !important;
@@ -7390,23 +7517,19 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             box-shadow: none !important;
             border: 1.8px solid #0f3d2e !important;
             border-radius: 4px !important;
-            overflow: hidden !important;
+            overflow: visible !important;
             background: #ffffff !important;
-            padding: 0 !important;
+            padding: 3mm 4mm !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             color-adjust: exact !important;
         }}
-        html.a4-print-desktop .a4-sheet, html.a4-print-desktop .a4-paper,
-        body.a4-print-desktop .a4-sheet, body.a4-print-desktop .a4-paper {{
-            height: 1035px !important;
-            max-height: 1035px !important;
-        }}
-        .a4-row {{ display: table-row !important; }}
-        .a4-cell {{ display: table-cell !important; width: 100% !important; }}
-        .a4-row-mid {{ height: 100% !important; }}
+        .a4-row, .a4-cell {{ display: block !important; width: 100% !important; height: auto !important; }}
         .legal-wrap-cell {{ vertical-align: top !important; }}
         .sig-bottom-cell {{ vertical-align: bottom !important; }}
+        table.sig-tbl, .sig-footer, .footer-qr, .signatures, .sig-grid, .attachment-section {{
+            page-break-inside: avoid !important; break-inside: avoid !important;
+        }}
         .a4-paper, .a4-paper *, .a4-sheet, .a4-sheet * {{
             color: #000000 !important; opacity: 1 !important;
             -webkit-print-color-adjust: exact !important;
@@ -7859,28 +7982,47 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         }} catch (eCls) {{}}
         if (frame) {{
             try {{
+                frame.style.setProperty("display", "block", "important");
                 frame.style.setProperty("width", "100%", "important");
                 frame.style.setProperty("max-width", "100%", "important");
-                frame.style.setProperty("height", (forPrint ? t.FRAME_H_MM : t.FRAME_H_PX + "px"), "important");
-                frame.style.setProperty("max-height", (forPrint ? t.FRAME_H_MM : t.FRAME_H_PX + "px"), "important");
+                frame.style.setProperty("min-width", "0", "important");
+                if (forPrint || t.isIOS) {{
+                    frame.style.setProperty("height", "auto", "important");
+                    frame.style.setProperty("max-height", "none", "important");
+                    frame.style.setProperty("overflow", "visible", "important");
+                    frame.style.setProperty("margin", "0", "important");
+                    frame.style.setProperty("padding", "3mm 4mm", "important");
+                }} else {{
+                    frame.style.setProperty("height", t.FRAME_H_PX + "px", "important");
+                    frame.style.setProperty("max-height", t.FRAME_H_PX + "px", "important");
+                    frame.style.setProperty("overflow", "hidden", "important");
+                    frame.style.setProperty("margin", "0 auto", "important");
+                }}
                 frame.style.setProperty("min-height", "0", "important");
-                frame.style.setProperty("overflow", "hidden", "important");
                 frame.style.setProperty("page-break-after", "avoid", "important");
                 frame.style.setProperty("page-break-inside", "avoid", "important");
                 frame.style.setProperty("box-sizing", "border-box", "important");
-                frame.style.setProperty("margin", "0 auto", "important");
             }} catch (eF) {{}}
         }}
         if (sheet) {{
             try {{
+                sheet.style.setProperty("display", "block", "important");
                 sheet.style.setProperty("width", "100%", "important");
                 sheet.style.setProperty("max-width", "100%", "important");
-                sheet.style.setProperty("height", t.TARGET_H_PX + "px", "important");
+                sheet.style.setProperty("min-width", "0", "important");
+                if (forPrint || t.isIOS) {{
+                    sheet.style.setProperty("height", "auto", "important");
+                    sheet.style.setProperty("max-height", "none", "important");
+                    sheet.style.setProperty("overflow", "visible", "important");
+                    sheet.style.setProperty("margin", "0", "important");
+                }} else {{
+                    sheet.style.setProperty("height", t.TARGET_H_PX + "px", "important");
+                    sheet.style.setProperty("max-height", t.TARGET_H_PX + "px", "important");
+                    sheet.style.setProperty("overflow", "hidden", "important");
+                    sheet.style.setProperty("margin-left", "auto", "important");
+                    sheet.style.setProperty("margin-right", "auto", "important");
+                }}
                 sheet.style.setProperty("min-height", "0", "important");
-                sheet.style.setProperty("max-height", t.TARGET_H_PX + "px", "important");
-                sheet.style.setProperty("overflow", "hidden", "important");
-                sheet.style.setProperty("margin-left", "auto", "important");
-                sheet.style.setProperty("margin-right", "auto", "important");
                 sheet.style.setProperty("box-sizing", "border-box", "important");
                 sheet.style.setProperty("page-break-after", "avoid", "important");
                 sheet.style.setProperty("page-break-inside", "avoid", "important");
@@ -8255,33 +8397,44 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
         const viewport = document.getElementById("a4PreviewViewport");
         const frame = document.getElementById("a4PageFrame");
         const paper = document.getElementById("a4Sheet");
+        const ios = /iPad|iPhone|iPod/.test(navigator.userAgent)
+            || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
         if (viewport) {{
             viewport.style.height = "auto";
             viewport.style.overflow = "visible";
             viewport.style.zoom = "";
+            viewport.style.maxHeight = "none";
+            viewport.style.minWidth = "0";
         }}
-        if (frame) {{
-            frame.style.zoom = "";
-            frame.style.transform = "none";
-            frame.style.width = "100%";
-            frame.style.overflow = "hidden";
-            frame.style.margin = "0 auto";
+        function releasePrintBox(el) {{
+            if (!el) return;
+            el.style.zoom = "";
+            el.style.transform = "none";
+            el.style.setProperty("display", "block", "important");
+            el.style.setProperty("width", "100%", "important");
+            el.style.setProperty("max-width", "100%", "important");
+            el.style.setProperty("min-width", "0", "important");
+            el.style.setProperty("height", "auto", "important");
+            el.style.setProperty("min-height", "0", "important");
+            el.style.setProperty("max-height", "none", "important");
+            el.style.setProperty("overflow", "visible", "important");
+            el.style.setProperty("margin", "0", "important");
+            el.style.setProperty("box-sizing", "border-box", "important");
         }}
-        if (paper) {{
-            paper.style.zoom = "";
-            paper.style.transform = "none";
-            paper.style.width = "100%";
-            paper.style.margin = "0 auto";
-        }}
-        const t = getPrintHeightTargets(window);
-        const TARGET_H_PX = t.TARGET_H_PX;
-        applyPrintPhysicalSize(document, true);
-        if (paper) {{
+        releasePrintBox(frame);
+        releasePrintBox(paper);
+        if (ios) {{
             try {{
-                paper.style.setProperty("height", TARGET_H_PX + "px", "important");
-                paper.style.setProperty("max-height", TARGET_H_PX + "px", "important");
-            }} catch (eH) {{}}
+                document.body.style.zoom = "1";
+                void document.body.offsetHeight;
+                var contentH = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
+                if (contentH > 900) {{
+                    document.body.style.zoom = String(Math.max(0.72, Math.min(1, 900 / contentH)));
+                }}
+            }} catch (eIos) {{}}
+            return;
         }}
+        applyPrintPhysicalSize(document, true);
         balanceA4Page(document);
     }}
     try {{ window.prepareA4Print = prepareA4Print; }} catch (e) {{}}
@@ -8358,39 +8511,26 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + '<button type="button" onclick="window.close()" style="background:#dc2626;color:#fff;border:none;'
             + 'padding:8px 14px;border-radius:6px;font-weight:800;font-size:14px;cursor:pointer;">✕ إغلاق</button>'
             + '</div>';
+        var iosSafeCss = {json.dumps(_KHAFAR_IOS_SAFE_PRINT_CSS)};
+        var iosAutoFitJs = {json.dumps(_KHAFAR_IOS_AUTOFIT_JS)};
         return '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8">'
-            + '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+            + '<meta name="viewport" content="width=794">'
             + '<meta name="format-detection" content="telephone=no">'
             + '<title>وثيقة رسمية - قسم مرور العارضة</title>'
             + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@700;800;900&display=swap">'
             + styles
-            + '<style>@page{{margin:5mm 6mm !important;}}'
-            + 'html,body{{width:100% !important;height:auto !important;margin:0 !important;padding:0 !important;'
-            + 'overflow:hidden !important;background:#fff !important;direction:rtl !important;}}'
-            + '.a4-page-frame{{width:100% !important;max-width:100% !important;height:254mm !important;max-height:254mm !important;'
-            + 'padding:4mm 5mm !important;box-sizing:border-box !important;overflow:hidden !important;margin:0 auto !important;'
-            + 'background:#fff !important;page-break-after:avoid !important;page-break-inside:avoid !important;position:relative !important;}}'
-            + 'html.a4-print-desktop .a4-page-frame,body.a4-print-desktop .a4-page-frame{{height:276mm !important;max-height:276mm !important;}}'
-            + '.a4-sheet,.a4-paper{{width:100% !important;height:945px !important;min-height:0 !important;'
-            + 'max-height:945px !important;display:table !important;table-layout:fixed !important;'
-            + 'box-sizing:border-box !important;overflow:hidden !important;margin:0 auto !important;'
-            + 'border:1.8px solid #0f3d2e !important;border-radius:4px !important;background:#fff !important;'
-            + 'page-break-after:avoid !important;page-break-inside:avoid !important;}}'
-            + 'html.a4-print-desktop .a4-sheet,html.a4-print-desktop .a4-paper,'
-            + 'body.a4-print-desktop .a4-sheet,body.a4-print-desktop .a4-paper{{height:1035px !important;max-height:1035px !important;}}'
-            + '.a4-row{{display:table-row !important;}}.a4-cell{{display:table-cell !important;width:100% !important;}}'
-            + '.a4-row-mid{{height:100% !important;}}.legal-wrap-cell{{vertical-align:top !important;}}'
-            + '.sig-bottom-cell{{vertical-align:bottom !important;}}'
+            + '<style id="khafar-ios-safe-print">' + iosSafeCss + '</style>'
+            + '<style>'
             + '@media screen{{'
             + 'html,body{{margin:0 !important;padding:12px !important;background:#0f172a !important;'
-            + 'display:flex !important;flex-direction:column !important;align-items:center !important;'
-            + 'direction:rtl !important;width:100% !important;height:auto !important;overflow:auto !important;}}'
-            + '.no-print{{width:100% !important;max-width:720px !important;box-sizing:border-box !important;}}'
-            + '.a4-page-frame{{width:min(100%,210mm) !important;max-width:100% !important;height:auto !important;'
-            + 'max-height:none !important;margin:0 auto 16px auto !important;transform-origin:top center !important;'
+            + 'display:block !important;direction:rtl !important;width:100% !important;height:auto !important;overflow:auto !important;}}'
+            + '.no-print{{width:100% !important;max-width:720px !important;box-sizing:border-box !important;margin:0 auto 10px auto !important;}}'
+            + '.a4-page-frame{{width:min(100%,794px) !important;max-width:100% !important;height:auto !important;'
+            + 'max-height:none !important;min-height:0 !important;margin:0 auto 16px auto !important;'
+            + 'display:block !important;overflow:visible !important;'
             + 'box-shadow:0 10px 28px rgba(0,0,0,0.45) !important;}}'
             + '.a4-sheet,.a4-paper{{width:100% !important;height:auto !important;min-height:0 !important;'
-            + 'max-height:none !important;margin:0 auto !important;}}'
+            + 'max-height:none !important;margin:0 auto !important;display:block !important;overflow:visible !important;}}'
             + '.report-attachments,.attachments-box,.attachment-grid{{width:100% !important;text-align:center !important;'
             + 'padding:4px 0 !important;page-break-inside:avoid !important;break-inside:avoid !important;display:block !important;}}'
             + '.report-attachments img,.attachments-box img,img.att-img{{display:inline-block !important;vertical-align:middle !important;'
@@ -8399,36 +8539,20 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + 'visibility:visible !important;opacity:1 !important;}}'
             + '}}'
             + '@media print{{.no-print{{display:none !important;}}'
-            + 'html,body{{width:100% !important;height:auto !important;margin:0 !important;padding:0 !important;overflow:hidden !important;}}'
-            + '.a4-page-frame{{width:100% !important;height:254mm !important;max-height:254mm !important;overflow:hidden !important;'
-            + 'page-break-after:avoid !important;page-break-inside:avoid !important;}}'
-            + 'html.a4-print-desktop .a4-page-frame,body.a4-print-desktop .a4-page-frame{{height:276mm !important;max-height:276mm !important;}}'
-            + '.a4-sheet,.a4-paper{{height:945px !important;max-height:945px !important;overflow:hidden !important;width:100% !important;margin:0 auto !important;}}'
-            + 'html.a4-print-desktop .a4-sheet,html.a4-print-desktop .a4-paper,'
-            + 'body.a4-print-desktop .a4-sheet,body.a4-print-desktop .a4-paper{{height:1035px !important;max-height:1035px !important;}}'
             + '.report-attachments,.attachments-box{{width:100% !important;text-align:center !important;padding:4px 0 !important;'
             + 'page-break-inside:avoid !important;break-inside:avoid !important;display:block !important;}}'
+            + 'table.sig-tbl,.sig-footer,.footer-qr,.signatures,.attachment-section{{page-break-inside:avoid !important;break-inside:avoid !important;}}'
             + '.report-attachments img,.attachments-box img,img.att-img{{display:inline-block !important;width:39mm !important;height:26mm !important;'
             + 'margin:3px !important;object-fit:cover !important;visibility:visible !important;opacity:1 !important;'
             + 'border:1px solid #cbd5e1 !important;border-radius:4px !important;'
             + '-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}}}}'
-            + '</style></head><body style="margin:0;padding:12px;background:#0f172a;direction:rtl;width:100%;height:auto;overflow:auto;display:flex;flex-direction:column;align-items:center;">'
+            + '</style></head><body style="margin:0;padding:12px;background:#0f172a;direction:rtl;width:100%;height:auto;overflow:auto;">'
             + topBar + frameHtml
-            + '<' + 'script>(function(){{'
+            + '<' + 'script>' + iosAutoFitJs + '(function(){{'
             + 'window.__khafarPrintWin=true;document.__khafarPrintWin=true;'
-            + 'var IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);'
+            + 'var IS_IOS=khafarDetectIOS();'
             + 'window.__khafarIsIOS=IS_IOS;'
-            + 'function waitImagesThen(fn){{'
-            + 'var imgs=Array.prototype.slice.call(document.images||[]);'
-            + 'var pending=imgs.length;var done=false;'
-            + 'function finish(){{if(done)return;done=true;try{{fn();}}catch(e){{}}}}'
-            + 'var timer=setTimeout(finish,250);'
-            + 'if(!pending){{clearTimeout(timer);setTimeout(finish,250);return;}}'
-            + 'imgs.forEach(function(im){{'
-            + 'if(im.complete){{pending-=1;if(pending<=0){{clearTimeout(timer);setTimeout(finish,50);}}return;}}'
-            + 'var tick=function(){{pending-=1;if(pending<=0){{clearTimeout(timer);setTimeout(finish,50);}}}};'
-            + 'im.addEventListener("load",tick);im.addEventListener("error",tick);'
-            + '}});}}'
+            + 'function waitImagesThen(fn){{khafarWaitImagesThen(fn);}}'
             + 'function getPrintHeightTargets(){{var ios=IS_IOS;return {{isIOS:ios,TARGET_H_PX:ios?945:1035,FRAME_H_PX:ios?960:1040,FRAME_H_MM:ios?"254mm":"276mm"}};}}'
             + 'function applyPrintPhysicalSize(doc){{doc=doc||document;var t=getPrintHeightTargets();'
             + 'try{{var root=doc.documentElement,body=doc.body;'
@@ -8438,17 +8562,17 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + 'if(body){{body.classList.remove("a4-print-ios");body.classList.add("a4-print-desktop");}}}}catch(e){{}}'
             + 'var frame=doc.getElementById("a4PageFrame")||doc.querySelector(".a4-page-frame");'
             + 'var sheet=doc.getElementById("a4Sheet")||doc.querySelector(".a4-sheet")||doc.querySelector(".a4-paper");'
-            + 'if(frame){{try{{frame.style.setProperty("width","100%","important");frame.style.setProperty("height",t.FRAME_H_MM,"important");'
-            + 'frame.style.setProperty("max-height",t.FRAME_H_MM,"important");frame.style.setProperty("overflow","hidden","important");'
-            + 'frame.style.setProperty("page-break-after","avoid","important");frame.style.setProperty("page-break-inside","avoid","important");'
-            + 'frame.style.setProperty("margin","0 auto","important");}}catch(e2){{}}}}'
-            + 'if(sheet){{try{{sheet.style.setProperty("width","100%","important");'
-            + 'sheet.style.setProperty("height",t.TARGET_H_PX+"px","important");'
-            + 'sheet.style.setProperty("max-height",t.TARGET_H_PX+"px","important");'
-            + 'sheet.style.setProperty("min-height","0","important");sheet.style.setProperty("overflow","hidden","important");'
-            + 'sheet.style.setProperty("margin-left","auto","important");sheet.style.setProperty("margin-right","auto","important");'
-            + 'sheet.style.setProperty("page-break-after","avoid","important");sheet.style.setProperty("page-break-inside","avoid","important");'
-            + '}}catch(e3){{}}}}return t;}}'
+            + 'function releaseEl(el){{if(!el)return;try{{el.style.setProperty("display","block","important");'
+            + 'el.style.setProperty("width","100%","important");el.style.setProperty("max-width","100%","important");'
+            + 'el.style.setProperty("min-width","0","important");el.style.setProperty("height","auto","important");'
+            + 'el.style.setProperty("max-height","none","important");el.style.setProperty("min-height","0","important");'
+            + 'el.style.setProperty("overflow","visible","important");el.style.setProperty("margin","0","important");'
+            + 'el.style.setProperty("box-sizing","border-box","important");'
+            + 'el.style.setProperty("page-break-after","avoid","important");el.style.setProperty("page-break-inside","avoid","important");'
+            + '}}catch(e2){{}}}}'
+            + 'releaseEl(frame);releaseEl(sheet);'
+            + 'if(t.isIOS){{try{{khafarIosAutoFitToOnePage();}}catch(eIos){{}}}}'
+            + 'return t;}}'
             + 'function stepDownFitA4(rootDoc){{'
             + 'var doc=rootDoc||document;var t=getPrintHeightTargets();var TARGET_H_PX=t.TARGET_H_PX;'
             + 'var frame=doc.getElementById("a4PageFrame")||doc.querySelector(".a4-page-frame");'
@@ -8535,14 +8659,16 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
             + 'free=newFree;steps+=1;if(atCap(next)&&dataFs>=13.49)break;}}'
             + 'applyPrintPhysicalSize(doc);return steps;}}'
             + 'function balanceA4Page(rootDoc){{var doc=rootDoc||document;applyPrintPhysicalSize(doc);'
-            + 'stepDownFitA4(doc);expandLegalToFillSpace(doc);applyPrintPhysicalSize(doc);}}'
+            + 'if(!IS_IOS){{stepDownFitA4(doc);expandLegalToFillSpace(doc);applyPrintPhysicalSize(doc);}}'
+            + 'else{{try{{khafarIosAutoFitToOnePage();}}catch(eI){{}}}}}}'
             + 'window.stepDownFitA4=stepDownFitA4;window.expandLegalToFillSpace=expandLegalToFillSpace;window.balanceA4Page=balanceA4Page;'
             + 'function go(){{waitImagesThen(function(){{try{{balanceA4Page(document);}}catch(e){{}}'
+            + 'try{{if(IS_IOS)khafarIosAutoFitToOnePage();}}catch(eIos){{}}'
             + 'try{{window.focus();}}catch(e2){{}}try{{window.print();}}catch(e3){{}}}});}}'
             + 'if(document.fonts&&document.fonts.ready){{document.fonts.ready.then(function(){{setTimeout(go,450);}});}}'
             + 'else{{setTimeout(go,450);}}'
             + 'window.addEventListener("load",function(){{setTimeout(go,700);}});'
-            + 'window.addEventListener("beforeprint",function(){{try{{balanceA4Page(document);}}catch(e){{}}}});'
+            + 'window.addEventListener("beforeprint",function(){{try{{balanceA4Page(document);if(IS_IOS)khafarIosAutoFitToOnePage();}}catch(e){{}}}});'
             + '}}());<' + '/script>'
             + '<' + '/body><' + '/html>';
     }}
@@ -8851,36 +8977,51 @@ def build_official_a4_html(rec: dict, form_def: dict | None, logo_b64: str, inte
     }}
   }}
   @media print {{
-    @page {{ size: A4 portrait; margin: 4.5mm 6mm !important; }}
+    @page {{ size: A4 portrait; margin: 5mm; }}
     html, body {{
       margin: 0 !important;
       padding: 0 !important;
       background: #ffffff !important;
       width: 100% !important;
       height: auto !important;
+      min-height: 0 !important;
       overflow: visible !important;
+      -webkit-text-size-adjust: 100% !important;
+      text-size-adjust: 100% !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }}
     .no-print, .toolbar, #zoomBar, .zoom-bar, .live-sig-dock, #printOfficialBtn, .print-btn, #khafarIosShareTray {{
       display: none !important;
     }}
     #khafarZoomViewport, #khafarZoomSizer, #khafarZoomCanvas {{
       position: static !important;
+      display: block !important;
       width: 100% !important;
       min-width: 0 !important;
-      max-width: none !important;
+      max-width: 100% !important;
       height: auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
       overflow: visible !important;
       transform: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      box-sizing: border-box !important;
     }}
     #a4Sheet {{
-      display: flex !important;
-      flex-direction: column !important;
-      justify-content: space-between !important;
+      display: block !important;
       width: 100% !important;
       min-width: 0 !important;
-      max-width: none !important;
-      margin: 0 auto !important;
+      max-width: 100% !important;
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
+      margin: 0 !important;
+      padding: 3mm 4mm !important;
       box-sizing: border-box !important;
+      overflow: visible !important;
+      box-shadow: none !important;
       border: 1.8px solid #0f3d2e !important;
       border-radius: 4px !important;
       padding: 4mm 5.5mm !important;
