@@ -270,15 +270,41 @@ def build_speed_description(
     ).replace("  ", " ").strip()
 
 
-def _img_html(b64: str, alt: str) -> str:
+def _img_html(*, b64: str, alt: str) -> str:
+    """يبني وسم صورة — المعاملات بالأسماء فقط لمنع خلط الصورة/التوقيع."""
     payload = strip_data_url(b64)
-    if not payload:
+    if not payload or len(payload) < 32:
         return "&nbsp;"
     mime = "image/png" if payload.startswith("iVBOR") else "image/jpeg"
-    return f'<img src="data:{mime};base64,{payload}" alt="{html.escape(alt)}">'
+    return (
+        f'<img src="data:{mime};base64,{payload}" alt="{html.escape(alt)}" '
+        f'data-khafar-img="{html.escape(alt)}">'
+    )
 
 
-def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/png") -> str:
+def _resolve_case_photo_b64(data: dict) -> str:
+    """صورة الحالة فقط — لا تقرأ مفتاح التوقيع أبداً."""
+    for key in ("photo", "photo_right", "photo_left"):
+        raw = strip_data_url(str((data or {}).get(key) or "").strip())
+        if raw and len(raw) >= 32:
+            return raw
+    return ""
+
+
+def _resolve_officer_signature_b64(data: dict) -> str:
+    """توقيع معد الحالة فقط — لا يسقط أبداً إلى صورة الحالة."""
+    data = data or {}
+    raw = strip_data_url(str(data.get("signature") or "").strip())
+    if not raw or len(raw) < 32:
+        return ""
+    # حراسة: إن تطابق التوقيع مع صورة الحالة فهو خلط — أفرغ خانة التوقيع
+    case_photo = _resolve_case_photo_b64(data)
+    if case_photo and raw == case_photo:
+        return ""
+    return raw
+
+
+def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "image/png") -> str:
     """قالب محضر إثبات حالة مطابق للنموذج الرسمي — بدون QR."""
     logo_b64, logo_mime = resolve_sair_print_logo(logo_b64, logo_mime)
     logo_b64 = strip_data_url(logo_b64)
@@ -307,15 +333,18 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
     officer_rank = html.escape(str(data.get("officer_rank") or "—"))
     officer_id_ar = to_arabic_numerals(data.get("officer_id") or "—")
 
-    # صورة واحدة فقط — مع ترحيل من المفاتيح القديمة إن وُجدت
-    single_photo = (
-        data.get("photo")
-        or data.get("photo_right")
-        or data.get("photo_left")
-        or ""
+    # فصل صارم: صورة الحالة ≠ التوقيع
+    case_photo_b64 = _resolve_case_photo_b64(data)
+    officer_signature_b64 = _resolve_officer_signature_b64(data)
+    single_photo_html = (
+        _img_html(b64=case_photo_b64, alt="صورة الحالة") if case_photo_b64 else "&nbsp;"
     )
-    single_photo_html = _img_html(single_photo, "صورة الحالة")
-    signature_img_html = _img_html(data.get("signature") or "", "التوقيع")
+    # خلية التوقيع تبقى بيضاء فارغة إن لم يوقّع المستخدم
+    signature_img_html = (
+        _img_html(b64=officer_signature_b64, alt="توقيع معد الحالة")
+        if officer_signature_b64
+        else "&nbsp;"
+    )
 
     report_css = f"""
   @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800&display=swap');
@@ -410,9 +439,14 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
   }}
   .sig-cell {{
     height: 78px; padding: 4px !important; background: #ffffff; vertical-align: middle;
+    overflow: hidden !important;
   }}
   .sig-cell img {{
-    max-width: 100%; max-height: 68px; object-fit: contain; display: block; margin: 0 auto;
+    max-width: 100% !important; max-height: 68px !important; width: auto !important; height: auto !important;
+    object-fit: contain !important; display: block !important; margin: 0 auto !important;
+  }}
+  .sig-cell img[data-khafar-img="صورة الحالة"] {{
+    display: none !important; /* حراسة أخيرة: لا تُعرض صورة الحالة داخل خانة التوقيع */
   }}
   @media print {{
     @page {{ size: A4 portrait; margin: 6mm; }}
@@ -506,7 +540,7 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
         <th class="shaded" colspan="3">صورة الحالة</th>
       </tr>
       <tr>
-        <td class="photo-cell" colspan="3">{single_photo_html}</td>
+        <td class="photo-cell" colspan="3" data-role="case-photo">{single_photo_html}</td>
       </tr>
     </table>
     <table class="footer-grid">
@@ -530,7 +564,7 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
         <td class="val">{officer_rank}</td>
         <td class="shaded">الرقم&nbsp;العام</td>
         <td class="val">{officer_id_ar}</td>
-        <td class="sig-cell" rowspan="2">{signature_img_html}</td>
+        <td class="sig-cell" rowspan="2" data-role="officer-signature">{signature_img_html}</td>
       </tr>
       <tr>
         <td class="shaded">الجهة</td>
@@ -910,6 +944,17 @@ def collect_sair_data() -> dict:
     """قراءة بيانات النموذج فقط — ممنوع الكتابة على مفاتيح الـ widgets هنا."""
     mode = str(st.session_state.get("sair_desc_mode") or DESC_MODES[0])
     desc = str(st.session_state.get("sair_description") or "").strip()
+    photo_now = strip_data_url(
+        st.session_state.get("sair_photo_b64")
+        or st.session_state.get("sair_photo_right_b64")
+        or st.session_state.get("sair_photo_left_b64")
+        or ""
+    )
+    sig_now = strip_data_url(st.session_state.get("sair_officer_sig_b64") or "")
+    # إن تطابق التوقيع مع صورة الحالة فهو خلط سابق — أفرغ التوقيع فقط
+    if sig_now and photo_now and sig_now == photo_now:
+        st.session_state["sair_officer_sig_b64"] = ""
+        sig_now = ""
     return {
         "case_no": to_western_digits(st.session_state.get("sair_case_no") or "").strip(),
         "location": str(st.session_state.get("sair_location") or "").strip(),
@@ -918,19 +963,14 @@ def collect_sair_data() -> dict:
         "classification": str(st.session_state.get("sair_classification") or "مخالفة مرورية").strip(),
         "coords": to_western_digits(st.session_state.get("sair_coords") or "").strip(),
         "description": desc,
-        "photo": strip_data_url(
-            st.session_state.get("sair_photo_b64")
-            or st.session_state.get("sair_photo_right_b64")
-            or st.session_state.get("sair_photo_left_b64")
-            or ""
-        ),
-        "photo_right": strip_data_url(st.session_state.get("sair_photo_b64") or st.session_state.get("sair_photo_right_b64") or ""),
+        "photo": photo_now,
+        "photo_right": photo_now,
         "photo_left": "",
         "officer_name": str(st.session_state.get("sair_officer_name") or "").strip(),
         "officer_rank": str(st.session_state.get("sair_officer_rank") or "").strip(),
         "officer_id": to_western_digits(st.session_state.get("sair_officer_id") or "").strip(),
         "unit_name": str(st.session_state.get("sair_unit_name") or "").strip(),
-        "signature": strip_data_url(st.session_state.get("sair_officer_sig_b64") or ""),
+        "signature": sig_now,
         "vehicle_type": str(st.session_state.get("sair_vehicle_type") or "").strip(),
         "plate": str(st.session_state.get("sair_plate") or "").strip(),
         "plate_class": str(st.session_state.get("sair_plate_class") or "").strip(),
@@ -1088,7 +1128,7 @@ def _render_quick_buttons(options: list[str], *, key_prefix: str, on_pick) -> No
 def _save_sair_then_next(logo_b64: str = "", logo_mime: str = "image/png") -> None:
     """on_click: حفظ ثم تفريغ حقول المركبة قبل إعادة الرسم."""
     data = collect_sair_data()
-    html_doc = build_sair_a4_html(data, logo_b64=logo_b64, logo_mime=logo_mime)
+    html_doc = build_sair_a4_html(data=data, logo_b64=logo_b64, logo_mime=logo_mime)
     ok = push_sair_to_archive(data, html_doc)
     clear_vehicle_fields_keep_officer(bump_case=True)
     st.session_state["_sair_flash_save_next"] = "ok" if ok else "partial"
@@ -1155,6 +1195,11 @@ def apply_sair_archive_recall(rec: dict) -> None:
         st.session_state[dst] = val
     if str(st.session_state.get("sair_plate_class") or "").strip() == "بدون":
         st.session_state["sair_plate_class"] = "خاص"
+    # حراسة بعد الاستدعاء: لا تسمح لخلط صورة الحالة مع التوقيع
+    photo_now = strip_data_url(st.session_state.get("sair_photo_b64") or "")
+    sig_now = strip_data_url(st.session_state.get("sair_officer_sig_b64") or "")
+    if photo_now and sig_now and photo_now == sig_now:
+        st.session_state["sair_officer_sig_b64"] = ""
     if fields.get("description"):
         st.session_state["sair_desc_manual_lock"] = True
         st.session_state["_sair_last_auto_desc"] = str(fields.get("description") or "")
@@ -1425,7 +1470,7 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
         )
 
     data = collect_sair_data()
-    a4_html = build_sair_a4_html(data, logo_b64=logo_hdr, logo_mime=logo_mime)
+    a4_html = build_sair_a4_html(data=data, logo_b64=logo_hdr, logo_mime=logo_mime)
 
     st.markdown("##### 5) الحفظ والمعاينة والطباعة")
     a, b, c = st.columns(3)
