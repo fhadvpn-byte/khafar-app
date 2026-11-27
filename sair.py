@@ -498,17 +498,46 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
 </html>"""
 
 
+_GPS_SIMPLE = re.compile(
+    r"^\s*([+-]?\d+(?:\.\d+)?)\s*[,،]\s*([+-]?\d+(?:\.\d+)?)\s*$"
+)
+_GPS_DISPLAY = re.compile(
+    r"(\d+(?:\.\d+)?)\s*°\s*([NSns])\s*[,،]\s*(\d+(?:\.\d+)?)\s*°\s*([EWew])"
+)
+
+
 def _signed_gps_pair(text: str):
+    """يفهم صيغة app.py المعتمدة (16.86° N, 43.12° E) وصيغة lat, lon."""
     raw = to_western_digits(str(text or "")).strip()
-    m = re.search(r"([+-]?\d+(?:\.\d+)?)\s*[,،]\s*([+-]?\d+(?:\.\d+)?)", raw)
-    if not m:
+    raw = raw.replace("\u2212", "-").replace("٫", ".")
+    if not raw or "بانتظار" in raw:
         return None
-    try:
-        lat, lng = float(m.group(1)), float(m.group(2))
-        if -90 <= lat <= 90 and -180 <= lng <= 180:
-            return lat, lng
-    except ValueError:
-        return None
+    m = _GPS_SIMPLE.match(raw)
+    if m:
+        try:
+            lat, lng = float(m.group(1)), float(m.group(2))
+            if -90 <= lat <= 90 and -180 <= lng <= 180:
+                return lat, lng
+        except ValueError:
+            return None
+    shown = _GPS_DISPLAY.search(raw)
+    if shown:
+        try:
+            lat = float(shown.group(1)) * (1 if shown.group(2).upper() == "N" else -1)
+            lng = float(shown.group(3)) * (1 if shown.group(4).upper() == "E" else -1)
+            if -90 <= lat <= 90 and -180 <= lng <= 180:
+                return lat, lng
+        except ValueError:
+            return None
+    # التقاط فضفاض لرقمين عشريين متتاليين
+    loose = re.findall(r"[+-]?\d+(?:\.\d+)?", raw)
+    if len(loose) >= 2:
+        try:
+            lat, lng = float(loose[0]), float(loose[1])
+            if -90 <= lat <= 90 and -180 <= lng <= 180:
+                return lat, lng
+        except ValueError:
+            return None
     return None
 
 
@@ -517,14 +546,16 @@ def _fmt_coord(n: float) -> str:
 
 
 def _session_gps_coords(shift: dict | None = None) -> str:
-    live = str(st.session_state.get("gps_live_value") or "").strip()
-    pair = _signed_gps_pair(live)
-    if pair:
-        return f"{_fmt_coord(pair[0])}, {_fmt_coord(pair[1])}"
-    shift_gps = str((shift or {}).get("default_gps") or "").strip()
-    pair = _signed_gps_pair(shift_gps)
-    if pair:
-        return f"{_fmt_coord(pair[0])}, {_fmt_coord(pair[1])}"
+    """قراءة إحداثيات الجلسة من app.py: gps_live_value ثم default_gps."""
+    candidates = [
+        st.session_state.get("gps_live_value"),
+        (shift or {}).get("default_gps"),
+        st.session_state.get("pending_live_gps"),
+    ]
+    for cand in candidates:
+        pair = _signed_gps_pair(cand)
+        if pair:
+            return f"{_fmt_coord(pair[0])}, {_fmt_coord(pair[1])}"
     return ""
 
 
@@ -538,13 +569,14 @@ def _default_unit_name(shift: dict | None = None) -> str:
 
 
 def ensure_sair_session(shift: dict | None = None) -> None:
+    """تهيئة لمرة واحدة فقط لكل مفتاح — لا تُعاد الكتابة فوق إدخال المستخدم في كل rerun."""
     defaults = {
         "sair_case_no": "4800000054",
-        "sair_location": LOCATION_PRESETS[0],
+        "sair_location": "",
         "sair_hijri": default_hijri_str(),
         "sair_time": default_time_24(),
         "sair_classification": "مخالفة مرورية",
-        "sair_coords": _session_gps_coords(shift),
+        "sair_coords": "",
         "sair_desc_mode": DESC_MODES[0],
         "sair_vehicle_type": "كامري",
         "sair_plate": "",
@@ -560,12 +592,15 @@ def ensure_sair_session(shift: dict | None = None) -> None:
         "sair_unit_name": _default_unit_name(shift),
         "sair_officer_sig_b64": "",
         "sair_desc_manual_lock": False,
+        "_sair_last_auto_desc": "",
+        "_sair_desc_seeded": False,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = val
-    # تحديث الإحداثيات من GPS الجلسة إن كان الحقل فارغاً أو غير صالح
-    if not _signed_gps_pair(st.session_state.get("sair_coords")):
+    # تعبئة الإحداثيات من GPS الجلسة فقط إذا كان الحقل فارغاً / بانتظار
+    cur_coords = str(st.session_state.get("sair_coords") or "").strip()
+    if (not cur_coords) or ("بانتظار" in cur_coords) or (cur_coords in ("—", "-")):
         gps_now = _session_gps_coords(shift)
         if gps_now:
             st.session_state["sair_coords"] = gps_now
@@ -676,6 +711,7 @@ def clear_vehicle_fields_keep_officer(*, bump_case: bool = True) -> None:
     st.session_state["sair_desc_manual_lock"] = False
     st.session_state["sair_description"] = ""
     st.session_state["_sair_last_auto_desc"] = ""
+    st.session_state["_sair_desc_seeded"] = False
     st.session_state["sair_time"] = default_time_24()
     st.session_state["sair_hijri"] = default_hijri_str()
 
@@ -700,23 +736,57 @@ def _regen_sair_description() -> None:
     st.session_state["sair_desc_manual_lock"] = False
     st.session_state["sair_description"] = auto_desc
     st.session_state["_sair_last_auto_desc"] = auto_desc
+    st.session_state["_sair_desc_seeded"] = True
 
 
-def _on_location_preset_change() -> None:
-    preset = str(st.session_state.get("sair_location_preset") or "")
-    if preset and preset != "— كتابة حرة —":
-        st.session_state["sair_location"] = preset
+def _set_sair_location(value: str) -> None:
+    st.session_state["sair_location"] = str(value or "")
 
 
-def _on_road_speed_choice_change() -> None:
-    choice = str(st.session_state.get("sair_road_speed_choice") or "")
-    if choice and choice != "إدخال يدوي":
-        st.session_state["sair_road_speed"] = choice
+def _set_sair_road_speed(value: str) -> None:
+    st.session_state["sair_road_speed"] = str(value or "")
+    if str(st.session_state.get("sair_desc_mode") or "") == DESC_MODES[0]:
+        _regen_sair_description()
+
+
+def _set_sair_vehicle(value: str) -> None:
+    st.session_state["sair_vehicle_type"] = str(value or "")
+    if str(st.session_state.get("sair_desc_mode") or "") == DESC_MODES[0]:
+        _regen_sair_description()
+
+
+def _set_sair_plate_class(value: str) -> None:
+    st.session_state["sair_plate_class"] = str(value or "")
+    if str(st.session_state.get("sair_desc_mode") or "") == DESC_MODES[0]:
+        _regen_sair_description()
+
+
+def _on_auto_desc_source_change() -> None:
+    """يُستدعى عند تغيّر حقول المركبة/اللوحة/السرعة فقط — لا يلمس الكتابة اليدوية إلا بإعادة التوليد."""
+    if str(st.session_state.get("sair_desc_mode") or "") != DESC_MODES[0]:
+        return
+    _regen_sair_description()
 
 
 def _clear_sair_photo(side: str) -> None:
     key = "sair_photo_right_b64" if side == "right" else "sair_photo_left_b64"
     st.session_state[key] = ""
+
+
+def _render_quick_buttons(options: list[str], *, key_prefix: str, on_pick) -> None:
+    """أزرار اقتراح سريعة عبر on_click فقط — بدون selectbox."""
+    if not options:
+        return
+    cols = st.columns(min(5, len(options)))
+    for i, label in enumerate(options):
+        with cols[i % len(cols)]:
+            st.button(
+                label,
+                key=f"{key_prefix}_{i}",
+                use_container_width=True,
+                on_click=on_pick,
+                args=(label,),
+            )
 
 
 def _save_sair_then_next(logo_b64: str = "", logo_mime: str = "image/png") -> None:
@@ -883,15 +953,13 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
             on_click=_bump_sair_case_no,
         )
 
-    loc_col, _ = st.columns([1, 0.01])
-    with loc_col:
-        st.selectbox(
-            "اقتراح موقع سريع",
-            options=["— كتابة حرة —"] + LOCATION_PRESETS,
-            key="sair_location_preset",
-            on_change=_on_location_preset_change,
-        )
-        st.text_input("الموقع", key="sair_location")
+    st.caption("اقتراحات موقع سريعة (اضغط للتعبئة — الحقل يبقى مفتوحاً للكتابة)")
+    _render_quick_buttons(LOCATION_PRESETS, key_prefix="sair_loc_btn", on_pick=_set_sair_location)
+    st.text_input(
+        "الموقع",
+        key="sair_location",
+        placeholder="اكتب موقع الرصد بحرية أو اختر من الأزرار أعلاه",
+    )
 
     d1, d2 = st.columns(2)
     with d1:
@@ -900,11 +968,17 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
         st.text_input("الوقت (24 ساعة)", key="sair_time", help="مثال: 16:58")
 
     st.text_input("تصنيف الحالة", key="sair_classification")
-    gps_hint = st.session_state.get("_sair_gps_cache") or _session_gps_coords(shift)
+    # تعبئة GPS قبل رسم الحقل إن كان فارغاً (بعد وصول الإحداثيات للجلسة)
+    _gps_now = _session_gps_coords(shift)
+    st.session_state["_sair_gps_cache"] = _gps_now
+    _coords_cur = str(st.session_state.get("sair_coords") or "").strip()
+    if _gps_now and ((not _coords_cur) or ("بانتظار" in _coords_cur)):
+        st.session_state["sair_coords"] = _gps_now
     st.text_input(
         "إحداثي الموقع",
         key="sair_coords",
-        help=f"يُملأ من GPS الجلسة عند التوفر. الحالي: {gps_hint or '—'}",
+        placeholder="مثال: 16.861514, 43.122711",
+        help=f"يُملأ من GPS الجلسة عند التوفر. المرجع: {_gps_now or '—'}",
     )
     st.button(
         "📍 مزامنة الإحداثيات من GPS الجلسة",
@@ -916,48 +990,60 @@ def render_sair_section(logo_b64: str, shift: dict | None = None, device_hash: s
     st.markdown("##### 2) وصف الحالة")
     st.radio("وضع الوصف", options=DESC_MODES, key="sair_desc_mode", horizontal=True)
     mode = st.session_state.get("sair_desc_mode") or DESC_MODES[0]
-    auto_desc = ""
     if mode == DESC_MODES[0]:
-        v1, v2 = st.columns(2)
-        with v1:
-            st.selectbox("نوع المركبة", options=VEHICLE_PRESETS, key="sair_vehicle_type")
-            st.text_input("رقم اللوحة", key="sair_plate", placeholder="أ ق ب 7894 أو س 219711")
-            st.selectbox("فئة اللوحة (اختياري)", options=PLATE_CLASS_OPTIONS, key="sair_plate_class")
-        with v2:
-            st.text_input("سرعة المركبة المرصودة (كم/ساعة)", key="sair_speed")
-            st.selectbox(
-                "سرعة الطريق المحددة (كم/ساعة)",
-                options=ROAD_SPEED_PRESETS + ["إدخال يدوي"],
-                key="sair_road_speed_choice",
-                on_change=_on_road_speed_choice_change,
+        st.caption("اقتراحات نوع المركبة")
+        _render_quick_buttons(VEHICLE_PRESETS, key_prefix="sair_veh_btn", on_pick=_set_sair_vehicle)
+        st.text_input(
+            "نوع المركبة",
+            key="sair_vehicle_type",
+            placeholder="كامري / سوناتا / شاص...",
+            on_change=_on_auto_desc_source_change,
+        )
+        st.text_input(
+            "رقم اللوحة",
+            key="sair_plate",
+            placeholder="أ ق ب 7894 أو س 219711",
+            on_change=_on_auto_desc_source_change,
+        )
+        st.caption("فئة اللوحة (اختياري)")
+        _render_quick_buttons(PLATE_CLASS_OPTIONS, key_prefix="sair_pcls_btn", on_pick=_set_sair_plate_class)
+        st.text_input(
+            "فئة اللوحة",
+            key="sair_plate_class",
+            placeholder="بدون / نقل خاص / نقل عام / حافلة",
+            on_change=_on_auto_desc_source_change,
+        )
+        s1, s2 = st.columns(2)
+        with s1:
+            st.text_input(
+                "سرعة المركبة المرصودة (كم/ساعة)",
+                key="sair_speed",
+                on_change=_on_auto_desc_source_change,
             )
-            # مزامنة اختيار القائمة إلى حقل السرعة قبل إنشاء text_input
-            road_choice = str(st.session_state.get("sair_road_speed_choice") or "")
-            if road_choice and road_choice != "إدخال يدوي":
-                st.session_state["sair_road_speed"] = road_choice
-            st.text_input("سرعة الطريق (يدوي إن لزم)", key="sair_road_speed")
-
-        auto_desc = _compute_auto_desc()
-        last_auto = str(st.session_state.get("_sair_last_auto_desc") or "")
-        # تحديث الوصف التلقائي قبل رسم text_area فقط
-        if not st.session_state.get("sair_desc_manual_lock"):
-            if ("sair_description" not in st.session_state) or (auto_desc != last_auto):
+        with s2:
+            st.caption("سرعة الطريق — اقتراحات سريعة")
+            _render_quick_buttons(ROAD_SPEED_PRESETS, key_prefix="sair_rspd_btn", on_pick=_set_sair_road_speed)
+            st.text_input(
+                "سرعة الطريق المحددة (كم/ساعة)",
+                key="sair_road_speed",
+                on_change=_on_auto_desc_source_change,
+            )
+        # بذرة أولية لمرة واحدة فقط — بعدها التحديث عبر on_change/أزرار فقط
+        if not st.session_state.get("_sair_desc_seeded"):
+            auto_desc = _compute_auto_desc()
+            if not str(st.session_state.get("sair_description") or "").strip():
                 st.session_state["sair_description"] = auto_desc
                 st.session_state["_sair_last_auto_desc"] = auto_desc
-        st.caption("النص يتولد تلقائياً — يمكنك تعديله يدوياً قبل الطباعة.")
+            st.session_state["_sair_desc_seeded"] = True
+        st.caption("يتحدّث الوصف تلقائياً عند تغيير حقول المركبة/السرعة — ويبقى قابلاً للكتابة الحرة.")
 
-    desc_val = st.text_area("وصف الحالة", key="sair_description", height=110)
+    st.text_area("وصف الحالة", key="sair_description", height=110)
     if mode == DESC_MODES[0]:
-        auto_now = auto_desc or _compute_auto_desc()
-        if str(desc_val or "").strip() and str(desc_val).strip() != auto_now:
-            st.session_state["sair_desc_manual_lock"] = True
-        b_unlock, _ = st.columns([1, 2])
-        with b_unlock:
-            st.button(
-                "🔄 إعادة توليد الوصف من الحقول",
-                key="sair_regen_desc",
-                on_click=_regen_sair_description,
-            )
+        st.button(
+            "🔄 إعادة توليد الوصف من الحقول",
+            key="sair_regen_desc",
+            on_click=_regen_sair_description,
+        )
 
     # —— الصور ——
     st.markdown("##### 3) صور الحالة")
