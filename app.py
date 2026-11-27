@@ -66,12 +66,24 @@ def get_khafar_app_logo_b64() -> str:
         return ""
 
 
+@st.cache_data(show_spinner=False)
+def get_splash_logo_jpeg_b64() -> str:
+    """شعار التطبيق الرسمي لشاشة الترحيب فقط (logo.jpeg) — لا يُستخدم في مطبوعات A4."""
+    fpath = Path(__file__).resolve().parent / "logo.jpeg"
+    if not fpath.is_file():
+        return ""
+    try:
+        return base64.b64encode(fpath.read_bytes()).decode("utf-8")
+    except Exception:
+        return ""
+
+
 def get_traffic_logo_b64() -> str:
-    """قراءة شعار المرور تلقائياً من مجلد المشروع، مع شعار احتياطي مضمّن إن لم يوجد الملف."""
+    """قراءة شعار المرور الرسمي للتقارير/A4 فقط — لا تُخلط مع شعار التطبيق logo.jpeg."""
     base_dir = Path(__file__).resolve().parent
     for fname in (
         "traffic_logo.png", "traffic_logo.PNG", "traffic_logo.jpg", "traffic_logo.jpeg",
-        "logo.png", "logo.PNG", "logo.jpeg", "logo.jpg", "passer_logo.png", "moi_logo.png",
+        "passer_logo.png", "moi_logo.png",
     ):
         fpath = base_dir / fname
         if fpath.exists():
@@ -745,25 +757,30 @@ img[src*="avatars.githubusercontent.com"] {
     pointer-events: none;
 }
 .khafar-splash-glow {
-    width: 96px;
-    height: 96px;
-    border-radius: 50%;
+    width: 145px;
+    height: 145px;
+    border-radius: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.96);
+    background: #ffffff;
+    padding: 6px;
+    box-sizing: border-box;
     border: 2px solid rgba(212, 175, 55, 0.85);
     box-shadow:
         0 0 0 6px rgba(212, 175, 55, 0.12),
+        0 0 0 10px rgba(6, 78, 59, 0.18),
         0 0 28px rgba(212, 175, 55, 0.35);
     animation: khafarSplashGlow 1.6s ease-in-out infinite;
     overflow: hidden;
 }
 .khafar-splash-glow img {
-    width: 78%;
-    height: 78%;
+    width: 100%;
+    height: 100%;
     object-fit: contain;
     display: block;
+    border-radius: 18px;
+    background: #ffffff;
 }
 .khafar-splash-title {
     margin: 0;
@@ -809,8 +826,18 @@ img[src*="avatars.githubusercontent.com"] {
     100% { top: 92%; opacity: 0; }
 }
 @keyframes khafarSplashGlow {
-    0%, 100% { box-shadow: 0 0 0 6px rgba(212, 175, 55, 0.10), 0 0 22px rgba(212, 175, 55, 0.28); }
-    50% { box-shadow: 0 0 0 10px rgba(212, 175, 55, 0.16), 0 0 34px rgba(212, 175, 55, 0.42); }
+    0%, 100% {
+        box-shadow:
+            0 0 0 6px rgba(212, 175, 55, 0.10),
+            0 0 0 10px rgba(6, 78, 59, 0.14),
+            0 0 22px rgba(212, 175, 55, 0.28);
+    }
+    50% {
+        box-shadow:
+            0 0 0 10px rgba(212, 175, 55, 0.16),
+            0 0 0 14px rgba(6, 78, 59, 0.22),
+            0 0 34px rgba(212, 175, 55, 0.42);
+    }
 }
 @keyframes khafarSplashBar {
     from { width: 0%; }
@@ -11074,12 +11101,9 @@ consume_pending_archive_recall()
 # شاشة ترحيب تقنية لمرة واحدة في الجلسة — CSS خالص (بدون sleep / rerun)
 if "welcome_splash_shown" not in st.session_state:
     st.session_state["welcome_splash_shown"] = True
-    _splash_logo = (logo_b64_global or "").strip() or get_traffic_logo_b64()
-    _splash_mime = (
-        "image/png" if str(_splash_logo).startswith("iVBOR") else "image/jpeg"
-    )
+    _splash_logo = get_splash_logo_jpeg_b64()
     _splash_img = (
-        f"<img src='data:{_splash_mime};base64,{_splash_logo}' alt='شعار المرور' />"
+        f"<img src='data:image/jpeg;base64,{_splash_logo}' alt='ميدان الخفر' />"
         if _splash_logo
         else "<span style='font-size:34px;line-height:1;'>🛡️</span>"
     )
