@@ -14,7 +14,12 @@ import streamlit as st
 import streamlit.components.v1 as components
 from PIL import Image, ImageOps
 
-from khafar_print_portal import inject_print_portal
+from khafar_print_portal import KHAFAR_PRINT_PORTAL_CSS
+
+
+def _js_embed(value: str) -> str:
+    """تمرير نص إلى JS عبر json.dumps مع حماية إغلاق وسم script."""
+    return json.dumps(value if value is not None else "", ensure_ascii=False).replace("</", "<\\/")
 
 try:
     from sig_pad_component import sig_pad
@@ -312,14 +317,7 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
     single_photo_html = _img_html(single_photo, "صورة الحالة")
     signature_img_html = _img_html(data.get("signature") or "", "التوقيع")
 
-    doc = f"""<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=794">
-<meta name="format-detection" content="telephone=no">
-<title>محضر إثبات حالة - {html.escape(case_no_ar)}</title>
-<style>
+    report_css = f"""
   @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800&display=swap');
   *, *::before, *::after {{ box-sizing: border-box; }}
   html, body {{
@@ -406,12 +404,9 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
     }}
     .no-print, .toolbar {{ display: none !important; }}
   }}
-</style>
-</head>
-<body>
-<div class="toolbar no-print">
-  <button class="print-btn" type="button" data-khafar-print="1" onclick="khafarPortalPrint(event)">🖨️ طباعة / حفظ PDF (1/1)</button>
-</div>
+"""
+
+    portal_sheet_html = f"""
 <div class="a4-sheet">
   <table class="top-header">
     <tr>
@@ -504,61 +499,196 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
     </table>
   </div>
 </div>
+""".strip()
+
+    # مستند مستقل لـ window.open (بدون سكربتات Streamlit)
+    full_print_html = f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=794">
+<meta name="format-detection" content="telephone=no">
+<title>محضر إثبات حالة - {html.escape(case_no_ar)}</title>
+<style>{report_css}</style>
+</head>
+<body style="background:#fff;color:#111;">
+{portal_sheet_html}
+<script>
+(function(){{
+  function go(){{
+    try {{
+      var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+        || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      document.body.style.zoom = "1";
+      var contentH = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
+      var zoom = 1;
+      if (isIOS) {{ if (contentH > 920) zoom = Math.min(1, 920 / contentH); }}
+      else if (contentH > 1120) {{ zoom = 1120 / contentH; }}
+      document.body.style.zoom = String(zoom);
+    }} catch (e0) {{}}
+    try {{ window.focus(); }} catch (e1) {{}}
+    try {{ window.print(); }} catch (e2) {{}}
+  }}
+  window.addEventListener("load", function(){{ setTimeout(go, 280); }});
+  setTimeout(go, 600);
+}})();
+</script>
 </body>
 </html>"""
-    doc = inject_print_portal(doc)
-    zoom_js = """
+
+    # CSS بوابة الأب + أنماط المحضر داخل @media print فقط
+    portal_print_css = (
+        KHAFAR_PRINT_PORTAL_CSS.replace("margin: 5mm;", "margin: 6mm;")
+        + "\n@media print {\n"
+        + report_css
+        + "\n}\n"
+    )
+
+    safe_full_html_js = _js_embed(full_print_html)
+    safe_portal_sheet_js = _js_embed(portal_sheet_html)
+    safe_portal_css_js = _js_embed(portal_print_css)
+
+    safe_print_js = f"""
 <script>
-(function(){
-  function isIOS(){
-    return /iPad|iPhone|iPod/.test(navigator.userAgent)
-      || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  }
-  function applySairPrintZoom(){
-    try {
-      var parentWin = null;
-      try { if (window.parent && window.parent !== window && window.parent.document) parentWin = window.parent; } catch(e0){}
-      try { if (!parentWin && window.top && window.top.document) parentWin = window.top; } catch(e1){}
-      var targetDoc = parentWin ? parentWin.document : document;
-      try { targetDoc.body.style.zoom = "1"; } catch(e2){}
-      var portal = targetDoc.getElementById("khafar-print-portal");
-      var measureEl = portal || targetDoc.querySelector(".a4-sheet") || targetDoc.body;
-      if (portal) { try { portal.style.zoom = "1"; } catch(e3){} }
-      void (measureEl && measureEl.offsetHeight);
-      var contentH = (measureEl && (measureEl.scrollHeight || measureEl.offsetHeight)) || 0;
-      if (!contentH) contentH = targetDoc.documentElement.scrollHeight || targetDoc.body.scrollHeight || 0;
+(function(){{
+  var FULL_HTML = {safe_full_html_js};
+  var PORTAL_SHEET = {safe_portal_sheet_js};
+  var PORTAL_CSS = {safe_portal_css_js};
+
+  function getParentCtx(){{
+    try {{
+      if (window.parent && window.parent !== window) {{
+        var d = null;
+        try {{ d = window.parent.document; }} catch (eP) {{ d = null; }}
+        if (d && d.body) return {{ win: window.parent, doc: d }};
+      }}
+    }} catch (e0) {{}}
+    try {{
+      if (window.top && window.top !== window) {{
+        var d2 = null;
+        try {{ d2 = window.top.document; }} catch (eT) {{ d2 = null; }}
+        if (d2 && d2.body) return {{ win: window.top, doc: d2 }};
+      }}
+    }} catch (e1) {{}}
+    return null;
+  }}
+
+  function injectPortal(ctx){{
+    var doc = ctx.doc;
+    var cssEl = doc.getElementById("khafar-print-portal-css");
+    if (!cssEl) {{
+      cssEl = doc.createElement("style");
+      cssEl.id = "khafar-print-portal-css";
+      (doc.head || doc.documentElement).appendChild(cssEl);
+    }}
+    cssEl.textContent = PORTAL_CSS;
+    var portal = doc.getElementById("khafar-print-portal");
+    if (!portal) {{
+      portal = doc.createElement("div");
+      portal.id = "khafar-print-portal";
+      doc.body.appendChild(portal);
+    }}
+    portal.setAttribute("dir", "rtl");
+    portal.innerHTML = PORTAL_SHEET;
+    return portal;
+  }}
+
+  function applyZoom(ctx, portal){{
+    try {{
+      var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+        || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      try {{ ctx.doc.body.style.zoom = "1"; }} catch (eZ0) {{}}
+      if (portal) {{ try {{ portal.style.zoom = "1"; }} catch (eZ1) {{}} }}
+      void (portal && portal.offsetHeight);
+      var contentH = (portal && (portal.scrollHeight || portal.offsetHeight)) || 0;
+      if (!contentH) {{
+        try {{ contentH = ctx.doc.documentElement.scrollHeight || ctx.doc.body.scrollHeight || 0; }} catch (eZ2) {{ contentH = 0; }}
+      }}
       var zoom = 1;
-      if (isIOS()) {
+      if (isIOS) {{
         if (contentH > 920) zoom = Math.min(1, 920 / contentH);
-      } else if (contentH > 1120) {
+      }} else if (contentH > 1120) {{
         zoom = 1120 / contentH;
-      }
-      try { targetDoc.body.style.zoom = String(zoom); } catch(e4){}
-      if (portal) { try { portal.style.zoom = String(zoom); } catch(e5){} }
-      return zoom;
-    } catch(e) { return 1; }
-  }
-  function wrapPortalPrint(){
-    if (typeof window.khafarPortalPrint !== "function") return;
-    if (window.__sairPrintZoomWrapped) return;
-    window.__sairPrintZoomWrapped = true;
-    var orig = window.khafarPortalPrint;
-    window.khafarPortalPrint = function(ev){
-      try { if (typeof window.khafarSyncPrintPortal === "function") window.khafarSyncPrintPortal(); } catch(e0){}
-      try { applySairPrintZoom(); } catch(e1){}
-      return orig(ev);
-    };
-  }
-  window.addEventListener("beforeprint", function(){ try { applySairPrintZoom(); } catch(e){} });
-  wrapPortalPrint();
-  window.addEventListener("load", wrapPortalPrint);
-  setTimeout(wrapPortalPrint, 300);
-})();
+      }}
+      try {{ ctx.doc.body.style.zoom = String(zoom); }} catch (eZ3) {{}}
+      if (portal) {{ try {{ portal.style.zoom = String(zoom); }} catch (eZ4) {{}} }}
+    }} catch (e) {{}}
+  }}
+
+  function sairSafePrint(ev){{
+    try {{ if (ev && ev.preventDefault) ev.preventDefault(); }} catch (ePrev) {{}}
+    try {{ if (ev && ev.stopPropagation) ev.stopPropagation(); }} catch (eStop) {{}}
+    var now = Date.now();
+    if (window.__sairSafePrintAt && (now - window.__sairSafePrintAt) < 900) return false;
+    window.__sairSafePrintAt = now;
+
+    // أ) بوابة الصفحة الأب — محمية بالكامل من SecurityError
+    try {{
+      var ctx = getParentCtx();
+      if (ctx) {{
+        var portal = injectPortal(ctx);
+        applyZoom(ctx, portal);
+        try {{ ctx.win.focus(); }} catch (eF) {{}}
+        try {{ ctx.win.print(); return false; }} catch (ePr) {{}}
+      }}
+    }} catch (eA) {{}}
+
+    // ب) نافذة منبثقة بمستند كامل عبر json.dumps
+    try {{
+      var printWin = null;
+      try {{ printWin = window.open("", "_blank"); }} catch (eOpen) {{ printWin = null; }}
+      if (printWin && !printWin.closed) {{
+        try {{
+          printWin.document.open();
+          printWin.document.write(FULL_HTML);
+          printWin.document.close();
+          return false;
+        }} catch (eWrite) {{
+          try {{ printWin.close(); }} catch (eClose) {{}}
+        }}
+      }}
+    }} catch (eB) {{}}
+
+    // ج) طباعة الإطار الحالي كآخر مسار
+    try {{ window.focus(); }} catch (eC0) {{}}
+    try {{ window.print(); }} catch (eC1) {{}}
+    return false;
+  }}
+
+  window.sairSafePrint = sairSafePrint;
+  window.khafarPortalPrint = sairSafePrint;
+
+  function bind(){{
+    var btns = document.querySelectorAll(".print-btn, [data-khafar-print]");
+    for (var i = 0; i < btns.length; i++) {{
+      btns[i].onclick = sairSafePrint;
+      try {{ btns[i].setAttribute("onclick", "sairSafePrint(event)"); }} catch (eAttr) {{}}
+    }}
+  }}
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind);
+  else bind();
+  window.addEventListener("load", bind);
+}})();
 </script>
 """
-    if re.search(r"</body\s*>", doc, flags=re.IGNORECASE):
-        return re.sub(r"</body\s*>", zoom_js + "</body>", doc, count=1, flags=re.IGNORECASE)
-    return doc + zoom_js
+
+    return f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=794">
+<meta name="format-detection" content="telephone=no">
+<title>محضر إثبات حالة - {html.escape(case_no_ar)}</title>
+<style>{report_css}</style>
+</head>
+<body>
+<div class="toolbar no-print">
+  <button class="print-btn" type="button" data-khafar-print="1" onclick="sairSafePrint(event)">🖨️ طباعة / حفظ PDF (1/1)</button>
+</div>
+{portal_sheet_html}
+{safe_print_js}
+</body>
+</html>"""
 
 
 _GPS_SIMPLE = re.compile(
