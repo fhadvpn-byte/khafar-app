@@ -197,11 +197,13 @@ def resolve_sair_print_logo(logo_b64: str = "", logo_mime: str = "image/png") ->
     return get_sair_header_logo_b64()
 
 
-def compress_photo_bytes(raw: bytes, *, max_px: int = 1400, quality: int = 86) -> str:
-    if not raw:
+@st.cache_data(show_spinner=False, max_entries=20)
+def _optimize_sair_photo(raw_bytes: bytes) -> str:
+    """ضغط ذكي لمرة واحدة مع كاش — يعيد data:image/jpeg;base64,... (~70–100KB)."""
+    if not raw_bytes:
         return ""
     try:
-        img = Image.open(io.BytesIO(raw))
+        img = Image.open(io.BytesIO(raw_bytes))
         img = ImageOps.exif_transpose(img)
         if img.mode in ("RGBA", "P"):
             bg = Image.new("RGB", img.size, (255, 255, 255))
@@ -210,13 +212,72 @@ def compress_photo_bytes(raw: bytes, *, max_px: int = 1400, quality: int = 86) -
             img = bg
         elif img.mode != "RGB":
             img = img.convert("RGB")
-        if max(img.size) > max_px:
-            img.thumbnail((max_px, max_px), Image.Resampling.LANCZOS)
+        img.thumbnail((1150, 850), Image.Resampling.LANCZOS)
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=quality, optimize=True)
-        return base64.b64encode(buf.getvalue()).decode("utf-8")
+        img.save(buf, format="JPEG", quality=78, optimize=True)
+        b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        return f"data:image/jpeg;base64,{b64}"
     except Exception:
         return ""
+
+
+def _render_pdf_first_page_bytes(raw: bytes) -> bytes:
+    """صيّر الصفحة الأولى من PDF إلى PNG bytes بدقة معتدلة."""
+    if not raw:
+        return b""
+    # 1) pypdfium2
+    try:
+        import pypdfium2 as pdfium  # type: ignore
+
+        doc = pdfium.PdfDocument(raw)
+        if len(doc) < 1:
+            return b""
+        page = doc[0]
+        scale = 130 / 72.0  # ≈ dpi=130
+        pil = page.render(scale=scale).to_pil()
+        buf = io.BytesIO()
+        pil.convert("RGB").save(buf, format="PNG")
+        return buf.getvalue()
+    except Exception:
+        pass
+    # 2) PyMuPDF
+    try:
+        import fitz  # type: ignore
+
+        doc = fitz.open(stream=raw, filetype="pdf")
+        if doc.page_count < 1:
+            return b""
+        page = doc.load_page(0)
+        pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
+        return pix.tobytes("png")
+    except Exception:
+        pass
+    # 3) pdf2image
+    try:
+        from pdf2image import convert_from_bytes  # type: ignore
+
+        pages = convert_from_bytes(raw, dpi=130, first_page=1, last_page=1)
+        if not pages:
+            return b""
+        buf = io.BytesIO()
+        pages[0].convert("RGB").save(buf, format="PNG")
+        return buf.getvalue()
+    except Exception:
+        return b""
+
+
+def compress_photo_bytes(raw: bytes, *, max_px: int = 1400, quality: int = 86) -> str:
+    """توافق خلفي — يوجّه للضغط الذكي المخزّن في الكاش ويعيد base64 خام."""
+    if not raw:
+        return ""
+    # PDF؟
+    if raw[:5] == b"%PDF-" or raw[:4] == b"%PDF":
+        rendered = _render_pdf_first_page_bytes(raw)
+        if not rendered:
+            return ""
+        raw = rendered
+    data_url = _optimize_sair_photo(bytes(raw))
+    return strip_data_url(data_url)
 
 
 def compress_sig_bytes(raw: bytes) -> str:
@@ -270,14 +331,30 @@ def build_speed_description(
     ).replace("  ", " ").strip()
 
 
-def _img_html(*, b64: str, alt: str) -> str:
-    """يبني وسم صورة — المعاملات بالأسماء فقط لمنع خلط الصورة/التوقيع."""
+_SAIR_LOGO_PH = "__SAIR_LOGO_SRC__"
+_SAIR_PHOTO_PH = "__SAIR_PHOTO_SRC__"
+_SAIR_SIG_PH = "__SAIR_SIG_SRC__"
+
+
+def _sair_data_uri(*, b64: str, default_mime: str = "image/jpeg") -> str:
     payload = strip_data_url(b64)
     if not payload or len(payload) < 32:
+        return ""
+    mime = default_mime
+    if payload.startswith("iVBOR"):
+        mime = "image/png"
+    elif payload.startswith("/9j/"):
+        mime = "image/jpeg"
+    return f"data:{mime};base64,{payload}"
+
+
+def _img_html(*, b64: str = "", alt: str = "", src: str = "") -> str:
+    """يبني وسم صورة — src صريح أو base64، بالأسماء فقط لمنع خلط الصورة/التوقيع."""
+    uri = str(src or "").strip() or _sair_data_uri(b64=b64)
+    if not uri:
         return "&nbsp;"
-    mime = "image/png" if payload.startswith("iVBOR") else "image/jpeg"
     return (
-        f'<img src="data:{mime};base64,{payload}" alt="{html.escape(alt)}" '
+        f'<img src="{uri}" alt="{html.escape(alt)}" '
         f'data-khafar-img="{html.escape(alt)}">'
     )
 
@@ -308,16 +385,7 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
     """قالب محضر إثبات حالة مطابق للنموذج الرسمي — بدون QR."""
     logo_b64, logo_mime = resolve_sair_print_logo(logo_b64, logo_mime)
     logo_b64 = strip_data_url(logo_b64)
-    logo_uri = (
-        f"data:{logo_mime};base64,{logo_b64}"
-        if logo_b64
-        else ""
-    )
-    logo_html = (
-        f'<img src="{logo_uri}" alt="شعار محضر إثبات حالة">'
-        if logo_uri
-        else '<div style="font-size:28px;font-weight:800;">المرور</div>'
-    )
+    logo_uri = _sair_data_uri(b64=logo_b64, default_mime=logo_mime or "image/png")
 
     case_no_ar = to_arabic_numerals(data.get("case_no") or "—")
     time_ar = to_arabic_numerals(data.get("time") or "—")
@@ -333,17 +401,34 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
     officer_rank = html.escape(str(data.get("officer_rank") or "—"))
     officer_id_ar = to_arabic_numerals(data.get("officer_id") or "—")
 
-    # فصل صارم: صورة الحالة ≠ التوقيع
+    # فصل صارم: صورة الحالة ≠ التوقيع — URIs مرة واحدة فقط للمعاينة
     case_photo_b64 = _resolve_case_photo_b64(data)
     officer_signature_b64 = _resolve_officer_signature_b64(data)
-    single_photo_html = (
-        _img_html(b64=case_photo_b64, alt="صورة الحالة") if case_photo_b64 else "&nbsp;"
-    )
-    # خلية التوقيع تبقى بيضاء فارغة إن لم يوقّع المستخدم
-    signature_img_html = (
-        _img_html(b64=officer_signature_b64, alt="توقيع معد الحالة")
+    photo_uri = _sair_data_uri(b64=case_photo_b64, default_mime="image/jpeg") if case_photo_b64 else ""
+    sig_uri = (
+        _sair_data_uri(b64=officer_signature_b64, default_mime="image/png")
         if officer_signature_b64
-        else "&nbsp;"
+        else ""
+    )
+
+    def _logo_block(src: str) -> str:
+        if src:
+            return f'<img class="sair-logo" src="{src}" alt="شعار محضر إثبات حالة">'
+        return '<div style="font-size:28px;font-weight:800;">المرور</div>'
+
+    # معاينة حية: وسائط فعلية مرة واحدة
+    logo_html = _logo_block(logo_uri)
+    single_photo_html = _img_html(src=photo_uri, alt="صورة الحالة") if photo_uri else "&nbsp;"
+    signature_img_html = (
+        _img_html(src=sig_uri, alt="توقيع معد الحالة") if sig_uri else "&nbsp;"
+    )
+    # قوالب طباعة خفيفة: رموز نائبة تُستبدل في المتصفح من عناصر المعاينة
+    logo_html_ph = _logo_block(_SAIR_LOGO_PH if logo_uri else "")
+    single_photo_html_ph = (
+        _img_html(src=_SAIR_PHOTO_PH, alt="صورة الحالة") if photo_uri else "&nbsp;"
+    )
+    signature_img_html_ph = (
+        _img_html(src=_SAIR_SIG_PH, alt="توقيع معد الحالة") if sig_uri else "&nbsp;"
     )
 
     report_css = f"""
@@ -480,7 +565,8 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
   }}
 """
 
-    portal_sheet_html = f"""
+    def _make_sheet(*, logo_block: str, photo_block: str, sig_block: str) -> str:
+        return f"""
 <div class="a4-sheet">
   <table class="top-header">
     <tr>
@@ -490,7 +576,7 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
         الأمن العام
       </td>
       <td class="hdr-logo">
-        {logo_html}
+        {logo_block}
       </td>
       <td class="hdr-left">
         الإدارة العامة للمرور<br>
@@ -540,7 +626,7 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
         <th class="shaded" colspan="3">صورة الحالة</th>
       </tr>
       <tr>
-        <td class="photo-cell" colspan="3" data-role="case-photo">{single_photo_html}</td>
+        <td class="photo-cell" colspan="3" data-role="case-photo">{photo_block}</td>
       </tr>
     </table>
     <table class="footer-grid">
@@ -564,7 +650,7 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
         <td class="val">{officer_rank}</td>
         <td class="shaded">الرقم&nbsp;العام</td>
         <td class="val">{officer_id_ar}</td>
-        <td class="sig-cell" rowspan="2" data-role="officer-signature">{signature_img_html}</td>
+        <td class="sig-cell" rowspan="2" data-role="officer-signature">{sig_block}</td>
       </tr>
       <tr>
         <td class="shaded">الجهة</td>
@@ -575,7 +661,20 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
 </div>
 """.strip()
 
-    # مستند مستقل لـ window.open (بدون سكربتات Streamlit)
+    # معاينة حية: وسائط مضمّنة مرة واحدة فقط
+    portal_sheet_html = _make_sheet(
+        logo_block=logo_html,
+        photo_block=single_photo_html,
+        sig_block=signature_img_html,
+    )
+    # قوالب طباعة خفيفة بدون تكرار Base64
+    portal_sheet_light = _make_sheet(
+        logo_block=logo_html_ph,
+        photo_block=single_photo_html_ph,
+        sig_block=signature_img_html_ph,
+    )
+
+    # مستند مستقل لـ window.open — رموز نائبة فقط (تُملأ من المعاينة)
     full_print_html = f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -587,7 +686,7 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
 <style>{report_css}</style>
 </head>
 <body style="background:#fff;color:#111;">
-{portal_sheet_html}
+{portal_sheet_light}
 <script>
 (function(){{
   function go(){{
@@ -624,7 +723,7 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
     )
 
     safe_full_html_js = _js_embed(full_print_html)
-    safe_portal_sheet_js = _js_embed(portal_sheet_html)
+    safe_portal_sheet_js = _js_embed(portal_sheet_light)
     safe_portal_css_js = _js_embed(portal_print_css)
 
     safe_print_js = f"""
@@ -633,6 +732,25 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
   var FULL_HTML = {safe_full_html_js};
   var PORTAL_SHEET = {safe_portal_sheet_js};
   var PORTAL_CSS = {safe_portal_css_js};
+
+  function readPreviewMedia(){{
+    var logoEl = document.querySelector(".a4-sheet .hdr-logo img.sair-logo, .a4-sheet .hdr-logo img");
+    var photoEl = document.querySelector('[data-role="case-photo"] img');
+    var sigEl = document.querySelector('[data-role="officer-signature"] img');
+    return {{
+      logo: logoEl ? (logoEl.getAttribute("src") || "") : "",
+      photo: photoEl ? (photoEl.getAttribute("src") || "") : "",
+      sig: sigEl ? (sigEl.getAttribute("src") || "") : ""
+    }};
+  }}
+
+  function withMedia(s){{
+    var m = readPreviewMedia();
+    return String(s || "")
+      .split("{_SAIR_LOGO_PH}").join(m.logo || "")
+      .split("{_SAIR_PHOTO_PH}").join(m.photo || "")
+      .split("{_SAIR_SIG_PH}").join(m.sig || "");
+  }}
 
   function getParentCtx(){{
     try {{
@@ -681,7 +799,7 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
       doc.body.appendChild(portal);
     }}
     portal.setAttribute("dir", "rtl");
-    portal.innerHTML = PORTAL_SHEET;
+    portal.innerHTML = withMedia(PORTAL_SHEET);
     return portal;
   }}
 
@@ -734,14 +852,14 @@ def build_sair_a4_html(*, data: dict, logo_b64: str = "", logo_mime: str = "imag
       }}
     }} catch (eA) {{}}
 
-    // ب) نافذة منبثقة بمستند كامل عبر json.dumps
+    // ب) نافذة منبثقة بمستند كامل مع تعبئة الوسائط من المعاينة
     try {{
       var printWin = null;
       try {{ printWin = window.open("", "_blank"); }} catch (eOpen) {{ printWin = null; }}
       if (printWin && !printWin.closed) {{
         try {{
           printWin.document.open();
-          printWin.document.write(FULL_HTML);
+          printWin.document.write(withMedia(FULL_HTML));
           printWin.document.close();
           return false;
         }} catch (eWrite) {{
