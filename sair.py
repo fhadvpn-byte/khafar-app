@@ -322,8 +322,12 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
   *, *::before, *::after {{ box-sizing: border-box; }}
   html, body {{
     margin: 0; padding: 0; background: #0d1316; color: #111111;
-    font-family: 'Tajawal', 'Arial', sans-serif; direction: rtl;
+    font-family: 'Tajawal', 'Arial', sans-serif !important; direction: rtl;
     -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+  }}
+  .a4-sheet, .a4-sheet *, .report-frame, .report-frame *,
+  .main-grid, .main-grid *, .footer-grid, .footer-grid * {{
+    font-family: 'Tajawal', 'Arial', sans-serif !important;
   }}
   .toolbar {{
     max-width: 794px; margin: 10px auto; text-align: center;
@@ -333,10 +337,11 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
     padding: 10px 18px; border-radius: 8px; font-weight: 800; cursor: pointer; font-size: 14px;
   }}
   .a4-sheet {{
-    width: 794px; max-width: 100%; margin: 0 auto 16px auto; padding: 12px 16px; background: #fff;
+    width: 794px; max-width: 100%; margin: 0 auto 16px auto; padding: 10px 14px;
+    background: #fff; border: none !important; box-shadow: none !important; outline: none !important;
   }}
   .top-header {{
-    width: 100%; border-collapse: collapse; margin-bottom: 12px; table-layout: fixed;
+    width: 100%; border-collapse: collapse; margin-bottom: 10px; table-layout: fixed;
   }}
   .top-header td {{
     border: none; vertical-align: middle; text-align: center;
@@ -347,48 +352,67 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
   .top-header .hdr-left  {{ width: 40%; }}
   .top-header .hdr-logo img {{ height: 96px; width: auto; object-fit: contain; }}
   .case-num-line {{ margin-top: 3px; font-size: 14.5px; font-weight: 800; color: #000; }}
+  /* إطار واحد فقط — بدون إطار مزدوج مع .a4-sheet */
   .report-frame {{
-    border: 1.4px solid #b8c3a8; border-radius: 14px;
-    padding: 14px 14px 16px 14px; background: #ffffff;
+    border: none !important; border-radius: 0 !important;
+    padding: 4px 0 0 0; background: #ffffff;
+    box-shadow: none !important; outline: none !important;
   }}
   .report-main-title {{
     text-align: center; color: #a61c1c; font-size: 23px;
-    font-weight: 800; margin: 0 0 12px 0; letter-spacing: 0.2px;
+    font-weight: 800; margin: 0 0 10px 0; letter-spacing: 0.2px;
   }}
   .main-grid, .footer-grid {{
     width: 100%; border-collapse: collapse; table-layout: fixed;
   }}
   .footer-grid {{ margin-top: -1.2px; page-break-inside: avoid; break-inside: avoid; }}
   .main-grid td, .main-grid th, .footer-grid td, .footer-grid th {{
-    border: 1.2px solid #4b5563; padding: 9px 10px;
-    text-align: center; vertical-align: middle; word-wrap: break-word;
+    border: 1.2px solid #4b5563; padding: 8px 8px;
+    text-align: center; vertical-align: middle;
+    overflow-wrap: normal; word-wrap: normal; word-break: keep-all;
+    hyphens: none; -webkit-hyphens: none;
   }}
   .shaded {{
     background-color: #f2f3f5 !important; font-size: 14.5px; font-weight: 800; color: #111;
   }}
+  /* عناوين معد الحالة لا تنكسر أبداً في منتصف الكلمة */
+  .footer-grid .shaded {{
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+    line-height: 1.35 !important;
+    padding: 8px 4px !important;
+    font-size: 13.5px !important;
+  }}
+  .footer-grid .val {{
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }}
   .val {{
-    background-color: #ffffff; font-size: 15px; font-weight: 700; color: #111; min-height: 38px;
+    background-color: #ffffff; font-size: 15px; font-weight: 700; color: #111; min-height: 34px;
   }}
   .coords-val {{
     direction: ltr; unicode-bidi: embed; font-size: 15px; font-weight: 700;
   }}
   .desc-val {{
-    min-height: 96px; padding: 14px 16px !important;
-    font-size: 15.5px; font-weight: 700; line-height: 1.9; text-align: right;
+    min-height: 72px; padding: 12px 14px !important;
+    font-size: 15px; font-weight: 700; line-height: 1.75; text-align: right;
   }}
+  /* ارتفاع مرن للصورة — بدون فراغ أبيض ثابت يدفع لصفحة ثانية */
   .photo-cell {{
-    height: 370px; padding: 10px !important; background: #ffffff;
+    height: auto !important; min-height: 0 !important; max-height: none !important;
+    padding: 8px !important; background: #ffffff;
     vertical-align: middle; text-align: center;
   }}
   .photo-cell img {{
-    max-width: 98%; max-height: 348px; width: auto; height: auto;
+    max-width: 96%; max-height: 210px; width: auto; height: auto;
     object-fit: contain; display: block; margin: 0 auto;
   }}
   .sig-cell {{
-    height: 86px; padding: 4px !important; background: #ffffff; vertical-align: middle;
+    height: 78px; padding: 4px !important; background: #ffffff; vertical-align: middle;
   }}
   .sig-cell img {{
-    max-width: 100%; max-height: 76px; object-fit: contain; display: block; margin: 0 auto;
+    max-width: 100%; max-height: 68px; object-fit: contain; display: block; margin: 0 auto;
   }}
   @media print {{
     @page {{ size: A4 portrait; margin: 6mm; }}
@@ -396,11 +420,27 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
       margin: 0 !important; padding: 0 !important; width: 100% !important;
       height: auto !important; min-height: 0 !important; background: #fff !important;
       -webkit-text-size-adjust: 100% !important; text-size-adjust: 100% !important;
+      font-family: 'Tajawal', 'Arial', sans-serif !important;
     }}
     .a4-sheet {{
       display: block !important; width: 100% !important; max-width: 100% !important;
       min-width: 0 !important; height: auto !important; min-height: 0 !important;
-      margin: 0 !important; padding: 12px 16px !important; box-shadow: none !important;
+      margin: 0 !important; padding: 8px 10px !important;
+      border: none !important; box-shadow: none !important; outline: none !important;
+      page-break-after: avoid !important; break-after: avoid !important;
+    }}
+    .report-frame {{
+      border: none !important; box-shadow: none !important; outline: none !important;
+      padding: 2px 0 0 0 !important;
+    }}
+    .photo-cell {{
+      height: auto !important; padding: 6px !important;
+    }}
+    .photo-cell img {{
+      max-height: 190px !important;
+    }}
+    .main-grid, .footer-grid, .footer-grid tr {{
+      page-break-inside: avoid !important; break-inside: avoid !important;
     }}
     .no-print, .toolbar {{ display: none !important; }}
   }}
@@ -471,13 +511,13 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
     </table>
     <table class="footer-grid">
       <colgroup>
-        <col style="width: 9%;">
-        <col style="width: 27%;">
-        <col style="width: 8%;">
-        <col style="width: 15%;">
-        <col style="width: 12%;">
         <col style="width: 11%;">
-        <col style="width: 18%;">
+        <col style="width: 27%;">
+        <col style="width: 10%;">
+        <col style="width: 14%;">
+        <col style="width: 14%;">
+        <col style="width: 9%;">
+        <col style="width: 15%;">
       </colgroup>
       <tr>
         <th class="shaded" colspan="6">معد الحالة</th>
@@ -488,7 +528,7 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
         <td class="val">{officer_name}</td>
         <td class="shaded">الرتبة</td>
         <td class="val">{officer_rank}</td>
-        <td class="shaded">الرقم العام</td>
+        <td class="shaded">الرقم&nbsp;العام</td>
         <td class="val">{officer_id_ar}</td>
         <td class="sig-cell" rowspan="2">{signature_img_html}</td>
       </tr>
@@ -509,6 +549,7 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
 <meta name="viewport" content="width=794">
 <meta name="format-detection" content="telephone=no">
 <title>محضر إثبات حالة - {html.escape(case_no_ar)}</title>
+<link id="khafar-tajawal-font" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800&display=swap">
 <style>{report_css}</style>
 </head>
 <body style="background:#fff;color:#111;">
@@ -522,7 +563,7 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
       document.body.style.zoom = "1";
       var contentH = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
       var zoom = 1;
-      if (isIOS) {{ if (contentH > 920) zoom = Math.min(1, 920 / contentH); }}
+      if (isIOS) {{ if (contentH > 900) zoom = Math.min(1, 900 / contentH); }}
       else if (contentH > 1120) {{ zoom = 1120 / contentH; }}
       document.body.style.zoom = String(zoom);
     }} catch (e0) {{}}
@@ -536,9 +577,13 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
 </body>
 </html>"""
 
-    # CSS بوابة الأب + أنماط المحضر داخل @media print فقط
+    # تحميل Tajawal في الصفحة الأب فوراً (خارج @media print) ثم أنماط المحضر عند الطباعة
     portal_print_css = (
-        KHAFAR_PRINT_PORTAL_CSS.replace("margin: 5mm;", "margin: 6mm;")
+        "@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800&display=swap');\n"
+        + "#khafar-print-portal, #khafar-print-portal * {"
+        " font-family: 'Tajawal', 'Arial', sans-serif !important;"
+        "}\n"
+        + KHAFAR_PRINT_PORTAL_CSS.replace("margin: 5mm;", "margin: 6mm;")
         + "\n@media print {\n"
         + report_css
         + "\n}\n"
@@ -573,8 +618,21 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
     return null;
   }}
 
+  function ensureTajawal(doc){{
+    try {{
+      if (!doc.getElementById("khafar-tajawal-font")) {{
+        var link = doc.createElement("link");
+        link.id = "khafar-tajawal-font";
+        link.rel = "stylesheet";
+        link.href = "https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800&display=swap";
+        (doc.head || doc.documentElement).appendChild(link);
+      }}
+    }} catch (eFont) {{}}
+  }}
+
   function injectPortal(ctx){{
     var doc = ctx.doc;
+    ensureTajawal(doc);
     var cssEl = doc.getElementById("khafar-print-portal-css");
     if (!cssEl) {{
       cssEl = doc.createElement("style");
@@ -606,13 +664,22 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
       }}
       var zoom = 1;
       if (isIOS) {{
-        if (contentH > 920) zoom = Math.min(1, 920 / contentH);
+        if (contentH > 900) zoom = Math.min(1, 900 / contentH);
       }} else if (contentH > 1120) {{
         zoom = 1120 / contentH;
       }}
       try {{ ctx.doc.body.style.zoom = String(zoom); }} catch (eZ3) {{}}
       if (portal) {{ try {{ portal.style.zoom = String(zoom); }} catch (eZ4) {{}} }}
     }} catch (e) {{}}
+  }}
+
+  function preloadParentAssets(){{
+    try {{
+      var ctx = getParentCtx();
+      if (!ctx) return;
+      ensureTajawal(ctx.doc);
+      injectPortal(ctx);
+    }} catch (ePre) {{}}
   }}
 
   function sairSafePrint(ev){{
@@ -665,9 +732,9 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
       try {{ btns[i].setAttribute("onclick", "sairSafePrint(event)"); }} catch (eAttr) {{}}
     }}
   }}
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind);
-  else bind();
-  window.addEventListener("load", bind);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", function(){{ bind(); preloadParentAssets(); }});
+  else {{ bind(); preloadParentAssets(); }}
+  window.addEventListener("load", function(){{ bind(); preloadParentAssets(); }});
 }})();
 </script>
 """
@@ -679,6 +746,7 @@ def build_sair_a4_html(data: dict, logo_b64: str = "", logo_mime: str = "image/p
 <meta name="viewport" content="width=794">
 <meta name="format-detection" content="telephone=no">
 <title>محضر إثبات حالة - {html.escape(case_no_ar)}</title>
+<link id="khafar-tajawal-font" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800&display=swap">
 <style>{report_css}</style>
 </head>
 <body>
